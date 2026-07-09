@@ -1,0 +1,33 @@
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Local configuration
+local.properties
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Android / NDK
+.externalNativeBuild/
+.cxx/
+captures/
+
+# Signing keys (never commit)
+*.jks
+*.keystore
+
+# Kotlin
+.kotlin/
