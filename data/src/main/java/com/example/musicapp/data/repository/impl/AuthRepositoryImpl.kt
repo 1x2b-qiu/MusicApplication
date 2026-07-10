@@ -76,22 +76,47 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun register(
+        phone: String,
+        captcha: String,
+        password: String,
+        nickname: String
+    ): LoginResult {
+        return runCatching {
+            val response = neteaseApi.registerCellphone(
+                phone = phone,
+                captcha = captcha,
+                password = password,
+                nickname = nickname
+            )
+            handleLoginResponse(response, failurePrefix = "注册")
+        }.getOrElse { throwable ->
+            LoginResult(
+                success = false,
+                message = throwable.message ?: "注册失败，请检查网络和 API 服务"
+            )
+        }
+    }
+
     override suspend fun logout() {
         runCatching { neteaseApi.logout() }
         cookieHolder.set(null)
         authPreferences.clear()
     }
 
-    private suspend fun handleLoginResponse(response: LoginResponse): LoginResult {
+    private suspend fun handleLoginResponse(
+        response: LoginResponse,
+        failurePrefix: String = "登录"
+    ): LoginResult {
         if (response.code != 200) {
             return LoginResult(
                 success = false,
-                message = response.message ?: "登录失败（code=${response.code}）"
+                message = response.message ?: "${failurePrefix}失败（code=${response.code}）"
             )
         }
         val cookie = parseNeteaseCookie(response.cookie)
         if (cookie.isBlank()) {
-            return LoginResult(success = false, message = "登录失败：未获取到 Cookie")
+            return LoginResult(success = false, message = "${failurePrefix}失败：未获取到 Cookie")
         }
         val nickname = response.profile?.nickname
         val userId = response.profile?.userId

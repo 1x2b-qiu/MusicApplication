@@ -6,6 +6,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.musicapp.ui.login.LoginScreen
 import com.example.musicapp.ui.player.PlayerScreen
+import com.example.musicapp.ui.register.RegisterScreen
 import com.example.musicapp.ui.search.SearchScreen
 
 @Composable
@@ -35,7 +36,17 @@ fun MusicNavGraph() {
         composable<MusicRoute.Login> {
             LoginScreen(
                 onBack = { navController.popBackStack() },
+                onRegisterClick = { navController.navigate(MusicRoute.Register) },
                 onLoginSuccess = { navController.popBackStack() }
+            )
+        }
+
+        composable<MusicRoute.Register> {
+            RegisterScreen(
+                onBack = { navController.popBackStack() },
+                onRegisterSuccess = {
+                    navController.popBackStack(MusicRoute.Search, inclusive = false)
+                }
             )
         }
 

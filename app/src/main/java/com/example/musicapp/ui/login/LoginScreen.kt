@@ -1,6 +1,5 @@
 package com.example.musicapp.ui.login
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -11,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
@@ -28,8 +30,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +64,7 @@ private val MusicRed = Color(0xFFE91429)
 @Composable
 fun LoginScreen(
     onBack: () -> Unit,
+    onRegisterClick: () -> Unit,
     onLoginSuccess: () -> Unit,
     viewModel: LoginViewModel = hiltViewModel()
 ) {
@@ -93,32 +96,26 @@ fun LoginScreen(
             contentScale = ContentScale.Crop
         )
 
-        IconButton(
-            onClick = onBack,
+        Box(
             modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(start = 8.dp, top = 8.dp)
+                .fillMaxWidth()
+                .align(Alignment.TopCenter)
+                .padding(horizontal = 24.dp, vertical = 72.dp)
+                .wrapContentHeight()
+                .background(
+                    color = Color.White.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(40.dp)
+                )
+                .border(
+                    width = 0.5.dp,
+                    color = Color.White.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(40.dp)
+                )
         ) {
-            Icon(
-                imageVector = ImageVector.vectorResource(id = R.drawable.ic_back),
-                contentDescription = "返回",
-                tint = Color.White
-            )
-        }
-
-        Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .padding(horizontal = 24.dp, vertical = 72.dp)
-                    .wrapContentHeight(),
-                shape = RoundedCornerShape(40.dp),
-                color = Color.White.copy(alpha = 0.1f),
-                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f))
-            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp, vertical = 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
@@ -471,6 +468,27 @@ fun LoginScreen(
                             color = Color.White.copy(alpha = 0.3f)
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("没有账号?", color = Color.White, fontSize = 14.sp)
+                        TextButton(
+                            onClick = onRegisterClick,
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
+                            modifier = Modifier.defaultMinSize(minHeight = 1.dp, minWidth = 1.dp)
+                        ) {
+                            Text(
+                                text = "注册",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
 

@@ -10,5 +10,11 @@ interface AuthRepository {
     suspend fun sendCaptcha(phone: String): LoginResult
     suspend fun loginWithCaptcha(phone: String, captcha: String): LoginResult
     suspend fun login(phone: String, password: String): LoginResult
+    suspend fun register(
+        phone: String,
+        captcha: String,
+        password: String,
+        nickname: String
+    ): LoginResult
     suspend fun logout()
 }

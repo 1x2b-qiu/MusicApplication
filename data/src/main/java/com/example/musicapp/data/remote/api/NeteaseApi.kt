@@ -46,6 +46,16 @@ interface NeteaseApi {
         @Field("countrycode") countryCode: String = "86"
     ): LoginResponse
 
+    @FormUrlEncoded
+    @POST("register/cellphone")
+    suspend fun registerCellphone(
+        @Field("phone") phone: String,
+        @Field("captcha") captcha: String,
+        @Field("password") password: String,
+        @Field("nickname") nickname: String,
+        @Field("countrycode") countryCode: String = "86"
+    ): LoginResponse
+
     @GET("login/status")
     suspend fun loginStatus(): LoginStatusResponse
 
