@@ -1,31 +1,35 @@
 package com.example.musicapp.ui.login
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,14 +38,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.musicapp.R
+import com.example.musicapp.ui.component.base.BaseTextField
+import com.example.musicapp.ui.component.loading.Loading
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val MusicRed = Color(0xFFE91429)
+
 @Composable
 fun LoginScreen(
     onBack: () -> Unit,
@@ -51,6 +68,11 @@ fun LoginScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var passwordVisible by remember { mutableStateOf(false) }
 
+    val isButtonEnabled = when (uiState.mode) {
+        LoginMode.CAPTCHA -> uiState.phone.isNotBlank() && uiState.captcha.isNotBlank()
+        LoginMode.PASSWORD -> uiState.phone.isNotBlank() && uiState.password.isNotBlank()
+    }
+
     LaunchedEffect(uiState.loginSuccess) {
         if (uiState.loginSuccess) {
             viewModel.consumeLoginSuccess()
@@ -58,167 +80,400 @@ fun LoginScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("登录网易云") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
-                    }
-                }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .blur(if (uiState.isLoading) 8.dp else 0.dp)
+    ) {
+        Image(
+            painter = painterResource(id = R.drawable.background),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop
+        )
+
+        IconButton(
+            onClick = onBack,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 8.dp, top = 8.dp)
+        ) {
+            Icon(
+                imageVector = ImageVector.vectorResource(id = R.drawable.ic_back),
+                contentDescription = "返回",
+                tint = Color.White
             )
         }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "登录后可播放完整歌曲",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            TabRow(
-                selectedTabIndex = uiState.mode.ordinal,
-                modifier = Modifier.fillMaxWidth()
+        Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter)
+                    .padding(horizontal = 24.dp, vertical = 72.dp)
+                    .wrapContentHeight(),
+                shape = RoundedCornerShape(40.dp),
+                color = Color.White.copy(alpha = 0.1f),
+                border = BorderStroke(0.5.dp, Color.White.copy(alpha = 0.15f))
             ) {
-                Tab(
-                    selected = uiState.mode == LoginMode.CAPTCHA,
-                    onClick = { viewModel.onModeChange(LoginMode.CAPTCHA) },
-                    text = { Text("验证码登录") }
-                )
-                Tab(
-                    selected = uiState.mode == LoginMode.PASSWORD,
-                    onClick = { viewModel.onModeChange(LoginMode.PASSWORD) },
-                    text = { Text("密码登录") }
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            OutlinedTextField(
-                value = uiState.phone,
-                onValueChange = viewModel::onPhoneChange,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("手机号") },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            when (uiState.mode) {
-                LoginMode.CAPTCHA -> {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(Color.White),
+                        contentAlignment = Alignment.Center
                     ) {
-                        OutlinedTextField(
-                            value = uiState.captcha,
-                            onValueChange = viewModel::onCaptchaChange,
-                            modifier = Modifier.weight(1f),
-                            label = { Text("验证码") },
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        Icon(
+                            imageVector = ImageVector.vectorResource(id = R.drawable.ic_music_note),
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MusicRed
                         )
+                    }
 
-                        val canSendCaptcha = uiState.captchaCountdown == 0 && !uiState.isSendingCaptcha
-                        OutlinedButton(
-                            onClick = viewModel::sendCaptcha,
-                            enabled = canSendCaptcha
-                        ) {
-                            when {
-                                uiState.isSendingCaptcha -> {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.height(16.dp),
-                                        strokeWidth = 2.dp
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Text(
+                        text = "欢迎",
+                        color = Color.White,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "登录后可播放完整歌曲",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 14.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(alpha = 0.08f))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        LoginMode.entries.forEach { mode ->
+                            val selected = mode == uiState.mode
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(
+                                        if (selected) Color.White.copy(alpha = 0.2f) else Color.Transparent
                                     )
-                                }
-                                uiState.captchaCountdown > 0 -> {
-                                    Text("${uiState.captchaCountdown}s")
-                                }
-                                else -> {
-                                    Text("发送验证码")
-                                }
-                            }
-                        }
-                    }
-
-                    if (uiState.captchaHint != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = uiState.captchaHint ?: "",
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-                }
-
-                LoginMode.PASSWORD -> {
-                    OutlinedTextField(
-                        value = uiState.password,
-                        onValueChange = viewModel::onPasswordChange,
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("密码") },
-                        singleLine = true,
-                        visualTransformation = if (passwordVisible) {
-                            VisualTransformation.None
-                        } else {
-                            PasswordVisualTransformation()
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = if (passwordVisible) KeyboardType.Text else KeyboardType.Password
-                        ),
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    imageVector = if (passwordVisible) {
-                                        Icons.Filled.VisibilityOff
-                                    } else {
-                                        Icons.Filled.Visibility
+                                    .clickable { viewModel.onModeChange(mode) }
+                                    .padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = when (mode) {
+                                        LoginMode.CAPTCHA -> "验证码登录"
+                                        LoginMode.PASSWORD -> "密码登录"
                                     },
-                                    contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                                    color = if (selected) Color.White else Color.White.copy(alpha = 0.6f),
+                                    fontSize = 13.sp,
+                                    fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal
                                 )
                             }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        text = "手机号",
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.fillMaxWidth()
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    BaseTextField(
+                        value = uiState.phone,
+                        onValueChange = viewModel::onPhoneChange,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .border(
+                                width = 0.5.dp,
+                                color = if (uiState.error != null) {
+                                    Color(0xFFFF5252)
+                                } else {
+                                    Color.White.copy(alpha = 0.5f)
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                        placeholderText = "请输入手机号",
+                        cornerRadius = 12.dp,
+                        maxLines = 1,
+                        fontSize = 14,
+                        backgroundColor = Color.White.copy(alpha = 0.08f),
+                        textColor = Color.White,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = ImageVector.vectorResource(id = R.drawable.ic_phone_android),
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    when (uiState.mode) {
+                        LoginMode.CAPTCHA -> {
+                            Text(
+                                text = "验证码",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                BaseTextField(
+                                    value = uiState.captcha,
+                                    onValueChange = viewModel::onCaptchaChange,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .height(48.dp)
+                                        .border(
+                                width = 0.5.dp,
+                                color = if (uiState.error != null) {
+                                    Color(0xFFFF5252)
+                                } else {
+                                    Color.White.copy(alpha = 0.5f)
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                                    placeholderText = "请输入验证码",
+                                    cornerRadius = 12.dp,
+                                    maxLines = 1,
+                                    fontSize = 14,
+                                    backgroundColor = Color.White.copy(alpha = 0.08f),
+                                    textColor = Color.White,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(
+                                                id = R.drawable.ic_verified_user
+                                            ),
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                )
+
+                                val canSendCaptcha =
+                                    uiState.captchaCountdown == 0 && !uiState.isSendingCaptcha
+                                Box(
+                                    modifier = Modifier
+                                        .height(48.dp)
+                                        .width(108.dp)
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(
+                                            if (canSendCaptcha) Color.White.copy(alpha = 0.15f)
+                                            else Color.White.copy(alpha = 0.08f)
+                                        )
+                                        .border(
+                                            width = 0.5.dp,
+                                            color = Color.White.copy(alpha = 0.3f),
+                                            shape = RoundedCornerShape(12.dp)
+                                        )
+                                        .clickable(enabled = canSendCaptcha) { viewModel.sendCaptcha() },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    when {
+                                        uiState.isSendingCaptcha -> {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(20.dp),
+                                                color = Color.White,
+                                                strokeWidth = 2.dp
+                                            )
+                                        }
+                                        uiState.captchaCountdown > 0 -> {
+                                            Text(
+                                                text = "${uiState.captchaCountdown}s",
+                                                color = Color.White.copy(alpha = 0.7f),
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                        else -> {
+                                            Text(
+                                                text = "发送验证码",
+                                                color = Color.White,
+                                                fontSize = 13.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        LoginMode.PASSWORD -> {
+                            Text(
+                                text = "密码",
+                                color = Color.White.copy(alpha = 0.8f),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            BaseTextField(
+                                value = uiState.password,
+                                onValueChange = viewModel::onPasswordChange,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp)
+                                    .border(
+                                width = 0.5.dp,
+                                color = if (uiState.error != null) {
+                                    Color(0xFFFF5252)
+                                } else {
+                                    Color.White.copy(alpha = 0.5f)
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            ),
+                                placeholderText = "请输入密码",
+                                cornerRadius = 12.dp,
+                                maxLines = 1,
+                                fontSize = 14,
+                                backgroundColor = Color.White.copy(alpha = 0.08f),
+                                textColor = Color.White,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = if (passwordVisible) KeyboardType.Text else KeyboardType.Password
+                                ),
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Lock,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                trailingIcon = {
+                                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                                        Icon(
+                                            imageVector = ImageVector.vectorResource(
+                                                id = if (passwordVisible) {
+                                                    R.drawable.ic_visibility
+                                                } else {
+                                                    R.drawable.ic_visibility_off
+                                                }
+                                            ),
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                    }
+                                },
+                                visualTransformation = if (passwordVisible) {
+                                    VisualTransformation.None
+                                } else {
+                                    PasswordVisualTransformation()
+                                }
+                            )
+                        }
+                    }
+
+                    if (uiState.captchaHint != null && uiState.mode == LoginMode.CAPTCHA) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = uiState.captchaHint ?: "",
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 12.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    if (uiState.error != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    color = Color(0x33FF5252),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = uiState.error ?: "",
+                                color = Color(0xFFFFCDD2),
+                                fontSize = 12.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+
+                    Button(
+                        onClick = viewModel::login,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        enabled = isButtonEnabled && !uiState.isLoading,
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color.Transparent,
+                            disabledContainerColor = Color.Transparent
+                        ),
+                        contentPadding = PaddingValues()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    color = if (isButtonEnabled) Color.White else Color.White.copy(alpha = 0.5f),
+                                    shape = RoundedCornerShape(16.dp)
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "登录",
+                                color = Color.Black,
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(32.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        HorizontalDivider(
+                            modifier = Modifier.weight(1f),
+                            color = Color.White.copy(alpha = 0.3f)
+                        )
+                        Text(
+                            text = "网易云音乐",
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(horizontal = 12.dp)
+                        )
+                        HorizontalDivider(
+                            modifier = Modifier.weight(1f),
+                            color = Color.White.copy(alpha = 0.3f)
+                        )
+                    }
                 }
             }
 
-            if (uiState.error != null) {
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = uiState.error ?: "",
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            Button(
-                onClick = viewModel::login,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !uiState.isLoading
-            ) {
-                if (uiState.isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.height(20.dp),
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Text("登录")
-                }
-            }
-        }
+        Loading(isVisible = uiState.isLoading)
     }
 }
