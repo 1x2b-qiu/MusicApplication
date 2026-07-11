@@ -7,6 +7,7 @@ import com.example.musicapp.domain.model.Song
 import com.example.musicapp.domain.usecase.LogoutUseCase
 import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
 import com.example.musicapp.domain.usecase.SearchSongsUseCase
+import com.example.musicapp.player.MusicPlayerController
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,7 +30,8 @@ data class SearchUiState(
 class SearchViewModel @Inject constructor(
     private val searchSongsUseCase: SearchSongsUseCase,
     private val observeLoginStateUseCase: ObserveLoginStateUseCase,
-    private val logoutUseCase: LogoutUseCase
+    private val logoutUseCase: LogoutUseCase,
+    private val playerController: MusicPlayerController
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SearchUiState())
@@ -74,5 +76,10 @@ class SearchViewModel @Inject constructor(
         viewModelScope.launch {
             logoutUseCase()
         }
+    }
+
+    fun onSongClick(song: Song) {
+        playerController.playSong(song, emptyList())
+        playerController.setPreviewSong(song)
     }
 }

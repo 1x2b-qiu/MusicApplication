@@ -1,6 +1,5 @@
 package com.example.musicapp.ui.player
 
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -16,30 +15,25 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
+import com.example.musicapp.ui.home.HomeColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,44 +43,28 @@ fun PlayerScreen(
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build()
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            exoPlayer.release()
-        }
-    }
-
-    DisposableEffect(uiState.playUrl) {
-        val playUrl = uiState.playUrl
-        if (!playUrl.isNullOrBlank()) {
-            exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(playUrl)))
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
-        }
-        onDispose {
-            exoPlayer.stop()
-            exoPlayer.clearMediaItems()
-        }
-    }
+    val exoPlayer = viewModel.exoPlayer
 
     Scaffold(
+        containerColor = HomeColors.Background,
         topBar = {
             TopAppBar(
-                title = { Text("正在播放") },
+                title = {
+                    Text("正在播放", color = HomeColors.TextPrimary)
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = HomeColors.TextPrimary
+                        )
                     }
                 },
                 actions = {
                     if (!uiState.isLoggedIn) {
                         TextButton(onClick = onLoginClick) {
-                            Text("登录")
+                            Text("登录", color = HomeColors.AccentPurple)
                         }
                     }
                 }
@@ -114,7 +92,7 @@ fun PlayerScreen(
 
             Text(
                 text = uiState.songName,
-                style = MaterialTheme.typography.headlineSmall,
+                color = HomeColors.TextPrimary,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -122,8 +100,7 @@ fun PlayerScreen(
 
             Text(
                 text = uiState.artistName,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = HomeColors.TextSecondary,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -133,13 +110,13 @@ fun PlayerScreen(
 
             when {
                 uiState.isLoading -> {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(color = HomeColors.AccentPurple)
                 }
 
                 uiState.error != null -> {
                     Text(
                         text = uiState.error ?: "",
-                        color = MaterialTheme.colorScheme.error,
+                        color = HomeColors.AccentPurple,
                         textAlign = TextAlign.Center
                     )
                 }

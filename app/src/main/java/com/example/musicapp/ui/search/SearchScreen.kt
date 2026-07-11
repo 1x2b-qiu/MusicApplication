@@ -1,10 +1,10 @@
 package com.example.musicapp.ui.search
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,20 +39,21 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.domain.model.Song
+import com.example.musicapp.ui.home.HomeColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
-    onSongClick: (Song) -> Unit,
     onLoginClick: () -> Unit,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
+        containerColor = HomeColors.Background,
         topBar = {
             TopAppBar(
-                title = { Text("网易云音乐") },
+                title = { Text("搜索", color = HomeColors.TextPrimary) },
                 actions = {
                     if (uiState.loginState.isLoggedIn) {
                         Text(
@@ -122,11 +123,10 @@ fun SearchScreen(
 
                 else -> {
                     LazyColumn(
-                        contentPadding = PaddingValues(bottom = 16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(uiState.songs, key = { it.id }) { song ->
-                            SongItem(song = song, onClick = { onSongClick(song) })
+                            SongItem(song = song, onClick = { viewModel.onSongClick(song) })
                         }
                     }
                 }

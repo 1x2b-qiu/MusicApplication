@@ -3,13 +3,15 @@ package com.example.musicapp.ui.player
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musicapp.domain.usecase.GetSongUrlUseCase
+import com.example.musicapp.domain.model.Song
 import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
+import com.example.musicapp.player.MusicPlayerController
+import com.example.musicapp.player.PlaybackState
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,76 +23,63 @@ data class PlayerUiState(
     val isLoggedIn: Boolean = false,
     val isLoading: Boolean = false,
     val playUrl: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val isPlaying: Boolean = false
 )
 
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
-    private val getSongUrlUseCase: GetSongUrlUseCase,
-    private val observeLoginStateUseCase: ObserveLoginStateUseCase,
+    private val playerController: MusicPlayerController,
+    observeLoginStateUseCase: ObserveLoginStateUseCase,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val songId: Long = savedStateHandle.get<Long>("songId") ?: 0L
-    private val songName: String = savedStateHandle.get<String>("songName").orEmpty()
-    private val artistName: String = savedStateHandle.get<String>("artistName").orEmpty()
-    private val coverUrl: String? = savedStateHandle.get<String>("coverUrl")?.takeIf { it.isNotBlank() }
+    private val navSongId: Long = savedStateHandle.get<Long>("songId") ?: 0L
+    private val navSongName: String = savedStateHandle.get<String>("songName").orEmpty()
+    private val navArtistName: String = savedStateHandle.get<String>("artistName").orEmpty()
+    private val navCoverUrl: String? = savedStateHandle.get<String>("coverUrl")?.takeIf { it.isNotBlank() }
 
-    private val _uiState = MutableStateFlow(
-        PlayerUiState(
-            songId = songId,
-            songName = songName,
-            artistName = artistName,
-            coverUrl = coverUrl
-        )
+    val exoPlayer get() = playerController.exoPlayer
+
+    val uiState: StateFlow<PlayerUiState> = combine(
+        playerController.playbackState,
+        observeLoginStateUseCase()
+    ) { playback, loginState ->
+        playback.toPlayerUiState(loginState.isLoggedIn)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = PlayerUiState()
     )
-    val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            observeLoginStateUseCase().collect { loginState ->
-                val wasLoggedIn = _uiState.value.isLoggedIn
-                _uiState.update { it.copy(isLoggedIn = loginState.isLoggedIn) }
-                if (loginState.isLoggedIn && !wasLoggedIn && songId > 0L) {
-                    loadSongUrl()
-                }
-            }
-        }
-        if (songId > 0L) {
-            loadSongUrl()
+        val current = playerController.playbackState.value.currentSong
+        if (current == null && navSongId > 0L) {
+            playerController.playSong(
+                Song(
+                    id = navSongId,
+                    name = navSongName,
+                    artists = navArtistName,
+                    album = "",
+                    coverUrl = navCoverUrl,
+                    durationMs = 0L
+                )
+            )
         }
     }
 
-    private fun loadSongUrl() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null, playUrl = null) }
-            runCatching {
-                getSongUrlUseCase(songId)
-            }.onSuccess { songUrl ->
-                if (songUrl.url.isNullOrBlank()) {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = if (it.isLoggedIn) {
-                                "该歌曲暂无播放权限"
-                            } else {
-                                "该歌曲仅可试听约 30 秒，请登录后播放完整版"
-                            }
-                        )
-                    }
-                } else {
-                    _uiState.update {
-                        it.copy(isLoading = false, playUrl = songUrl.url, error = null)
-                    }
-                }
-            }.onFailure { throwable ->
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = throwable.message ?: "获取播放地址失败"
-                    )
-                }
-            }
-        }
+    private fun PlaybackState.toPlayerUiState(isLoggedIn: Boolean): PlayerUiState {
+        val song = currentSong
+        return PlayerUiState(
+            songId = song?.id ?: navSongId,
+            songName = song?.name ?: navSongName,
+            artistName = song?.artists ?: navArtistName,
+            coverUrl = song?.coverUrl ?: navCoverUrl,
+            isLoggedIn = isLoggedIn,
+            isLoading = isLoading,
+            playUrl = playUrl,
+            error = error,
+            isPlaying = isPlaying
+        )
     }
 }
