@@ -5,7 +5,6 @@ import com.example.musicapp.data.remote.api.NeteaseApi
 import com.example.musicapp.data.remote.response.LoginResponse
 import com.example.musicapp.data.session.SessionCookieHolder
 import com.example.musicapp.data.util.parseNeteaseCookie
-import com.example.musicapp.data.util.toMd5
 import com.example.musicapp.domain.model.LoginResult
 import com.example.musicapp.domain.model.LoginState
 import com.example.musicapp.domain.repository.AuthRepository
@@ -14,7 +13,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 // 认证仓储实现
-// 负责验证码登录、密码登录、会话恢复与登出，并持久化 Cookie 与用户信息
+// 负责验证码登录、会话恢复与登出，并持久化 Cookie 与用户信息
 @Singleton
 class AuthRepositoryImpl @Inject constructor(
     private val neteaseApi: NeteaseApi,
@@ -57,22 +56,6 @@ class AuthRepositoryImpl @Inject constructor(
             val response = neteaseApi.loginCellphoneWithCaptcha(
                 phone = phone,
                 captcha = captcha
-            )
-            handleLoginResponse(response)
-        }.getOrElse { throwable ->
-            LoginResult(
-                success = false,
-                message = throwable.message ?: "登录失败，请检查网络和 API 服务"
-            )
-        }
-    }
-
-    // 使用手机号 + 明文密码登录（内部会转为 MD5 再请求接口）
-    override suspend fun login(phone: String, password: String): LoginResult {
-        return runCatching {
-            val response = neteaseApi.loginCellphoneWithPassword(
-                phone = phone,
-                md5Password = password.toMd5()
             )
             handleLoginResponse(response)
         }.getOrElse { throwable ->

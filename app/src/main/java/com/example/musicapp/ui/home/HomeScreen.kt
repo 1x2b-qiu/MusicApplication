@@ -579,8 +579,9 @@ fun HomeSectionHeader(
 }
 
 // 「最近播放」列表单行
+// 首页 / 搜索页共用的歌曲列表项：封面 + 歌名 + 歌手 + 时长
 @Composable
-private fun HomeRecentItem(
+fun HomeRecentItem(
     song: Song,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -592,7 +593,7 @@ private fun HomeRecentItem(
             .background(MaterialTheme.colorScheme.surfaceVariant)
             .border(1.dp, MaterialTheme.colorScheme.surfaceDim, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(11.dp),
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {

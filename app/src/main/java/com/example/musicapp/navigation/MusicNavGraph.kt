@@ -53,10 +53,13 @@ fun MusicNavGraph(
         // 登录/播放器等非 Tab 页 → 默认高亮首页
         else -> MainTab.Home
     }
-    // 仅在 Home / Radio / Profile 三个 Tab 页显示底部迷你播放栏和 Tab 栏
-    val showBottomChrome = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
+    // 仅在 Home / Radio / Profile 三个 Tab 页显示底部 Tab 栏
+    val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
             currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
             currentDestination?.hasRoute<MusicRoute.Profile>() == true
+    // 搜索页只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
+    val showMiniPlayerBar = showBottomTabBar ||
+            currentDestination?.hasRoute<MusicRoute.Search>() == true
 
     // 创建 Haze 模糊状态，供底部 Tab 栏做玻璃磨砂背景
     val hazeState = rememberHazeState()
@@ -102,7 +105,9 @@ fun MusicNavGraph(
 
             composable<MusicRoute.Search> {
                 SearchScreen(
-                    onLoginClick = { navController.navigate(MusicRoute.Login) }
+                    onBack = { navController.popBackStack() },
+                    darkTheme = darkTheme,
+                    hazeState = hazeState
                 )
             }
 
@@ -121,7 +126,7 @@ fun MusicNavGraph(
             }
         }
 
-        if (showBottomChrome) {
+        if (showMiniPlayerBar) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -140,17 +145,19 @@ fun MusicNavGraph(
                         )
                     )
                 })
-                BottomTabBar(
-                    hazeState = hazeState,
-                    selectedTab = selectedTab,
-                    onTabSelected = { tab ->
-                        navController.navigate(tab.toRoute()) {
-                            popUpTo(MusicRoute.Home) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
+                if (showBottomTabBar) {
+                    BottomTabBar(
+                        hazeState = hazeState,
+                        selectedTab = selectedTab,
+                        onTabSelected = { tab ->
+                            navController.navigate(tab.toRoute()) {
+                                popUpTo(MusicRoute.Home) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
         }
     }

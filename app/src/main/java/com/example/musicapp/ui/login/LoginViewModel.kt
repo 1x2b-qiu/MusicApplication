@@ -2,7 +2,6 @@ package com.example.musicapp.ui.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musicapp.domain.usecase.LoginUseCase
 import com.example.musicapp.domain.usecase.LoginWithCaptchaUseCase
 import com.example.musicapp.domain.usecase.SendCaptchaUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,24 +14,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// 登录方式
-enum class LoginMode {
-    // 验证码登录
-    CAPTCHA,
-    // 密码登录
-    PASSWORD
-}
-
 // 登录页 UI 状态
 data class LoginUiState(
-    // 当前登录方式
-    val mode: LoginMode = LoginMode.CAPTCHA,
-    // 手机号
+    // 手机号（仅数字，最多 11 位）
     val phone: String = "",
-    // 短信验证码
+    // 短信验证码（仅数字，最多 4 位）
     val captcha: String = "",
-    // 密码
-    val password: String = "",
     // 是否正在提交登录请求
     val isLoading: Boolean = false,
     // 是否正在发送验证码
@@ -41,19 +28,20 @@ data class LoginUiState(
     val captchaCountdown: Int = 0,
     // 验证码发送成功后的提示文案
     val captchaHint: String? = null,
-    // 表单或接口错误信息
+    // 表单校验或接口错误信息
     val error: String? = null,
     // 登录是否成功；LoginScreen 消费后会重置为 false
     val loginSuccess: Boolean = false
 )
 
 // 登录页 ViewModel
-// 负责切换登录方式、发送验证码、提交登录，以及验证码倒计时
+// 负责验证码发送、验证码登录，以及 60 秒倒计时
 @HiltViewModel
 class LoginViewModel @Inject constructor(
+    // 向手机号发送登录验证码
     private val sendCaptchaUseCase: SendCaptchaUseCase,
-    private val loginWithCaptchaUseCase: LoginWithCaptchaUseCase,
-    private val loginUseCase: LoginUseCase
+    // 使用手机号 + 验证码完成登录
+    private val loginWithCaptchaUseCase: LoginWithCaptchaUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -63,20 +51,16 @@ class LoginViewModel @Inject constructor(
     // 验证码倒计时任务；页面销毁或重新发送时会取消
     private var countdownJob: Job? = null
 
-    fun onModeChange(mode: LoginMode) {
-        _uiState.update { it.copy(mode = mode, error = null) }
-    }
-
     fun onPhoneChange(phone: String) {
-        _uiState.update { it.copy(phone = phone, error = null) }
+        _uiState.update {
+            it.copy(phone = phone.filter(Char::isDigit).take(11), error = null)
+        }
     }
 
     fun onCaptchaChange(captcha: String) {
-        _uiState.update { it.copy(captcha = captcha, error = null) }
-    }
-
-    fun onPasswordChange(password: String) {
-        _uiState.update { it.copy(password = password, error = null) }
+        _uiState.update {
+            it.copy(captcha = captcha.filter(Char::isDigit).take(4), error = null)
+        }
     }
 
     // 发送短信验证码
@@ -84,6 +68,11 @@ class LoginViewModel @Inject constructor(
     fun sendCaptcha() {
         val state = _uiState.value
         if (state.isSendingCaptcha || state.captchaCountdown > 0) return
+
+        if (state.phone.length < 11) {
+            _uiState.update { it.copy(error = "请输入 11 位手机号码") }
+            return
+        }
 
         viewModelScope.launch {
             _uiState.update {
@@ -94,7 +83,7 @@ class LoginViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isSendingCaptcha = false,
-                        captchaHint = result.message
+                        captchaHint = result.message ?: "验证码已发送，请注意查收"
                     )
                 }
                 startCaptchaCountdown()
@@ -109,18 +98,19 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    // 提交登录
-    // 根据当前登录方式调用对应 UseCase
+    // 提交验证码登录
     fun login() {
         val state = _uiState.value
         if (state.isLoading) return
 
+        if (state.phone.isBlank() || state.captcha.isBlank()) {
+            _uiState.update { it.copy(error = "请填写手机号和验证码") }
+            return
+        }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
-            val result = when (state.mode) {
-                LoginMode.CAPTCHA -> loginWithCaptchaUseCase(state.phone, state.captcha)
-                LoginMode.PASSWORD -> loginUseCase(state.phone, state.password)
-            }
+            val result = loginWithCaptchaUseCase(state.phone, state.captcha)
             if (result.success) {
                 _uiState.update {
                     it.copy(isLoading = false, loginSuccess = true)

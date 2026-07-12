@@ -3,10 +3,12 @@ package com.example.musicapp.di
 import com.example.musicapp.data.repository.impl.AuthRepositoryImpl
 import com.example.musicapp.data.repository.impl.MusicRepositoryImpl
 import com.example.musicapp.data.repository.impl.PlayHistoryRepositoryImpl
+import com.example.musicapp.data.repository.impl.SearchHistoryRepositoryImpl
 import com.example.musicapp.data.repository.impl.ThemeRepositoryImpl
 import com.example.musicapp.domain.repository.AuthRepository
 import com.example.musicapp.domain.repository.MusicRepository
 import com.example.musicapp.domain.repository.PlayHistoryRepository
+import com.example.musicapp.domain.repository.SearchHistoryRepository
 import com.example.musicapp.domain.repository.ThemeRepository
 import dagger.Binds
 import dagger.Module
@@ -46,4 +48,11 @@ abstract class RepositoryModule {
     abstract fun bindThemeRepository(
         themeRepositoryImpl: ThemeRepositoryImpl
     ): ThemeRepository
+
+    @Binds
+    @Singleton
+    // 搜索历史本地仓储
+    abstract fun bindSearchHistoryRepository(
+        searchHistoryRepositoryImpl: SearchHistoryRepositoryImpl
+    ): SearchHistoryRepository
 }

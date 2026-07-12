@@ -20,11 +20,12 @@ import retrofit2.http.Query
 // 网易云音乐 OpenAPI 接口定义
 interface NeteaseApi {
 
-    // 搜索歌曲
-    @GET("search")
+    // 搜索歌曲（cloudsearch 比 search 返回更完整的 al.picUrl 封面）
+    @GET("cloudsearch")
     suspend fun search(
         @Query("keywords") keywords: String,
-        @Query("limit") limit: Int = 20
+        @Query("limit") limit: Int = 20,
+        @Query("type") type: Int = 1
     ): SearchResponse
 
     // 获取歌曲播放地址
@@ -80,15 +81,6 @@ interface NeteaseApi {
         @Query("phone") phone: String,
         @Query("ctcode") countryCode: String = "86"
     ): CaptchaSentResponse
-
-    // 手机号 + MD5 密码登录
-    @FormUrlEncoded
-    @POST("login/cellphone")
-    suspend fun loginCellphoneWithPassword(
-        @Field("phone") phone: String,
-        @Field("md5_password") md5Password: String,
-        @Field("countrycode") countryCode: String = "86"
-    ): LoginResponse
 
     // 手机号 + 验证码登录
     @FormUrlEncoded

@@ -14,8 +14,6 @@ interface AuthRepository {
     suspend fun sendCaptcha(phone: String): LoginResult
     // 使用手机号 + 验证码登录
     suspend fun loginWithCaptcha(phone: String, captcha: String): LoginResult
-    // 使用手机号 + 密码登录
-    suspend fun login(phone: String, password: String): LoginResult
     // 退出登录并清除本地会话
     suspend fun logout()
 }

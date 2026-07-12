@@ -31,6 +31,6 @@ class PlayHistoryRepositoryImpl @Inject constructor(
 
     companion object {
         // 本地最多保留的播放记录条数
-        private const val MAX_RECENT_PLAY_COUNT = 20
+        private const val MAX_RECENT_PLAY_COUNT = 50
     }
 }
