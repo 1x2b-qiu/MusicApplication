@@ -34,6 +34,7 @@ import com.example.musicapp.R
 @Composable
 fun ProfileScreen(
     onLoginClick: () -> Unit,
+    onLoggedOut: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -93,7 +94,7 @@ fun ProfileScreen(
                     .clip(RoundedCornerShape(16.dp))
                     .background(colorScheme.surface)
                     .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(16.dp))
-                    .clickable(onClick = viewModel::logout)
+                    .clickable(onClick = { viewModel.logout(onLoggedOut = onLoggedOut) })
                     .padding(vertical = 14.dp),
                 color = colorScheme.onBackground,
                 fontSize = 15.sp,

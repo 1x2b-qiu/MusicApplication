@@ -18,7 +18,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.example.musicapp.domain.model.Song
 import com.example.musicapp.ui.component.bottombar.BottomTabBar
 import com.example.musicapp.ui.component.minplayer.MiniPlayerBar
 import com.example.musicapp.ui.home.HomeScreen
@@ -27,7 +26,7 @@ import com.example.musicapp.ui.player.PlayerScreen
 import com.example.musicapp.ui.profile.ProfileScreen
 import com.example.musicapp.ui.radio.RadioScreen
 import com.example.musicapp.ui.search.SearchScreen
-import dev.chrisbanes.haze.HazeState
+import com.example.musicapp.ui.splash.SplashScreen
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
@@ -64,7 +63,6 @@ fun MusicNavGraph(
     // 创建 Haze 模糊状态，供底部 Tab 栏做玻璃磨砂背景
     val hazeState = rememberHazeState()
 
-
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -74,9 +72,45 @@ fun MusicNavGraph(
     ) {
         NavHost(
             navController = navController,
-            startDestination = MusicRoute.Home,
+            startDestination = MusicRoute.Splash,
             modifier = Modifier.hazeSource(state = hazeState)
         ) {
+            composable<MusicRoute.Splash> {
+                SplashScreen(
+                    onSuccess = {
+                        // Splash / 登录成功后进入首页，并清空 auth 栈（含 Splash）
+                        navController.navigate(MusicRoute.Home) {
+                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    },
+                    onFail = {
+                        // Splash 未登录时进入登录页，并移除 Splash，避免返回
+                        navController.navigate(MusicRoute.Login) {
+                            popUpTo<MusicRoute.Splash> { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+
+            composable<MusicRoute.Login> {
+                LoginScreen(
+                    onBack = {
+                        if (navController.previousBackStackEntry != null) {
+                            navController.popBackStack()
+                        }
+                    },
+                    onLoginSuccess = {
+                        // Splash / 登录成功后进入首页，并清空 auth 栈（含 Splash）
+                        navController.navigate(MusicRoute.Home) {
+                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+
             composable<MusicRoute.Home> {
                 HomeScreen(
                     hazeState = hazeState,
@@ -87,7 +121,11 @@ fun MusicNavGraph(
                             restoreState = true
                         }
                     },
-                    onLoginClick = { navController.navigate(MusicRoute.Login) },
+                    onLoginClick = {
+                        navController.navigate(MusicRoute.Login) {
+                            launchSingleTop = true
+                        }
+                    },
                     darkTheme = darkTheme,
                     onToggleTheme = onToggleTheme
                 )
@@ -99,7 +137,18 @@ fun MusicNavGraph(
 
             composable<MusicRoute.Profile> {
                 ProfileScreen(
-                    onLoginClick = { navController.navigate(MusicRoute.Login) }
+                    onLoginClick = {
+                        navController.navigate(MusicRoute.Login) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onLoggedOut = {
+                        // 退出登录后回到登录页，并清空主界面栈
+                        navController.navigate(MusicRoute.Login) {
+                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
 
@@ -111,17 +160,14 @@ fun MusicNavGraph(
                 )
             }
 
-            composable<MusicRoute.Login> {
-                LoginScreen(
-                    onBack = { navController.popBackStack() },
-                    onLoginSuccess = { navController.popBackStack() }
-                )
-            }
-
             composable<MusicRoute.Player> {
                 PlayerScreen(
                     onBack = { navController.popBackStack() },
-                    onLoginClick = { navController.navigate(MusicRoute.Login) }
+                    onLoginClick = {
+                        navController.navigate(MusicRoute.Login) {
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
         }

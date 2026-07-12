@@ -28,6 +28,8 @@ captures/
 # Signing keys (never commit)
 *.jks
 *.keystore
+keystore.properties
+keystore/
 
 # Kotlin
 .kotlin/

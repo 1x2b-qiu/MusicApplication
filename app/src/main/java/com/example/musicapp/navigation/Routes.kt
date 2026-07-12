@@ -6,6 +6,9 @@ import kotlinx.serialization.Serializable
 sealed interface MusicRoute {
 
     @Serializable
+    data object Splash : MusicRoute
+
+    @Serializable
     data object Home : MusicRoute
 
     @Serializable

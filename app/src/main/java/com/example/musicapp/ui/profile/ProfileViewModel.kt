@@ -40,10 +40,11 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
-    // 退出登录
-    fun logout() {
+    // 退出登录，完成后回调导航层回到登录页
+    fun logout(onLoggedOut: () -> Unit = {}) {
         viewModelScope.launch {
             logoutUseCase()
+            onLoggedOut()
         }
     }
 }
