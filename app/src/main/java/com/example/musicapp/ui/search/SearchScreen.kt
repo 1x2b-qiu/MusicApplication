@@ -39,7 +39,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.domain.model.Song
-import com.example.musicapp.ui.home.HomeColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,13 +46,14 @@ fun SearchScreen(
     onLoginClick: () -> Unit,
     viewModel: SearchViewModel = hiltViewModel()
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Scaffold(
-        containerColor = HomeColors.Background,
+        containerColor = colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("搜索", color = HomeColors.TextPrimary) },
+                title = { Text("搜索", color = colorScheme.onBackground) },
                 actions = {
                     if (uiState.loginState.isLoggedIn) {
                         Text(
@@ -77,7 +77,6 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp)
         ) {
             OutlinedTextField(
                 value = uiState.query,

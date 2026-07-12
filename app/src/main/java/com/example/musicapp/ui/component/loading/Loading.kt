@@ -31,8 +31,7 @@ fun Loading(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.35f)),
+                .fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             Surface(

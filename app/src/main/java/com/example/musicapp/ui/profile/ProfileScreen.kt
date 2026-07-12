@@ -1,6 +1,5 @@
 package com.example.musicapp.ui.profile
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -28,37 +28,39 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.example.musicapp.R
-import com.example.musicapp.ui.home.HomeColors
 
 @Composable
 fun ProfileScreen(
     onLoginClick: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(HomeColors.Background)
-            .padding(horizontal = 20.dp, vertical = 32.dp),
+            .background(colorScheme.background),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
             modifier = Modifier
                 .size(88.dp)
                 .clip(CircleShape)
-                .background(HomeColors.AvatarBg)
-                .border(1.dp, HomeColors.AvatarBorder, CircleShape)
+                .background(colorScheme.surfaceContainerHigh)
+                .border(1.dp, colorScheme.surfaceBright, CircleShape)
         ) {
-            Image(
-                painter = painterResource(R.drawable.img_avatar_default),
+            AsyncImage(
+                model = uiState.loginState.avatarUrl ?: R.drawable.img_avatar_default,
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(CircleShape),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Crop,
+                placeholder = painterResource(R.drawable.img_avatar_default),
+                error = painterResource(R.drawable.img_avatar_default)
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -68,7 +70,7 @@ fun ProfileScreen(
             } else {
                 "未登录"
             },
-            color = HomeColors.TextPrimary,
+            color = colorScheme.onBackground,
             fontSize = 22.sp,
             fontWeight = FontWeight.Medium
         )
@@ -79,7 +81,7 @@ fun ProfileScreen(
             } else {
                 "登录后可同步收藏与播放记录"
             },
-            color = HomeColors.TextSecondary,
+            color = colorScheme.onSurfaceVariant,
             fontSize = 14.sp
         )
         Spacer(modifier = Modifier.height(32.dp))
@@ -89,11 +91,11 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(HomeColors.SurfaceBg)
-                    .border(1.dp, HomeColors.SurfaceBorder, RoundedCornerShape(16.dp))
+                    .background(colorScheme.surface)
+                    .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(16.dp))
                     .clickable(onClick = viewModel::logout)
                     .padding(vertical = 14.dp),
-                color = HomeColors.TextPrimary,
+                color = colorScheme.onBackground,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
@@ -104,10 +106,10 @@ fun ProfileScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(HomeColors.AccentPurple)
+                    .background(colorScheme.primary)
                     .clickable(onClick = onLoginClick)
                     .padding(vertical = 14.dp),
-                color = HomeColors.TextPrimary,
+                color = colorScheme.onPrimary,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center

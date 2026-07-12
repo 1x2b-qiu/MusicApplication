@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,7 +30,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -64,7 +62,6 @@ private val MusicRed = Color(0xFFE91429)
 @Composable
 fun LoginScreen(
     onBack: () -> Unit,
-    onRegisterClick: () -> Unit,
     onLoginSuccess: () -> Unit,
     viewModel: LoginViewModel = hiltViewModel()
 ) {
@@ -100,7 +97,6 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .padding(horizontal = 24.dp, vertical = 72.dp)
                 .wrapContentHeight()
                 .background(
                     color = Color.White.copy(alpha = 0.1f),
@@ -467,25 +463,6 @@ fun LoginScreen(
                             modifier = Modifier.weight(1f),
                             color = Color.White.copy(alpha = 0.3f)
                         )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("没有账号?", color = Color.White, fontSize = 14.sp)
-                        TextButton(
-                            onClick = onRegisterClick,
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
-                            modifier = Modifier.defaultMinSize(minHeight = 1.dp, minWidth = 1.dp)
-                        ) {
-                            Text(
-                                text = "注册",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                lineHeight = 20.sp
-                            )
-                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))

@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         minSdk = 24
-        buildConfigField("String", "NETEASE_BASE_URL", "\"http://192.168.31.77:3000/\"")
+        buildConfigField("String", "NETEASE_BASE_URL", "\"http://192.168.31.130:3000/\"")
     }
 
     compileOptions {
@@ -42,4 +42,8 @@ dependencies {
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
+
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 }

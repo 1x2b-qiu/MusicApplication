@@ -8,12 +8,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -27,7 +30,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.musicapp.navigation.MainTab
-import com.example.musicapp.ui.home.HomeColors
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -39,11 +41,13 @@ fun BottomTabBar(
     onTabSelected: (MainTab) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val barShape = RoundedCornerShape(28.dp)
+    val colorScheme = MaterialTheme.colorScheme
+    val barShape = RoundedCornerShape(16.dp)
 
     Box(
         modifier = modifier
             .fillMaxWidth()
+            .height(66.dp)
             .shadow(
                 elevation = 8.dp,
                 shape = barShape,
@@ -54,7 +58,7 @@ fun BottomTabBar(
             .hazeEffect(state = hazeState) {
                 blurRadius = 24.dp
                 tints = listOf(
-                    HazeTint(Color(0xFF0E0E10).copy(alpha = 0.5f)),
+                    HazeTint(colorScheme.background.copy(alpha = 0.5f)),
                     HazeTint(Color.White.copy(alpha = 0.08f))
                 )
                 noiseFactor = 0.15f
@@ -80,9 +84,9 @@ fun BottomTabBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(11.dp),
-            horizontalArrangement = Arrangement.spacedBy(17.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.Bottom
+                .padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             MainTab.entries.forEach { tab ->
                 BottomTabItem(
@@ -101,26 +105,27 @@ private fun BottomTabItem(
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val textColor = if (isSelected) HomeColors.TextPrimary else HomeColors.TextSecondary
-    val bgColor = if (isSelected) HomeColors.ChipSelectedBg else Color.Transparent
+    val colorScheme = MaterialTheme.colorScheme
+    val textColor = if (isSelected) colorScheme.primary else colorScheme.onBackground
 
     Box(
         modifier = Modifier
             .width(62.dp)
-            .height(53.dp)
+            .fillMaxHeight()
             .clip(RoundedCornerShape(16.dp))
-            .background(bgColor)
+            .background(Color.Transparent)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(4.dp),
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 4.dp)
         ) {
-            Image(
+            Icon(
                 painter = painterResource(tab.iconRes),
                 contentDescription = tab.label,
+                tint = textColor,
                 modifier = Modifier.size(22.dp)
             )
             Text(

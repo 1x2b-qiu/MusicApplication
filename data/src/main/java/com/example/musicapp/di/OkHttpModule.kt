@@ -10,12 +10,14 @@ import okhttp3.logging.HttpLoggingInterceptor
 import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
+// Hilt OkHttp 模块：配置超时、Cookie 拦截器与日志
 @Module
 @InstallIn(SingletonComponent::class)
 object OkHttpModule {
 
     @Provides
     @Singleton
+    // 配置超时、Cookie 拦截器与请求日志
     fun provideOkHttpClient(
         cookieInterceptor: CookieInterceptor
     ): OkHttpClient {

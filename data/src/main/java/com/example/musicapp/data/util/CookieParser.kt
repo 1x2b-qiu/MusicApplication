@@ -1,7 +1,8 @@
 package com.example.musicapp.data.util
 
-fun parseNeteaseCookie(raw: Any?): String {
-    val cookieString = when (raw) {
+// 解析登录响应中的 Cookie 字符串，供请求头使用
+// 兼容字符串、列表等格式，并过滤掉 expires/path 等非会话字段
+fun parseNeteaseCookie(raw: Any?): String {    val cookieString = when (raw) {
         null -> ""
         is String -> raw
         is List<*> -> raw.filterIsInstance<String>().joinToString("; ")

@@ -15,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,7 +34,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
-import com.example.musicapp.ui.home.HomeColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,29 +42,30 @@ fun PlayerScreen(
     onLoginClick: () -> Unit,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val exoPlayer = viewModel.exoPlayer
 
     Scaffold(
-        containerColor = HomeColors.Background,
+        containerColor = colorScheme.background,
         topBar = {
             TopAppBar(
                 title = {
-                    Text("正在播放", color = HomeColors.TextPrimary)
+                    Text("正在播放", color = colorScheme.onBackground)
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回",
-                            tint = HomeColors.TextPrimary
+                            tint = colorScheme.onBackground
                         )
                     }
                 },
                 actions = {
                     if (!uiState.isLoggedIn) {
                         TextButton(onClick = onLoginClick) {
-                            Text("登录", color = HomeColors.AccentPurple)
+                            Text("登录", color = colorScheme.primary)
                         }
                     }
                 }
@@ -74,8 +75,7 @@ fun PlayerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(24.dp),
+                .padding(padding),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -92,7 +92,7 @@ fun PlayerScreen(
 
             Text(
                 text = uiState.songName,
-                color = HomeColors.TextPrimary,
+                color = colorScheme.onBackground,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -100,7 +100,7 @@ fun PlayerScreen(
 
             Text(
                 text = uiState.artistName,
-                color = HomeColors.TextSecondary,
+                color = colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -110,13 +110,13 @@ fun PlayerScreen(
 
             when {
                 uiState.isLoading -> {
-                    CircularProgressIndicator(color = HomeColors.AccentPurple)
+                    CircularProgressIndicator(color = colorScheme.primary)
                 }
 
                 uiState.error != null -> {
                     Text(
                         text = uiState.error ?: "",
-                        color = HomeColors.AccentPurple,
+                        color = colorScheme.primary,
                         textAlign = TextAlign.Center
                     )
                 }

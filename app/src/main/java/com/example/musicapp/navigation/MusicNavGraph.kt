@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -19,19 +21,21 @@ import androidx.navigation.compose.rememberNavController
 import com.example.musicapp.domain.model.Song
 import com.example.musicapp.ui.component.bottombar.BottomTabBar
 import com.example.musicapp.ui.component.minplayer.MiniPlayerBar
-import com.example.musicapp.ui.home.HomeColors
 import com.example.musicapp.ui.home.HomeScreen
 import com.example.musicapp.ui.login.LoginScreen
 import com.example.musicapp.ui.player.PlayerScreen
 import com.example.musicapp.ui.profile.ProfileScreen
 import com.example.musicapp.ui.radio.RadioScreen
-import com.example.musicapp.ui.register.RegisterScreen
 import com.example.musicapp.ui.search.SearchScreen
+import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
 @Composable
-fun MusicNavGraph() {
+fun MusicNavGraph(
+    darkTheme: Boolean = true,
+    onToggleTheme: () -> Unit = {}
+) {
     // 创建并记住 NavController，负责页面跳转与返回栈管理
     val navController = rememberNavController()
     // 订阅当前导航栈顶页面，页面切换时会自动重组
@@ -46,7 +50,7 @@ fun MusicNavGraph() {
         currentDestination?.hasRoute<MusicRoute.Radio>() == true -> MainTab.Radio
         // 在我的页 → 高亮「我的」
         currentDestination?.hasRoute<MusicRoute.Profile>() == true -> MainTab.Profile
-        // 登录/注册/播放器等非 Tab 页 → 默认高亮首页
+        // 登录/播放器等非 Tab 页 → 默认高亮首页
         else -> MainTab.Home
     }
     // 仅在 Home / Radio / Profile 三个 Tab 页显示底部迷你播放栏和 Tab 栏
@@ -61,7 +65,9 @@ fun MusicNavGraph() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(HomeColors.Background)
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp)
     ) {
         NavHost(
             navController = navController,
@@ -70,6 +76,7 @@ fun MusicNavGraph() {
         ) {
             composable<MusicRoute.Home> {
                 HomeScreen(
+                    hazeState = hazeState,
                     onSearchClick = {
                         navController.navigate(MusicRoute.Search) {
                             popUpTo(MusicRoute.Home) { saveState = true }
@@ -77,7 +84,9 @@ fun MusicNavGraph() {
                             restoreState = true
                         }
                     },
-                    onLoginClick = { navController.navigate(MusicRoute.Login) }
+                    onLoginClick = { navController.navigate(MusicRoute.Login) },
+                    darkTheme = darkTheme,
+                    onToggleTheme = onToggleTheme
                 )
             }
 
@@ -100,17 +109,7 @@ fun MusicNavGraph() {
             composable<MusicRoute.Login> {
                 LoginScreen(
                     onBack = { navController.popBackStack() },
-                    onRegisterClick = { navController.navigate(MusicRoute.Register) },
                     onLoginSuccess = { navController.popBackStack() }
-                )
-            }
-
-            composable<MusicRoute.Register> {
-                RegisterScreen(
-                    onBack = { navController.popBackStack() },
-                    onRegisterSuccess = {
-                        navController.popBackStack(MusicRoute.Home, inclusive = false)
-                    }
                 )
             }
 
@@ -127,10 +126,11 @@ fun MusicNavGraph() {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .navigationBarsPadding()
-                    .padding(horizontal = 16.dp)
                     .padding(bottom = 12.dp)
             ) {
-                MiniPlayerBar(onPlayerClick = { song ->
+                MiniPlayerBar(
+                    hazeState = hazeState,
+                    onPlayerClick = { song ->
                     navController.navigate(
                         MusicRoute.Player(
                             songId = song.id,
