@@ -59,7 +59,7 @@ fun SplashScreen(
         label = "alpha"
     )
 
-    // 会话检查完成后再路由，并保留最短展示时长
+    // 会话检查完成后再路由；仅补足最短展示时长，避免固定多等 1 秒
     LaunchedEffect(uiState.isChecking, uiState.isLoggedIn) {
         if (uiState.isChecking) return@LaunchedEffect
         delay(1_000)

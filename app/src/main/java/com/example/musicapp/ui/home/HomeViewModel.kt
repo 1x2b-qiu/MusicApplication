@@ -91,7 +91,6 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { it.copy(recentSongs = recentSongs) }
             }
         }
-        loadHomeContent()
     }
 
     // 加载失败后由 UI 触发重试
@@ -118,8 +117,9 @@ class HomeViewModel @Inject constructor(
 
             runCatching {
                 val liked = if (userId != null) {
-                    runCatching { getLikedMusicPlaylistSongsUseCase(userId) }
-                        .getOrElse { emptyList() }
+                    runCatching {
+                        getLikedMusicPlaylistSongsUseCase(userId, limit = HOME_LIKED_SONGS_LIMIT)
+                    }.getOrElse { emptyList() }
                 } else {
                     emptyList()
                 }
@@ -148,6 +148,8 @@ class HomeViewModel @Inject constructor(
 
 // 首页「最近播放」展示条数
 private const val RECENT_PLAY_LIMIT = 20
+// 首页「我喜欢的」轮播只拉取前 N 首，避免全量歌单拖慢首屏
+private const val HOME_LIKED_SONGS_LIMIT = 30
 
 // 将歌曲时长（毫秒）格式化为 mm:ss
 fun formatSongDuration(durationMs: Long): String {

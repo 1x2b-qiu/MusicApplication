@@ -370,11 +370,6 @@ private fun LoginCaptchaField(
             ) {
                 when {
                     isSendingCaptcha -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = actionColor,
-                            strokeWidth = 2.dp
-                        )
                     }
                     captchaCountdown > 0 -> {
                         Text(

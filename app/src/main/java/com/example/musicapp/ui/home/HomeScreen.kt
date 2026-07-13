@@ -85,7 +85,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.R
 import com.example.musicapp.domain.model.Song
-import com.example.musicapp.ui.component.loading.Loading
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -200,10 +199,6 @@ fun HomeScreen(
         )
 
         when {
-            // 首次加载且尚无缓存数据时显示全屏 Loading
-            uiState.isLoading && uiState.recentSongs.isEmpty() -> {
-            }
-
             uiState.error != null && uiState.recentSongs.isEmpty() -> {
             }
 
@@ -212,10 +207,7 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
-                    // 底部留白，避免内容被迷你播放栏和 Tab 栏遮挡
-                    contentPadding = PaddingValues(
-                        bottom = 161.dp
-                    )
+                    contentPadding = PaddingValues(bottom = 161.dp)
                 ) {
                     if (uiState.likedSongs.isNotEmpty()) {
                         item {

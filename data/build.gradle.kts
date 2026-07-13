@@ -11,7 +11,8 @@ android {
 
     defaultConfig {
         minSdk = 24
-        buildConfigField("String", "NETEASE_BASE_URL", "\"http://192.168.31.130:3000/\"")
+//        buildConfigField("String", "NETEASE_BASE_URL", "\"http://192.168.31.130:3000/\"")
+        buildConfigField("String", "NETEASE_BASE_URL", "\"http://192.168.1.115:3000/\"")
     }
 
     compileOptions {
