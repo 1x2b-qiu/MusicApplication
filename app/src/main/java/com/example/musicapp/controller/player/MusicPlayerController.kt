@@ -75,7 +75,30 @@ class MusicPlayerController @Inject constructor(
     private val observeLoginStateUseCase: ObserveLoginStateUseCase
 ) {
     // 底层播放器，真正负责解码和出声
-    val exoPlayer: ExoPlayer = ExoPlayer.Builder(context).build()
+    // lazy：首次访问时才创建，避免 App 启动时即占用音频资源
+    val exoPlayer: ExoPlayer by lazy {
+        ExoPlayer.Builder(context).build().also { player ->
+            // 监听 ExoPlayer 播放状态变化，同步到 PlaybackState.isPlaying
+            player.addListener(
+                object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        _playbackState.update { it.copy(isPlaying = isPlaying) }
+                        if (isPlaying) {
+                            startPositionTracking()
+                        } else {
+                            positionJob?.cancel()
+                        }
+                    }
+
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == Player.STATE_ENDED) {
+                            skipToNext()
+                        }
+                    }
+                }
+            )
+        }
+    }
 
     // 控制器自己的协程作用域
     // SupervisorJob：某个播放任务异常不会拖垮整个 scope
@@ -105,26 +128,6 @@ class MusicPlayerController @Inject constructor(
                 }
             }
         }
-
-        // 监听 ExoPlayer 播放状态变化，同步到 PlaybackState.isPlaying
-        exoPlayer.addListener(
-            object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    _playbackState.update { it.copy(isPlaying = isPlaying) }
-                    if (isPlaying) {
-                        startPositionTracking()
-                    } else {
-                        positionJob?.cancel()
-                    }
-                }
-
-                override fun onPlaybackStateChanged(playbackState: Int) {
-                    if (playbackState == Player.STATE_ENDED) {
-                        skipToNext()
-                    }
-                }
-            }
-        )
     }
 
     // 设置迷你栏预览歌曲

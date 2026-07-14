@@ -68,6 +68,8 @@ class HomeViewModel @Inject constructor(
                 val previousUserId = _uiState.value.loginState.userId
                 _uiState.update { it.copy(loginState = loginState) }
                 if (loginState.userId != previousUserId) {
+                    // 错峰：先让 Room 本地数据（最近播放）加载展示，网络请求延后
+                    delay(NETWORK_LOAD_DELAY_MS)
                     loadHomeContent()
                 }
             }
@@ -150,6 +152,8 @@ class HomeViewModel @Inject constructor(
 private const val RECENT_PLAY_LIMIT = 20
 // 首页「我喜欢的」轮播只拉取前 N 首，避免全量歌单拖慢首屏
 private const val HOME_LIKED_SONGS_LIMIT = 30
+// 网络请求延后毫秒数，让 Room 本地数据先加载展示
+private const val NETWORK_LOAD_DELAY_MS = 300L
 
 // 将歌曲时长（毫秒）格式化为 mm:ss
 fun formatSongDuration(durationMs: Long): String {

@@ -10,6 +10,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,6 +52,7 @@ import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -110,6 +112,10 @@ private const val FavoritesThumbTransitionMs = 300
 private const val FavoritesAutoCarouselIntervalMs = 4_000L
 // 用户无操作后恢复自动轮播的等待时长
 private const val FavoritesAutoCarouselResumeDelayMs = 5_000L
+// 磨砂玻璃淡入延迟（毫秒），首帧先用纯色背景
+private const val FavoritesHazeFadeDelayMs = 150L
+// 磨砂玻璃淡入动画时长（毫秒）
+private const val FavoritesHazeFadeDurationMs = 400
 // 磨砂玻璃主卡圆角
 private val GlassCardShape = RoundedCornerShape(26.dp)
 // 主卡内封面图圆角
@@ -258,7 +264,6 @@ private fun HomeLyricsHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.background)
             .padding(top = 24.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -651,6 +656,12 @@ private fun HomeFavoritesSection(
     var idleResumeEpoch by remember { mutableIntStateOf(0) }
     // 底部缩略图横向列表滚动状态，供自动轮播 animateScrollToItem
     val thumbnailListState = rememberLazyListState()
+    // 当前可见的缩略图下标集合，离屏项不启动动画
+    val visibleIndices by remember {
+        derivedStateOf {
+            thumbnailListState.layoutInfo.visibleItemsInfo.map { it.index }.toSet()
+        }
+    }
     // 防止列表变化后 selectedIndex 越界
     val safeIndex = selectedIndex.coerceIn(0, songs.lastIndex)
     // 当前主卡展示的歌曲
@@ -730,6 +741,7 @@ private fun HomeFavoritesSection(
                 FavoritesThumbnailItem(
                     song = song,
                     isSelected = index == safeIndex,
+                    isLazyAnimated = index in visibleIndices,
                     onClick = {
                         selectedIndex = index
                         onUserInteraction()
@@ -760,6 +772,18 @@ private fun FavoritesGlassMainCard(
         label = "play_button_scale"
     )
 
+    // 延迟 Haze 模糊：首帧用纯色背景，延迟后淡入模糊效果
+    var isHazeReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(FavoritesHazeFadeDelayMs)
+        isHazeReady = true
+    }
+    val hazeAlpha by animateFloatAsState(
+        targetValue = if (isHazeReady) 1f else 0f,
+        animationSpec = tween(FavoritesHazeFadeDurationMs, easing = FastOutSlowInEasing),
+        label = "haze_fade_in"
+    )
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -771,9 +795,11 @@ private fun FavoritesGlassMainCard(
             )
             .clip(GlassCardShape)
             .hazeEffect(state = hazeState) {
-                blurRadius = glassStyle.blurRadius
-                tints = glassStyle.hazeTints
-                noiseFactor = glassStyle.noiseFactor
+                blurRadius = glassStyle.blurRadius * hazeAlpha
+                tints = glassStyle.hazeTints.map { tint ->
+                    HazeTint(tint.color.copy(alpha = tint.color.alpha * hazeAlpha))
+                }
+                noiseFactor = glassStyle.noiseFactor * hazeAlpha
             }
             .background(glassStyle.surfaceOverlay)
             .border(0.67.dp, glassStyle.borderColor, GlassCardShape)
@@ -914,16 +940,25 @@ private fun FavoritesGlassMainCard(
 private fun FavoritesThumbnailItem(
     song: Song,
     isSelected: Boolean,
+    isLazyAnimated: Boolean,
     onClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    // 缩略图选中态动画曲线，供 ringAlpha / overlayAlpha 复用
-    val thumbTransition = tween<Float>(FavoritesThumbTransitionMs, easing = FastOutSlowInEasing)
+    // 可见时用 tween 平滑动画，离屏时用 snap 跳过动画帧
+    val thumbTransition = if (isLazyAnimated) {
+        tween<Float>(FavoritesThumbTransitionMs, easing = FastOutSlowInEasing)
+    } else {
+        snap()
+    }
 
     // 选中时放大，未选中时缩小
     val thumbSize by animateDpAsState(
         targetValue = if (isSelected) 62.dp else 54.dp,
-        animationSpec = tween(FavoritesThumbTransitionMs, easing = FastOutSlowInEasing),
+        animationSpec = if (isLazyAnimated) {
+            tween(FavoritesThumbTransitionMs, easing = FastOutSlowInEasing)
+        } else {
+            snap()
+        },
         label = "thumb_size"
     )
     // 选中光环透明度，驱动描边颜色插值
