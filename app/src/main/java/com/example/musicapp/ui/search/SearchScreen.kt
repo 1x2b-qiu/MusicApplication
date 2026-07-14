@@ -331,7 +331,7 @@ private fun SearchTopBar(
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // 返回：有输入时清空，无输入时返回上一页
-        IconButton(
+        SearchHeaderIconButton(
             onClick = {
                 if (query.isNotBlank()) {
                     onClearQuery()
@@ -339,13 +339,13 @@ private fun SearchTopBar(
                     onBack()
                 }
             },
-            modifier = Modifier.size(30.dp)
+            contentDescription = "返回"
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-                contentDescription = "返回",
-                tint = themeStyle.iconMutedColor,
-                modifier = Modifier.size(22.dp)
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(20.dp)
             )
         }
 
@@ -434,18 +434,39 @@ private fun SearchTopBar(
         }
 
         // 搜索确认按钮
-        IconButton(
+        SearchHeaderIconButton(
             onClick = onConfirmSearch,
-            modifier = Modifier
-                .size(46.dp)
+            contentDescription = "搜索"
         ) {
             Icon(
                 imageVector = Icons.Outlined.Search,
-                contentDescription = "搜索",
-                tint = themeStyle.iconMutedColor,
-                modifier = Modifier.size(18.dp)
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(16.dp)
             )
         }
+    }
+}
+
+// 与 HomeScreen 顶栏一致的圆形图标按钮
+@Composable
+private fun SearchHeaderIconButton(
+    onClick: () -> Unit,
+    contentDescription: String,
+    content: @Composable () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(colorScheme.surfaceVariant)
+            .border(0.67.dp, colorScheme.outlineVariant, CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
     }
 }
 
@@ -498,14 +519,22 @@ private fun RecentSearchSection(
             )
 
             if (recents.isNotEmpty()) {
-                IconButton(onClick = onClearAll, modifier = Modifier.size(24.dp)) {
+                SearchHeaderIconButton(
+                    onClick = onClearAll,
+                    contentDescription = "清空最近搜索"
+                ) {
                     Icon(
                         imageVector = Icons.Outlined.DeleteOutline,
-                        contentDescription = "清空最近搜索",
-                        tint = themeStyle.sectionLabelColor.copy(alpha = 0.7f),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.size(16.dp)
                     )
                 }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                )
             }
         }
 

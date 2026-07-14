@@ -69,7 +69,7 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { it.copy(loginState = loginState) }
                 if (loginState.userId != previousUserId) {
                     // 错峰：先让 Room 本地数据（最近播放）加载展示，网络请求延后
-                    delay(NETWORK_LOAD_DELAY_MS)
+//                    delay(NETWORK_LOAD_DELAY_MS)
                     loadHomeContent()
                 }
             }
