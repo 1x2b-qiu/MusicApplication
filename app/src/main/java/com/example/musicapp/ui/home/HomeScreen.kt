@@ -175,6 +175,8 @@ private data class FavoritesGlassStyle(
 fun HomeScreen(
     hazeState: HazeState,
     onSearchClick: () -> Unit,
+    onLikedClick: () -> Unit,
+    onRecentClick: () -> Unit,
     onLoginClick: () -> Unit,
     darkTheme: Boolean = true,
     onToggleTheme: () -> Unit = {},
@@ -224,14 +226,15 @@ fun HomeScreen(
                                 isPlaying = uiState.isPlaying,
                                 currentSongId = uiState.currentSongId,
                                 onPlaySong = viewModel::playSong,
-                                onTogglePlayPause = viewModel::togglePlayPause
+                                onTogglePlayPause = viewModel::togglePlayPause,
+                                onViewAllClick = onLikedClick
                             )
                         }
                     }
                     item {
                         HomeSectionHeader(
                             title = "最近播放",
-                            onViewAllClick = onSearchClick
+                            onViewAllClick = onRecentClick
                         )
                     }
                     items(uiState.recentSongs, key = { it.id }) { song ->
@@ -642,6 +645,7 @@ private fun HomeFavoritesSection(
     currentSongId: Long?,
     onPlaySong: (Song, List<Song>) -> Unit,
     onTogglePlayPause: () -> Unit,
+    onViewAllClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (songs.isEmpty()) return
@@ -710,7 +714,7 @@ private fun HomeFavoritesSection(
         HomeSectionHeader(
             title = "我喜欢的",
             iconRes = R.drawable.ic_heart2,
-            onViewAllClick = {}
+            onViewAllClick = onViewAllClick
         )
 
         FavoritesGlassMainCard(

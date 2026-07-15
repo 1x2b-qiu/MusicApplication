@@ -3,15 +3,18 @@ package com.example.musicapp.ui.player
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musicapp.domain.model.Song
-import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
 import com.example.musicapp.controller.player.MusicPlayerController
 import com.example.musicapp.controller.player.PlaybackState
+import com.example.musicapp.domain.model.Song
+import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 // 播放页 UI 状态
@@ -52,15 +55,18 @@ class PlayerViewModel @Inject constructor(
     private val navArtistName: String = savedStateHandle.get<String>("artistName").orEmpty()
     private val navCoverUrl: String? = savedStateHandle.get<String>("coverUrl")?.takeIf { it.isNotBlank() }
 
+    // 进页时读取一次，不再持续观察登录态
+    private val isLoggedIn = MutableStateFlow(false)
+
     // 直接暴露 ExoPlayer，供 PlayerScreen 挂载 PlayerView
     val exoPlayer get() = playerController.exoPlayer
 
-    // 合并播放状态与登录状态，生成页面 UI 状态
+    // 合并播放状态与一次性登录结果，生成页面 UI 状态
     val uiState: StateFlow<PlayerUiState> = combine(
         playerController.playbackState,
-        observeLoginStateUseCase()
-    ) { playback, loginState ->
-        playback.toPlayerUiState(loginState.isLoggedIn)
+        isLoggedIn
+    ) { playback, loggedIn ->
+        playback.toPlayerUiState(loggedIn)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -68,6 +74,9 @@ class PlayerViewModel @Inject constructor(
     )
 
     init {
+        viewModelScope.launch {
+            isLoggedIn.value = observeLoginStateUseCase().first().isLoggedIn
+        }
         // 若全局播放器尚未开始播歌，则使用导航参数触发首次播放
         val current = playerController.playbackState.value.currentSong
         if (current == null && navSongId > 0L) {

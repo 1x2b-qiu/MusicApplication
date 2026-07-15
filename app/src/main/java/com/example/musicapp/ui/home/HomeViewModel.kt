@@ -10,10 +10,10 @@ import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
 import com.example.musicapp.domain.usecase.ObserveRecentPlayedSongsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -41,14 +41,14 @@ data class HomeUiState(
 )
 
 // 首页 ViewModel
-// 负责加载「我喜欢的」、订阅本地最近播放，同步登录与播放状态，播放操作委托给全局播放器
+// 负责加载「我喜欢的」、订阅本地最近播放与播放状态；登录信息进页时读一次
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     // 拉取网易云「我喜欢的音乐」歌单
     private val getLikedMusicPlaylistSongsUseCase: GetLikedMusicPlaylistSongsUseCase,
     // 观察 Room 中的最近播放记录
     private val observeRecentPlayedSongsUseCase: ObserveRecentPlayedSongsUseCase,
-    // 观察 DataStore 中的登录状态
+    // 进页时读取一次当前登录状态
     private val observeLoginStateUseCase: ObserveLoginStateUseCase,
     // 全局播放控制器，首页不直接持有 ExoPlayer
     private val playerController: MusicPlayerController
@@ -58,21 +58,15 @@ class HomeViewModel @Inject constructor(
     // 对外只读的首页状态
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
 
-    // 当前进行中的「我喜欢的」加载任务，切换账号时可取消
+    // 当前进行中的「我喜欢的」加载任务，重试时可取消
     private var loadJob: Job? = null
 
     init {
-        // 登录状态变化时更新 UI；用户切换后重新加载「我喜欢的」
+        // 进页时只取一次登录态，再加载「我喜欢的」
         viewModelScope.launch {
-            observeLoginStateUseCase().collect { loginState ->
-                val previousUserId = _uiState.value.loginState.userId
-                _uiState.update { it.copy(loginState = loginState) }
-                if (loginState.userId != previousUserId) {
-                    // 错峰：先让 Room 本地数据（最近播放）加载展示，网络请求延后
-//                    delay(NETWORK_LOAD_DELAY_MS)
-                    loadHomeContent()
-                }
-            }
+            val loginState = observeLoginStateUseCase().first()
+            _uiState.update { it.copy(loginState = loginState) }
+            loadHomeContent()
         }
         // 订阅全局播放器状态，驱动顶栏歌词与播放指示
         viewModelScope.launch {
@@ -152,8 +146,6 @@ class HomeViewModel @Inject constructor(
 private const val RECENT_PLAY_LIMIT = 20
 // 首页「我喜欢的」轮播只拉取前 N 首，避免全量歌单拖慢首屏
 private const val HOME_LIKED_SONGS_LIMIT = 30
-// 网络请求延后毫秒数，让 Room 本地数据先加载展示
-private const val NETWORK_LOAD_DELAY_MS = 300L
 
 // 将歌曲时长（毫秒）格式化为 mm:ss
 fun formatSongDuration(durationMs: Long): String {

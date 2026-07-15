@@ -3,6 +3,7 @@ package com.example.musicapp.di
 import android.content.Context
 import androidx.room.Room
 import com.example.musicapp.data.local.MusicDatabase
+import com.example.musicapp.data.local.dao.PlayStatsDao
 import com.example.musicapp.data.local.dao.RecentPlayDao
 import dagger.Module
 import dagger.Provides
@@ -26,12 +27,21 @@ object DatabaseModule {
             context,
             MusicDatabase::class.java,
             "music_database"
-        ).build()
+        )
+            // 测试阶段：版本不匹配时直接重建库，不做正式迁移
+            .fallbackToDestructiveMigration()
+            .build()
     }
 
     @Provides
     // 提供最近播放 DAO
     fun provideRecentPlayDao(database: MusicDatabase): RecentPlayDao {
         return database.recentPlayDao()
+    }
+
+    @Provides
+    // 提供播放统计 DAO
+    fun providePlayStatsDao(database: MusicDatabase): PlayStatsDao {
+        return database.playStatsDao()
     }
 }

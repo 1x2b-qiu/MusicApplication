@@ -2,18 +2,21 @@ package com.example.musicapp.controller.player
 
 import android.content.Context
 import android.net.Uri
+import android.os.SystemClock
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.example.musicapp.domain.model.LyricLine
 import com.example.musicapp.domain.model.LyricMatcher
 import com.example.musicapp.domain.model.Song
+import com.example.musicapp.domain.usecase.AddListenDurationUseCase
 import com.example.musicapp.domain.usecase.GetLikedSongIdsUseCase
 import com.example.musicapp.domain.usecase.GetSongLyricsUseCase
 import com.example.musicapp.domain.usecase.GetSongUrlUseCase
 import com.example.musicapp.domain.usecase.LikeSongUseCase
 import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
 import com.example.musicapp.domain.usecase.RecordRecentPlayUseCase
+import com.example.musicapp.domain.usecase.RecordWeekPlayUseCase
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +26,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -70,6 +74,10 @@ class MusicPlayerController @Inject constructor(
     private val getSongLyricsUseCase: GetSongLyricsUseCase,
     // 播放成功后写入本地最近播放
     private val recordRecentPlayUseCase: RecordRecentPlayUseCase,
+    // 本周播放次数 +1
+    private val recordWeekPlayUseCase: RecordWeekPlayUseCase,
+    // 累加实际听歌时长
+    private val addListenDurationUseCase: AddListenDurationUseCase,
     private val likeSongUseCase: LikeSongUseCase,
     private val getLikedSongIdsUseCase: GetLikedSongIdsUseCase,
     private val observeLoginStateUseCase: ObserveLoginStateUseCase
@@ -84,8 +92,10 @@ class MusicPlayerController @Inject constructor(
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         _playbackState.update { it.copy(isPlaying = isPlaying) }
                         if (isPlaying) {
+                            markListeningStarted()
                             startPositionTracking()
                         } else {
+                            settleListenDuration()
                             positionJob?.cancel()
                         }
                     }
@@ -115,17 +125,19 @@ class MusicPlayerController @Inject constructor(
     // 当前登录用户收藏的歌曲 ID 缓存，用于切歌时同步红心状态
     private var likedSongIds: Set<Long> = emptySet()
     private var currentUserId: Long? = null
+    // 当前连续出声区间的起点（elapsedRealtime），用于结算实际听歌时长
+    private var listeningSinceElapsedRealtime: Long? = null
 
     init {
+        // 初始化时只取一次登录态，用于同步红心列表
         scope.launch {
-            observeLoginStateUseCase().collect { loginState ->
-                currentUserId = loginState.userId?.takeIf { loginState.isLoggedIn }
-                if (currentUserId != null) {
-                    refreshLikedSongIds(currentUserId!!)
-                } else {
-                    likedSongIds = emptySet()
-                    _playbackState.update { it.copy(isFavorite = false) }
-                }
+            val loginState = observeLoginStateUseCase().first()
+            currentUserId = loginState.userId?.takeIf { loginState.isLoggedIn }
+            if (currentUserId != null) {
+                refreshLikedSongIds(currentUserId!!)
+            } else {
+                likedSongIds = emptySet()
+                _playbackState.update { it.copy(isFavorite = false) }
             }
         }
     }
@@ -148,6 +160,8 @@ class MusicPlayerController @Inject constructor(
     // song：要播放的歌曲
     // queue：播放队列；为空时退化为只播当前这一首
     fun playSong(song: Song, queue: List<Song> = emptyList()) {
+        // 切歌前先结算上一首已听时长
+        settleListenDuration()
         // 没传队列时，用当前歌曲单首组成队列
         val resolvedQueue = queue.ifEmpty { listOf(song) }
         // 找到当前歌曲在队列中的位置，供下一首切换使用
@@ -191,8 +205,8 @@ class MusicPlayerController @Inject constructor(
                     _playbackState.update {
                         it.copy(isLoading = false, playUrl = url, error = null)
                     }
-                    // 获取到可播放地址后，记入本地最近播放
-                    recordRecentPlay(song)
+                    // 获取到可播放地址后，记入最近播放并统计本周次数
+                    recordPlayStats(song)
                     // 交给 ExoPlayer 加载并开始播放
                     exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
                     exoPlayer.prepare()
@@ -298,10 +312,29 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 异步写入最近播放，失败不影响当前播放流程
-    private fun recordRecentPlay(song: Song) {
+    // 异步写入最近播放与本周次数，失败不影响当前播放流程
+    private fun recordPlayStats(song: Song) {
         scope.launch {
             runCatching { recordRecentPlayUseCase(song) }
+            runCatching { recordWeekPlayUseCase() }
+        }
+    }
+
+    // 标记一段连续出声区间的起点
+    private fun markListeningStarted() {
+        if (listeningSinceElapsedRealtime == null) {
+            listeningSinceElapsedRealtime = SystemClock.elapsedRealtime()
+        }
+    }
+
+    // 结算自上次出声以来的实际听歌时长并落库
+    private fun settleListenDuration() {
+        val since = listeningSinceElapsedRealtime ?: return
+        listeningSinceElapsedRealtime = null
+        val elapsedMs = SystemClock.elapsedRealtime() - since
+        if (elapsedMs <= 0L) return
+        scope.launch {
+            runCatching { addListenDurationUseCase(elapsedMs) }
         }
     }
 

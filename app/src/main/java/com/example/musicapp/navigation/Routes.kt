@@ -21,6 +21,12 @@ sealed interface MusicRoute {
     data object Search : MusicRoute
 
     @Serializable
+    data object Liked : MusicRoute
+
+    @Serializable
+    data object Recent : MusicRoute
+
+    @Serializable
     data object Login : MusicRoute
 
     @Serializable

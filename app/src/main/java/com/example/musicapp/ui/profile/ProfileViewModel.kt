@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -20,10 +21,10 @@ data class ProfileUiState(
 )
 
 // 我的页 ViewModel
-// 负责同步登录状态，并处理退出登录
+// 进页时读取一次登录状态，并处理退出登录
 @HiltViewModel
 class ProfileViewModel @Inject constructor(
-    observeLoginStateUseCase: ObserveLoginStateUseCase,
+    private val observeLoginStateUseCase: ObserveLoginStateUseCase,
     private val logoutUseCase: LogoutUseCase
 ) : ViewModel() {
 
@@ -32,11 +33,10 @@ class ProfileViewModel @Inject constructor(
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
     init {
-        // 订阅登录状态变化，同步到 UI
+        // 进页时只取一次登录态，同步到 UI
         viewModelScope.launch {
-            observeLoginStateUseCase().collect { loginState ->
-                _uiState.update { it.copy(loginState = loginState) }
-            }
+            val loginState = observeLoginStateUseCase().first()
+            _uiState.update { it.copy(loginState = loginState) }
         }
     }
 

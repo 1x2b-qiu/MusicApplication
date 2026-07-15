@@ -19,5 +19,5 @@ data class LoginResult(
     // 失败时的提示信息
     val message: String? = null,
     // 登录成功后的用户昵称
-    val nickname: String? = null
+        val nickname: String? = null
 )

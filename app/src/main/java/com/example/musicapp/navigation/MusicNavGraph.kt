@@ -21,10 +21,12 @@ import androidx.navigation.compose.rememberNavController
 import com.example.musicapp.ui.component.bottombar.BottomTabBar
 import com.example.musicapp.ui.component.minplayer.MiniPlayerBar
 import com.example.musicapp.ui.home.HomeScreen
+import com.example.musicapp.ui.liked.LikedScreen
 import com.example.musicapp.ui.login.LoginScreen
 import com.example.musicapp.ui.player.PlayerScreen
 import com.example.musicapp.ui.profile.ProfileScreen
 import com.example.musicapp.ui.radio.RadioScreen
+import com.example.musicapp.ui.recent.RecentScreen
 import com.example.musicapp.ui.search.SearchScreen
 import com.example.musicapp.ui.splash.SplashScreen
 import dev.chrisbanes.haze.hazeSource
@@ -56,9 +58,11 @@ fun MusicNavGraph(
     val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
             currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
             currentDestination?.hasRoute<MusicRoute.Profile>() == true
-    // 搜索页只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
+    // 搜索页 / 我喜欢的 / 最近播放：只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
     val showMiniPlayerBar = showBottomTabBar ||
-            currentDestination?.hasRoute<MusicRoute.Search>() == true
+            currentDestination?.hasRoute<MusicRoute.Search>() == true ||
+            currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
+            currentDestination?.hasRoute<MusicRoute.Recent>() == true
 
     // 创建 Haze 模糊状态，供底部 Tab 栏做玻璃磨砂背景
     val hazeState = rememberHazeState()
@@ -121,6 +125,16 @@ fun MusicNavGraph(
                             restoreState = true
                         }
                     },
+                    onLikedClick = {
+                        navController.navigate(MusicRoute.Liked) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onRecentClick = {
+                        navController.navigate(MusicRoute.Recent) {
+                            launchSingleTop = true
+                        }
+                    },
                     onLoginClick = {
                         navController.navigate(MusicRoute.Login) {
                             launchSingleTop = true
@@ -154,6 +168,22 @@ fun MusicNavGraph(
 
             composable<MusicRoute.Search> {
                 SearchScreen(
+                    onBack = { navController.popBackStack() },
+                    darkTheme = darkTheme,
+                    hazeState = hazeState
+                )
+            }
+
+            composable<MusicRoute.Liked> {
+                LikedScreen(
+                    onBack = { navController.popBackStack() },
+                    darkTheme = darkTheme,
+                    hazeState = hazeState
+                )
+            }
+
+            composable<MusicRoute.Recent> {
+                RecentScreen(
                     onBack = { navController.popBackStack() },
                     darkTheme = darkTheme,
                     hazeState = hazeState
