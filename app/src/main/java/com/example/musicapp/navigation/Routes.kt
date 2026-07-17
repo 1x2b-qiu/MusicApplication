@@ -30,10 +30,5 @@ sealed interface MusicRoute {
     data object Login : MusicRoute
 
     @Serializable
-    data class Player(
-        val songId: Long,
-        val songName: String,
-        val artistName: String,
-        val coverUrl: String = ""
-    ) : MusicRoute
+    data object Player : MusicRoute
 }

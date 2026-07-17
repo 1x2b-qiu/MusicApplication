@@ -11,7 +11,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -32,8 +34,10 @@ data class LikedUiState(
     val error: String? = null,
     // 是否正在播放，驱动身份区主播放钮图标
     val isPlaying: Boolean = false,
-    // 当前播放歌曲 ID，用于判断是否仍在喜欢列表内连播
-    val currentSongId: Long? = null
+    // 当前播放歌曲 ID
+    val currentSongId: Long? = null,
+    // 本页会话内是否已点过主播放钮；ViewModel 销毁后随状态重置
+    val hasStartedPlayAll: Boolean = false
 )
 
 // 「我喜欢的」页 ViewModel
@@ -63,16 +67,24 @@ class LikedViewModel @Inject constructor(
             cachedUserId = observeLoginStateUseCase().first().userId
             loadLikedSongs()
         }
-        // 订阅全局播放器状态，驱动主播放钮与当前曲高亮逻辑
+        // 只取本页需要的播放字段，过滤无关更新
         viewModelScope.launch {
-            playerController.playbackState.collect { playbackState ->
-                _uiState.update {
-                    it.copy(
-                        isPlaying = playbackState.isPlaying,
-                        currentSongId = playbackState.currentSong?.id
+            playerController.playbackState
+                .map { state ->
+                    LikedUiState(
+                        isPlaying = state.isPlaying,
+                        currentSongId = state.currentSong?.id
                     )
                 }
-            }
+                .distinctUntilChanged()
+                .collect { playback ->
+                    _uiState.update {
+                        it.copy(
+                            isPlaying = playback.isPlaying,
+                            currentSongId = playback.currentSongId
+                        )
+                    }
+                }
         }
     }
 
@@ -109,16 +121,15 @@ class LikedViewModel @Inject constructor(
         playerController.playSong(song, queue)
     }
 
-    // 身份区主播放钮：当前曲在喜欢列表中则切换播停，否则从列表首曲连播全量
+    // 身份区主播放钮：本页首次点击从首曲连播全量，之后切换播停（至 ViewModel 销毁）
     fun onPlayAllClick() {
         val state = _uiState.value
         val queue = state.songs
         if (queue.isEmpty()) return
-        val currentId = state.currentSongId
-        val isPlayingLiked = currentId != null && queue.any { it.id == currentId }
-        if (isPlayingLiked) {
+        if (state.hasStartedPlayAll) {
             playerController.togglePlayPause()
         } else {
+            _uiState.update { it.copy(hasStartedPlayAll = true) }
             playerController.playSong(queue.first(), queue)
         }
     }

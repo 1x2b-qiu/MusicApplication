@@ -1,112 +1,107 @@
 package com.example.musicapp.ui.player
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicapp.controller.player.MusicPlayerController
-import com.example.musicapp.controller.player.PlaybackState
+import com.example.musicapp.controller.player.PlayerPlayMode
+import com.example.musicapp.domain.model.LyricLine
+import com.example.musicapp.domain.model.LyricMatcher
 import com.example.musicapp.domain.model.Song
-import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// 播放页 UI 状态
+// 全屏播放页 UI 状态（数据来自全局 MusicPlayerController）
 data class PlayerUiState(
-    // 当前歌曲 ID
     val songId: Long = 0L,
-    // 歌曲名
     val songName: String = "",
-    // 艺人名
     val artistName: String = "",
-    // 封面地址
+    val albumName: String = "",
     val coverUrl: String? = null,
-    // 是否已登录，用于控制顶部登录入口
-    val isLoggedIn: Boolean = false,
-    // 是否正在拉取播放地址
+    // 是否正在解析播放地址
     val isLoading: Boolean = false,
-    // 当前可用的流媒体地址
     val playUrl: String? = null,
-    // 播放或拉取地址时的错误信息
     val error: String? = null,
-    // 是否正在播放
-    val isPlaying: Boolean = false
-)
+    val isPlaying: Boolean = false,
+    val isFavorite: Boolean = false,
+    // 播放队列与当前下标
+    val queue: List<Song> = emptyList(),
+    val queueIndex: Int = 0,
+    val lyrics: List<LyricLine> = emptyList(),
+    val playMode: PlayerPlayMode = PlayerPlayMode.Shuffle,
+    // 进度（毫秒），来自 PlaybackState
+    val currentPositionMs: Long = 0L,
+    val durationMs: Long = 0L
+) {
+    // 当前高亮歌词行（与 Controller / LyricMatcher 同一套匹配算法）
+    val activeLyricIndex: Int
+        get() = LyricMatcher.currentIndex(lyrics, currentPositionMs)
 
-// 播放页 ViewModel
-// 将全局 MusicPlayerController 的播放状态映射为页面 UI 状态
-// 若进入页面时还没有正在播放的歌曲，则根据导航参数自动发起播放
+    // 进度条比例 0f..1f
+    val progressFraction: Float
+        get() = if (durationMs <= 0L) 0f else (currentPositionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+}
+
+// 全屏播放页 ViewModel：只读全局播放状态，播控委托 MusicPlayerController
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
-    private val playerController: MusicPlayerController,
-    observeLoginStateUseCase: ObserveLoginStateUseCase,
-    savedStateHandle: SavedStateHandle
+    private val playerController: MusicPlayerController
 ) : ViewModel() {
 
-    // 从导航参数读取的歌曲信息，作为播放前的兜底展示数据
-    private val navSongId: Long = savedStateHandle.get<Long>("songId") ?: 0L
-    private val navSongName: String = savedStateHandle.get<String>("songName").orEmpty()
-    private val navArtistName: String = savedStateHandle.get<String>("artistName").orEmpty()
-    private val navCoverUrl: String? = savedStateHandle.get<String>("coverUrl")?.takeIf { it.isNotBlank() }
-
-    // 进页时读取一次，不再持续观察登录态
-    private val isLoggedIn = MutableStateFlow(false)
-
-    // 直接暴露 ExoPlayer，供 PlayerScreen 挂载 PlayerView
-    val exoPlayer get() = playerController.exoPlayer
-
-    // 合并播放状态与一次性登录结果，生成页面 UI 状态
-    val uiState: StateFlow<PlayerUiState> = combine(
-        playerController.playbackState,
-        isLoggedIn
-    ) { playback, loggedIn ->
-        playback.toPlayerUiState(loggedIn)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = PlayerUiState()
-    )
-
-    init {
-        viewModelScope.launch {
-            isLoggedIn.value = observeLoginStateUseCase().first().isLoggedIn
-        }
-        // 若全局播放器尚未开始播歌，则使用导航参数触发首次播放
-        val current = playerController.playbackState.value.currentSong
-        if (current == null && navSongId > 0L) {
-            playerController.playSong(
-                Song(
-                    id = navSongId,
-                    name = navSongName,
-                    artists = navArtistName,
-                    album = "",
-                    coverUrl = navCoverUrl,
-                    durationMs = 0L
-                )
+    // 映射本页需要的字段并过滤无关更新
+    val uiState: StateFlow<PlayerUiState> = playerController.playbackState
+        .map { state ->
+            val song = state.displaySong
+            PlayerUiState(
+                songId = song?.id ?: 0L,
+                songName = song?.name.orEmpty(),
+                artistName = song?.artists.orEmpty(),
+                albumName = song?.album.orEmpty(),
+                coverUrl = song?.coverUrl,
+                isLoading = state.isLoading,
+                playUrl = state.playUrl,
+                error = state.error,
+                isPlaying = state.isPlaying,
+                isFavorite = state.isFavorite,
+                queue = state.queue,
+                queueIndex = state.queueIndex,
+                lyrics = state.lyrics,
+                playMode = state.playMode,
+                currentPositionMs = state.currentPositionMs,
+                durationMs = song?.durationMs ?: 0L
             )
         }
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = PlayerUiState()
+        )
+
+    fun togglePlayPause() = playerController.togglePlayPause()
+
+    fun toggleFavorite() = playerController.toggleFavorite()
+
+    fun skipToNext() = playerController.skipToNext()
+
+    fun skipToPrevious() = playerController.skipToPrevious()
+
+    // 进度条拖动结束后定位
+    fun seekTo(positionMs: Long) = playerController.seekTo(positionMs)
+
+    // 点击歌词跳转到对应时间
+    fun seekToLyric(index: Int) {
+        val lyric = uiState.value.lyrics.getOrNull(index) ?: return
+        playerController.seekTo(lyric.timeMs)
     }
 
-    // 将全局 PlaybackState 转换为播放页展示状态
-    // 播放器尚未返回歌曲信息时，回退到导航参数
-    private fun PlaybackState.toPlayerUiState(isLoggedIn: Boolean): PlayerUiState {
-        val song = currentSong
-        return PlayerUiState(
-            songId = song?.id ?: navSongId,
-            songName = song?.name ?: navSongName,
-            artistName = song?.artists ?: navArtistName,
-            coverUrl = song?.coverUrl ?: navCoverUrl,
-            isLoggedIn = isLoggedIn,
-            isLoading = isLoading,
-            playUrl = playUrl,
-            error = error,
-            isPlaying = isPlaying
-        )
-    }
+    // 播放队列中指定项
+    fun playQueueItemAt(index: Int) = playerController.playQueueItemAt(index)
+
+    // 切换播放模式，逻辑在 Controller
+    fun cyclePlayMode() = playerController.cyclePlayMode()
 }

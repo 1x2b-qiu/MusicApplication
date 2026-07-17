@@ -13,7 +13,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -68,18 +70,28 @@ class HomeViewModel @Inject constructor(
             _uiState.update { it.copy(loginState = loginState) }
             loadHomeContent()
         }
-        // 订阅全局播放器状态，驱动顶栏歌词与播放指示
+        // 只取本页需要的播放字段，过滤无关更新（含顶栏歌词）
         viewModelScope.launch {
-            playerController.playbackState.collect { playbackState ->
-                _uiState.update {
-                    it.copy(
-                        currentLyricLine = playbackState.currentLyricLine,
-                        isPlaying = playbackState.isPlaying,
-                        currentSongId = playbackState.currentSong?.id,
-                        hasPlaybackContent = playbackState.displaySong != null
+            playerController.playbackState
+                .map { state ->
+                    HomeUiState(
+                        currentLyricLine = state.currentLyricLine,
+                        isPlaying = state.isPlaying,
+                        currentSongId = state.currentSong?.id,
+                        hasPlaybackContent = state.displaySong != null
                     )
                 }
-            }
+                .distinctUntilChanged()
+                .collect { playback ->
+                    _uiState.update {
+                        it.copy(
+                            currentLyricLine = playback.currentLyricLine,
+                            isPlaying = playback.isPlaying,
+                            currentSongId = playback.currentSongId,
+                            hasPlaybackContent = playback.hasPlaybackContent
+                        )
+                    }
+                }
         }
         // 订阅本地最近播放；播放器写入后首页会自动刷新
         viewModelScope.launch {

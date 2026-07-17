@@ -88,10 +88,6 @@ fun RecentScreen(
 
     // 底部留白：迷你播放栏 66dp + 导航层间距 12dp
     val miniPlayerBottomInset = 78.dp
-    // 当前是否正在连播最近播放列表（驱动身份区播停图标）
-    val isPlayingRecent = uiState.currentSongId != null &&
-            uiState.songs.any { it.id == uiState.currentSongId } &&
-            uiState.isPlaying
     // 列表区空态文案；有数据时为 null，展示 LazyColumn
     val statusMessage = when {
         uiState.isLoading && uiState.songs.isEmpty() -> "加载中…"
@@ -132,7 +128,7 @@ fun RecentScreen(
                 totalPlayHours = uiState.totalPlayHours,
                 totalPlayMinutes = uiState.totalPlayMinutes,
                 coverUrl = uiState.songs.firstOrNull()?.coverUrl,
-                isPlayingRecent = isPlayingRecent,
+                isPlayingRecent = uiState.hasStartedPlayAll && uiState.isPlaying,
                 onPlayAllClick = {
                     dismissKeyboard()
                     viewModel.onPlayAllClick()

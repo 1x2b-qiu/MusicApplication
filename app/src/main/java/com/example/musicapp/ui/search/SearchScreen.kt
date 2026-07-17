@@ -111,7 +111,7 @@ fun SearchScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
-            .navigationBarsPadding()
+//            .navigationBarsPadding()
             .imePadding()
     ) {
 

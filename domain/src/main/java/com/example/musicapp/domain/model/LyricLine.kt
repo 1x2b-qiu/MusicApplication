@@ -12,27 +12,29 @@ data class LyricLine(
 object LyricMatcher {
 
     /**
-     * 查找当前播放位置对应的歌词文本。
-     *
-     * lines 必须按 timeMs 升序排列。算法从前往后扫描，持续记录
-     * 「开始时间 <= 当前进度」的最后一句；一旦遇到未来的歌词行就停止。
-     *
-     * 例：positionMs = 20000，歌词分别在 12000 / 18500 / 25000 开始，
-     * 则返回 18500 那句，因为 25000 还没到。
+     * 查找当前播放位置对应的歌词下标。
+     * lines 须按 timeMs 升序；取「timeMs <= positionMs」的最后一句。
+     * 无歌词，或进度尚未到达第一句时，返回 0。
      */
-    fun currentLine(lines: List<LyricLine>, positionMs: Long): String? {
-        if (lines.isEmpty()) return null
-
-        // 记录目前为止最后一个已经"到达"的歌词行
-        var result: LyricLine? = null
-        for (line in lines) {
-            if (line.timeMs <= positionMs) {
-                result = line
+    fun currentIndex(lines: List<LyricLine>, positionMs: Long): Int {
+        if (lines.isEmpty()) return 0
+        var index = 0
+        for (current in lines.indices) {
+            if (lines[current].timeMs <= positionMs) {
+                index = current
             } else {
-                // 后续行的开始时间都大于当前进度，无需继续扫描
                 break
             }
         }
-        return result?.text
+        return index
+    }
+
+    /**
+     * 查找当前播放位置对应的歌词文本；尚无到达的句子时返回 null。
+     */
+    fun currentLine(lines: List<LyricLine>, positionMs: Long): String? {
+        if (lines.isEmpty()) return null
+        val line = lines[currentIndex(lines, positionMs)]
+        return if (line.timeMs <= positionMs) line.text else null
     }
 }

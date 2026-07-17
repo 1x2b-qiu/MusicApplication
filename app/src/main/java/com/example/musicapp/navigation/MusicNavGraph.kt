@@ -192,12 +192,7 @@ fun MusicNavGraph(
 
             composable<MusicRoute.Player> {
                 PlayerScreen(
-                    onBack = { navController.popBackStack() },
-                    onLoginClick = {
-                        navController.navigate(MusicRoute.Login) {
-                            launchSingleTop = true
-                        }
-                    }
+                    onBack = { navController.popBackStack() }
                 )
             }
         }
@@ -211,16 +206,12 @@ fun MusicNavGraph(
             ) {
                 MiniPlayerBar(
                     hazeState = hazeState,
-                    onPlayerClick = { song ->
-                    navController.navigate(
-                        MusicRoute.Player(
-                            songId = song.id,
-                            songName = song.name,
-                            artistName = song.artists,
-                            coverUrl = song.coverUrl.orEmpty()
-                        )
-                    )
-                })
+                    onPlayerClick = {
+                        navController.navigate(MusicRoute.Player) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
                 if (showBottomTabBar) {
                     BottomTabBar(
                         hazeState = hazeState,

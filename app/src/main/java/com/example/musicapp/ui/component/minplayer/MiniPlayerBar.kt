@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,7 +38,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.R
-import com.example.musicapp.domain.model.Song
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -47,13 +45,13 @@ import dev.chrisbanes.haze.hazeEffect
 @Composable
 fun MiniPlayerBar(
     hazeState: HazeState,
-    onPlayerClick: (Song) -> Unit,
+    onPlayerClick: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: MiniPlayerViewModel = hiltViewModel()
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val playbackState by viewModel.playbackState.collectAsStateWithLifecycle()
-    val song = playbackState.displaySong ?: return
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val song = uiState.song ?: return
     val barShape = RoundedCornerShape(16.dp)
 
     Column(modifier = modifier) {
@@ -103,7 +101,12 @@ fun MiniPlayerBar(
             ) {
                 Row(
                     modifier = Modifier
-                        .weight(1f),
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClick = onPlayerClick
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
@@ -142,7 +145,7 @@ fun MiniPlayerBar(
                         .size(36.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    val isFavorite = playbackState.isFavorite
+                    val isFavorite = uiState.isFavorite
                     Icon(
                         painter = painterResource(
                             if (isFavorite) R.drawable.ic_heart2 else R.drawable.ic_heart
@@ -172,7 +175,7 @@ fun MiniPlayerBar(
                 ) {
                     Image(
                         painter = painterResource(
-                            if (playbackState.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                            if (uiState.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
                         ),
                         contentDescription = null,
                         colorFilter = ColorFilter.tint(colorScheme.onPrimary),
