@@ -269,8 +269,9 @@ private fun HomeLyricsHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 24.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(top = 14.dp)
+            .height(46.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AvatarWithPulseRing(
@@ -307,7 +308,7 @@ private fun HomeLyricsHeader(
             AnimatedLyricText(lyricLine = currentLyricLine)
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             HomeHeaderIconButton(
                 onClick = onSearchClick,
                 contentDescription = "搜索"

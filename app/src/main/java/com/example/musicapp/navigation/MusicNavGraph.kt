@@ -30,6 +30,7 @@ import com.example.musicapp.ui.profile.ProfileScreen
 import com.example.musicapp.ui.radio.RadioScreen
 import com.example.musicapp.ui.recent.RecentScreen
 import com.example.musicapp.ui.search.SearchScreen
+import com.example.musicapp.ui.settings.SettingsScreen
 import com.example.musicapp.ui.splash.SplashScreen
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
@@ -60,7 +61,7 @@ fun MusicNavGraph(
     val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
             currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
             currentDestination?.hasRoute<MusicRoute.Profile>() == true
-    // 搜索页 / 我喜欢的 / 最近播放：只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
+    // 搜索 / 喜欢 / 最近：只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
     val showMiniPlayerBar = showBottomTabBar ||
             currentDestination?.hasRoute<MusicRoute.Search>() == true ||
             currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
@@ -153,18 +154,17 @@ fun MusicNavGraph(
 
             composable<MusicRoute.Profile> {
                 ProfileScreen(
-                    onLoginClick = {
-                        navController.navigate(MusicRoute.Login) {
-                            launchSingleTop = true
-                        }
-                    },
-                    onLoggedOut = {
-                        // 退出登录后回到登录页，并清空主界面栈
-                        navController.navigate(MusicRoute.Login) {
-                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    onSettingsClick = {
+                        navController.navigate(MusicRoute.Settings) {
                             launchSingleTop = true
                         }
                     }
+                )
+            }
+
+            composable<MusicRoute.Settings> {
+                SettingsScreen(
+                    onBack = { navController.popBackStack() }
                 )
             }
 
