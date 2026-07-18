@@ -2,8 +2,8 @@ package com.example.musicapp.ui.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musicapp.controller.player.MusicPlayerController
-import com.example.musicapp.controller.player.PlayerPlayMode
+import com.example.musicapp.controller.MusicPlayerController
+import com.example.musicapp.controller.PlayerPlayMode
 import com.example.musicapp.domain.model.LyricLine
 import com.example.musicapp.domain.model.LyricMatcher
 import com.example.musicapp.domain.model.Song

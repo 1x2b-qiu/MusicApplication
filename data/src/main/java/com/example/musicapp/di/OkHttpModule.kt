@@ -1,5 +1,6 @@
 package com.example.musicapp.di
 
+import com.example.musicapp.data.BuildConfig
 import com.example.musicapp.data.remote.interceptor.CookieInterceptor
 import dagger.Module
 import dagger.Provides
@@ -17,18 +18,23 @@ object OkHttpModule {
 
     @Provides
     @Singleton
-    // 配置超时、Cookie 拦截器与请求日志
+    // 配置超时、Cookie 拦截器；HTTP 日志仅 debug 开启
     fun provideOkHttpClient(
         cookieInterceptor: CookieInterceptor
     ): OkHttpClient {
-        val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
-        }
         return OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(15, TimeUnit.SECONDS)
             .addInterceptor(cookieInterceptor)
-            .addInterceptor(logging)
+            .apply {
+                if (BuildConfig.DEBUG) {
+                    addInterceptor(
+                        HttpLoggingInterceptor().apply {
+                            level = HttpLoggingInterceptor.Level.BASIC
+                        }
+                    )
+                }
+            }
             .build()
     }
 }

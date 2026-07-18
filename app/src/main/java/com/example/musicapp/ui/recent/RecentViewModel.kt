@@ -2,7 +2,7 @@ package com.example.musicapp.ui.recent
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musicapp.controller.player.MusicPlayerController
+import com.example.musicapp.controller.MusicPlayerController
 import com.example.musicapp.domain.model.Song
 import com.example.musicapp.domain.usecase.ObservePlayStatsUseCase
 import com.example.musicapp.domain.usecase.ObserveRecentPlayedSongsUseCase

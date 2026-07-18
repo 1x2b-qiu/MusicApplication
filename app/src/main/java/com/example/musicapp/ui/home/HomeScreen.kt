@@ -75,6 +75,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +88,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.R
 import com.example.musicapp.domain.model.Song
+import com.example.musicapp.util.rememberCoverRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -457,7 +459,7 @@ private fun AvatarWithPulseRing(
                 .clickable(onClick = onClick)
         ) {
             AsyncImage(
-                model = avatarUrl,
+                model = rememberCoverRequest(avatarUrl, 40.dp),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()
@@ -598,7 +600,7 @@ fun HomeRecentItem(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         AsyncImage(
-            model = song.coverUrl,
+            model = rememberCoverRequest(song.coverUrl, 48.dp),
             contentDescription = song.name,
             modifier = Modifier
                 .size(48.dp)
@@ -768,6 +770,7 @@ private fun FavoritesGlassMainCard(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val glassStyle = rememberFavoritesGlassStyle(darkTheme)
+    val coverDecodeWidth = LocalConfiguration.current.screenWidthDp.dp
     val playInteraction = remember { MutableInteractionSource() }
     val isPlayPressed by playInteraction.collectIsPressedAsState()
     val playScale by animateFloatAsState(
@@ -844,7 +847,7 @@ private fun FavoritesGlassMainCard(
             ) { songId ->
                 val song = songById[songId] ?: return@AnimatedContent
                 AsyncImage(
-                    model = song.coverUrl,
+                    model = rememberCoverRequest(song.coverUrl, coverDecodeWidth, 208.dp),
                     contentDescription = song.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop,
@@ -996,7 +999,7 @@ private fun FavoritesThumbnailItem(
                 .clickable(onClick = onClick)
         ) {
             AsyncImage(
-                model = song.coverUrl,
+                model = rememberCoverRequest(song.coverUrl, 62.dp),
                 contentDescription = song.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop,

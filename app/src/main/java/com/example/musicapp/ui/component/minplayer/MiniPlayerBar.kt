@@ -38,6 +38,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.R
+import com.example.musicapp.util.rememberCoverRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -111,7 +112,7 @@ fun MiniPlayerBar(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     AsyncImage(
-                        model = song.coverUrl,
+                        model = rememberCoverRequest(song.coverUrl, 44.dp),
                         contentDescription = song.name,
                         modifier = Modifier
                             .size(44.dp)

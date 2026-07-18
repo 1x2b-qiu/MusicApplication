@@ -11,8 +11,10 @@ android {
 
     defaultConfig {
         minSdk = 24
+        // USB 调试：adb reverse tcp:3000 tcp:3000 后用 127.0.0.1（不依赖局域网/防火墙）
+        buildConfigField("String", "NETEASE_BASE_URL", "\"http://127.0.0.1:3000/\"")
+        // 路由器局域网：手机与跑 NeteaseCloudMusicApi 的电脑需在同一 Wi‑Fi
 //        buildConfigField("String", "NETEASE_BASE_URL", "\"http://192.168.31.130:3000/\"")
-        buildConfigField("String", "NETEASE_BASE_URL", "\"http://192.168.1.115:3000/\"")
     }
 
     compileOptions {

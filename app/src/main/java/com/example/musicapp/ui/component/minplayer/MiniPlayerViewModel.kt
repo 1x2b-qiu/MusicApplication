@@ -2,7 +2,7 @@ package com.example.musicapp.ui.component.minplayer
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musicapp.controller.player.MusicPlayerController
+import com.example.musicapp.controller.MusicPlayerController
 import com.example.musicapp.domain.model.Song
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted

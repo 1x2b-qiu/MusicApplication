@@ -8,7 +8,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,11 +18,8 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -51,7 +47,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
@@ -61,6 +56,7 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -72,8 +68,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.R
-import com.example.musicapp.controller.player.PlayerPlayMode
+import com.example.musicapp.controller.PlayerPlayMode
 import com.example.musicapp.domain.model.Song
+import com.example.musicapp.util.rememberCoverRequest
 import com.example.musicapp.ui.component.player.PlayerQueueBottomSheet
 import com.example.musicapp.ui.home.formatSongDuration
 import dev.chrisbanes.haze.HazeState
@@ -162,6 +159,7 @@ fun PlayerScreen(
                         coverUrl = uiState.coverUrl,
                         songName = uiState.songName,
                         isPlaying = uiState.isPlaying,
+                        decodeSizeFraction = 0.7f,
                         modifier = Modifier
                             .fillMaxWidth(0.7f)
                             .aspectRatio(1f)
@@ -307,16 +305,18 @@ private fun PlayerAlbumArt(
     coverUrl: String?,
     songName: String,
     isPlaying: Boolean,
+    decodeSizeFraction: Float,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val decodeSize = LocalConfiguration.current.screenWidthDp.dp * decodeSizeFraction
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(34.dp))
             .border(1.dp, colorScheme.primary, RoundedCornerShape(34.dp))
     ) {
         AsyncImage(
-            model = coverUrl,
+            model = rememberCoverRequest(coverUrl, decodeSize),
             contentDescription = songName,
             modifier = Modifier.fillMaxSize(),
             contentScale = ContentScale.Crop
@@ -783,6 +783,7 @@ private fun ImmersivePlayerContent(
                 coverUrl = uiState.coverUrl,
                 songName = uiState.songName,
                 isPlaying = uiState.isPlaying,
+                decodeSizeFraction = 0.4f,
                 modifier = Modifier
                     .fillMaxWidth(0.4f)
                     .aspectRatio(1f)

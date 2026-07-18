@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.R
 import com.example.musicapp.domain.model.Song
+import com.example.musicapp.util.rememberCoverRequest
 import com.example.musicapp.ui.home.formatSongDuration
 import com.example.musicapp.util.ClearFocusOnImeHidden
 import com.example.musicapp.util.dismissKeyboardOnTap
@@ -421,7 +422,7 @@ private fun RecentIdentityRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         AsyncImage(
-            model = coverUrl,
+            model = rememberCoverRequest(coverUrl, 54.dp),
             contentDescription = null,
             modifier = Modifier
                 .size(54.dp)
@@ -523,7 +524,7 @@ private fun RecentTrackRow(
             modifier = Modifier.width(23.dp)
         )
         AsyncImage(
-            model = song.coverUrl,
+            model = rememberCoverRequest(song.coverUrl, 43.dp),
             contentDescription = song.name,
             modifier = Modifier
                 .size(43.dp)

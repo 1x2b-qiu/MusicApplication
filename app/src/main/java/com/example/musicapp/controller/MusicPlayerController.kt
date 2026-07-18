@@ -1,9 +1,13 @@
-package com.example.musicapp.controller.player
+package com.example.musicapp.controller
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.example.musicapp.domain.model.LyricLine
@@ -17,6 +21,7 @@ import com.example.musicapp.domain.usecase.LikeSongUseCase
 import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
 import com.example.musicapp.domain.usecase.RecordRecentPlayUseCase
 import com.example.musicapp.domain.usecase.RecordWeekPlayUseCase
+import com.example.musicapp.service.MusicPlaybackService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -42,7 +47,8 @@ enum class PlayerPlayMode {
     Single
 }
 
-// 全局播放状态
+// 全局播放状态，供 UI（迷你栏、全屏播放器等）订阅
+// currentSong：已真正进入播放链路；previewSong：未开播时仅展示封面/歌名
 data class PlaybackState(
     // 当前正在播放的歌曲；为 null 表示尚未真正开始播
     val currentSong: Song? = null,
@@ -60,7 +66,7 @@ data class PlaybackState(
     val error: String? = null,
     // 当前播放队列
     val queue: List<Song> = emptyList(),
-    // 当前歌曲在队列中的下标，供 skipToNext 使用
+    // 当前歌曲在队列中的下标，供上下首切歌使用
     val queueIndex: Int = 0,
     // 当前歌曲的 LRC 歌词
     val lyrics: List<LyricLine> = emptyList(),
@@ -78,77 +84,90 @@ data class PlaybackState(
         get() = currentSong ?: previewSong
 }
 
-// 全局音乐播放控制器
-// Hilt 单例，整个 App 共享同一个 ExoPlayer 实例
-// 负责拉取播放地址、驱动 ExoPlayer、维护 PlaybackState
-// 不依赖 ViewModel / NavGraph，由各处通过 Hilt 注入获取
+// 全局音乐播放控制器（Hilt 单例）
+// 拉 URL / 队列 / 歌词 / PlaybackState / 听歌统计与收藏；
+// 持有进程内唯一 ExoPlayer，由 MusicPlaybackService 挂到 MediaSession
 @Singleton
 class MusicPlayerController @Inject constructor(
-    @ApplicationContext context: Context,
+    // Application Context：创建 ExoPlayer、启动 MusicPlaybackService
+    @ApplicationContext private val context: Context,
+    // 按歌曲 id 拉取可播流媒体 URL
     private val getSongUrlUseCase: GetSongUrlUseCase,
+    // 拉取并解析 LRC 歌词
     private val getSongLyricsUseCase: GetSongLyricsUseCase,
-    // 播放成功后写入本地最近播放
+    // 写入最近播放记录
     private val recordRecentPlayUseCase: RecordRecentPlayUseCase,
-    // 本周播放次数 +1
+    // 累加本周播放次数
     private val recordWeekPlayUseCase: RecordWeekPlayUseCase,
-    // 累加实际听歌时长
+    // 累加听歌时长（本地统计）
     private val addListenDurationUseCase: AddListenDurationUseCase,
+    // 红心收藏 / 取消收藏
     private val likeSongUseCase: LikeSongUseCase,
+    // 拉取当前用户红心歌单 id 列表
     private val getLikedSongIdsUseCase: GetLikedSongIdsUseCase,
+    // 观察登录态，用于预热收藏与鉴权提示
     private val observeLoginStateUseCase: ObserveLoginStateUseCase
 ) {
-    // 底层播放器，真正负责解码和出声
-    // lazy：首次访问时才创建，避免 App 启动时即占用音频资源
-    val exoPlayer: ExoPlayer by lazy {
-        ExoPlayer.Builder(context).build().also { player ->
-            // 监听 ExoPlayer 播放状态变化，同步到 PlaybackState.isPlaying
-            player.addListener(
-                object : Player.Listener {
-                    override fun onIsPlayingChanged(isPlaying: Boolean) {
-                        _playbackState.update { it.copy(isPlaying = isPlaying) }
-                        if (isPlaying) {
-                            markListeningStarted()
-                            startPositionTracking()
-                        } else {
-                            settleListenDuration()
-                            syncPositionAndLyric()
-                            positionJob?.cancel()
-                        }
-                    }
-
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        when (playbackState) {
-                            Player.STATE_READY -> syncPositionAndLyric()
-                            Player.STATE_ENDED -> onPlaybackEnded()
-                        }
-                    }
-                }
+    // 底层播放器（懒加载）；音频焦点与「拔出耳机暂停」交给 Media3
+    // 播放/暂停状态通过 Listener 回写 playbackState
+    val player: ExoPlayer by lazy {
+        ExoPlayer.Builder(context)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus = */ true
             )
-        }
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+            .also { player ->
+                player.addListener(
+                    object : Player.Listener {
+                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                            _playbackState.update { it.copy(isPlaying = isPlaying) }
+                            if (isPlaying) {
+                                markListeningStarted()
+                                startPositionTracking()
+                            } else {
+                                // 暂停/停止时结算听歌时长，并停掉进度轮询
+                                settleListenDuration()
+                                syncPositionAndLyric()
+                                positionJob?.cancel()
+                            }
+                        }
+
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            when (playbackState) {
+                                Player.STATE_READY -> syncPositionAndLyric()
+                                Player.STATE_ENDED -> onPlaybackEnded()
+                            }
+                        }
+                    }
+                )
+            }
     }
 
-    // 控制器自己的协程作用域
-    // SupervisorJob：某个播放任务异常不会拖垮整个 scope
-    // Main.immediate：状态更新和 ExoPlayer 调用保持在主线程
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    // 内部可变状态
     private val _playbackState = MutableStateFlow(PlaybackState())
-    // 对外只读，UI 层 collect 这个 Flow
+    // UI 订阅的全局播放状态
     val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
+    // 播放中每 200ms 同步进度与歌词
     private var positionJob: Job? = null
+    // 异步拉取歌词；切歌时取消旧任务
     private var lyricJob: Job? = null
-    // 拉取播放地址的任务；切歌时取消，避免旧 URL 覆盖新歌
+    // 异步拉取播放 URL；切歌时取消，避免旧请求回写新状态
     private var urlJob: Job? = null
-    // 当前登录用户收藏的歌曲 ID 缓存，用于切歌时同步红心状态
+    // 本地缓存的红心歌单 id，用于即时判断收藏态
     private var likedSongIds: Set<Long> = emptySet()
     private var currentUserId: Long? = null
-    // 当前连续出声区间的起点（elapsedRealtime），用于结算实际听歌时长
+    // 本次连续播放段起点（elapsedRealtime）；null 表示当前未在计时
     private var listeningSinceElapsedRealtime: Long? = null
 
     init {
-        // 初始化时只取一次登录态，用于同步红心列表
+        // 启动时根据登录态预热红心列表，避免首屏收藏图标闪错
         scope.launch {
             val loginState = observeLoginStateUseCase().first()
             currentUserId = loginState.userId?.takeIf { loginState.isLoggedIn }
@@ -161,9 +180,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 设置迷你栏预览歌曲
-    // 典型场景：首页加载出精选歌、搜索页点选歌曲但尚未播放
-    // 若当前还没有队列，则把这首歌作为初始队列
+    // 设置迷你栏预览曲；不触发真正播放。队列为空时用该曲填成单曲队列
     fun setPreviewSong(song: Song) {
         _playbackState.update { state ->
             state.copy(
@@ -175,22 +192,17 @@ class MusicPlayerController @Inject constructor(
         syncFavoriteForCurrentSong()
     }
 
-    // 播放指定歌曲
-    // song：要播放的歌曲
-    // queue：播放队列；为空时退化为只播当前这一首
+    // 播放指定歌曲：结算上一曲时长 → 更新状态并拉歌词 → 启动服务 → 异步取 URL 后 prepare/play
+    // 切歌会取消进行中的 URL/歌词任务，并用 songId 校验防止过期回调污染状态
     fun playSong(song: Song, queue: List<Song> = emptyList()) {
-        // 切歌前先结算上一首已听时长
         settleListenDuration()
-        // 没传队列时，用当前歌曲单首组成队列
         val resolvedQueue = queue.ifEmpty { listOf(song) }
-        // 找到当前歌曲在队列中的位置，供下一首切换使用
         val queueIndex = resolvedQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
 
         positionJob?.cancel()
         lyricJob?.cancel()
         urlJob?.cancel()
 
-        // 先同步 UI 状态：切歌、进入 loading、清空旧错误和旧地址
         _playbackState.update {
             it.copy(
                 currentSong = song,
@@ -206,15 +218,15 @@ class MusicPlayerController @Inject constructor(
             )
         }
 
+        ensurePlaybackService()
         loadLyrics(song.id)
         syncFavoriteForCurrentSong()
 
-        // 异步向服务端请求真实可播放地址；切歌时会取消，并二次校验 songId
         val requestSongId = song.id
         urlJob = scope.launch {
             try {
                 val songUrl = getSongUrlUseCase(requestSongId)
-                // 请求返回时可能已切到别的歌，丢弃过期结果
+                // 用户已切到别的歌：丢弃本次结果
                 if (_playbackState.value.currentSong?.id != requestSongId) return@launch
 
                 val url = songUrl.url
@@ -230,9 +242,9 @@ class MusicPlayerController @Inject constructor(
                         it.copy(isLoading = false, playUrl = url, error = null)
                     }
                     recordPlayStats(song)
-                    exoPlayer.setMediaItem(MediaItem.fromUri(Uri.parse(url)))
-                    exoPlayer.prepare()
-                    exoPlayer.playWhenReady = true
+                    player.setMediaItem(buildMediaItem(song, url))
+                    player.prepare()
+                    player.playWhenReady = true
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -248,9 +260,8 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 播放/暂停切换
-    // 若还没有 currentSong，则先把 previewSong 真正播起来
-    // 若已在播，则直接控制 ExoPlayer 暂停/继续
+    // 播放/暂停：无 currentSong 时用 preview 走 playSong；
+    // 已有曲目时先 ensurePlaybackService（暂停期间服务可能被系统回收）再 play/pause
     fun togglePlayPause() {
         val state = _playbackState.value
         if (state.currentSong == null) {
@@ -259,25 +270,26 @@ class MusicPlayerController @Inject constructor(
             }
             return
         }
-        if (exoPlayer.isPlaying) {
-            exoPlayer.pause()
+        ensurePlaybackService()
+        if (player.isPlaying) {
+            player.pause()
         } else {
-            exoPlayer.play()
+            player.play()
         }
     }
 
-    // 当前曲播完：单曲重播；列表循环 / 随机则按模式切下一首
+    // 单曲播完：单曲循环重播，其余模式切下一首
     private fun onPlaybackEnded() {
         when (_playbackState.value.playMode) {
             PlayerPlayMode.Single -> {
-                exoPlayer.seekTo(0)
-                exoPlayer.play()
+                player.seekTo(0)
+                player.play()
             }
             PlayerPlayMode.Loop, PlayerPlayMode.Shuffle -> skipToNext()
         }
     }
 
-    // 播放队列中的下一首（行为随 playMode 变化）
+    // 按当前播放模式切到下一首
     fun skipToNext() {
         val state = _playbackState.value
         val queue = state.queue
@@ -286,7 +298,7 @@ class MusicPlayerController @Inject constructor(
         playSong(queue[nextIndex], queue)
     }
 
-    // 播放队列中的上一首（行为随 playMode 变化）
+    // 上一首：Shuffle 随机；Loop 环形回退；Single 在队首则回到开头，否则播上一曲
     fun skipToPrevious() {
         val state = _playbackState.value
         val queue = state.queue
@@ -304,9 +316,8 @@ class MusicPlayerController @Inject constructor(
                 playSong(queue[previousIndex], queue)
             }
             PlayerPlayMode.Single -> {
-                // 手动上一首仍切队列；已在队首则回到当前曲开头
                 if (state.queueIndex <= 0) {
-                    exoPlayer.seekTo(0)
+                    player.seekTo(0)
                     syncPositionAndLyric()
                 } else {
                     playSong(queue[state.queueIndex - 1], queue)
@@ -315,7 +326,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 随机 → 列表循环 → 单曲循环 → 随机
+    // 循环切换播放模式：随机 → 列表循环 → 单曲循环 → 随机
     fun cyclePlayMode() {
         _playbackState.update { state ->
             state.copy(
@@ -328,18 +339,17 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 供 skipToNext 使用：含手动下一首（单曲模式播完不会走到这里，点下一首会）
+    // 解析「下一首」下标；单曲循环在手动/自动下一首时仍按列表前进
     private fun resolveNextIndex(state: PlaybackState): Int {
         val queue = state.queue
         return when (state.playMode) {
             PlayerPlayMode.Shuffle -> resolveRandomIndex(queue, state.queueIndex)
-            // Loop 自动切歌，以及 Loop / Single 下手动下一首：顺序 + 环绕
             PlayerPlayMode.Loop, PlayerPlayMode.Single ->
                 (state.queueIndex + 1) % queue.size
         }
     }
 
-    // 队列多于 1 首时避开当前下标，避免「随机」抽到同一首
+    // 随机选一首，尽量避开当前下标（队列长度 > 1）
     private fun resolveRandomIndex(queue: List<Song>, currentIndex: Int): Int {
         if (queue.size <= 1) return 0
         var next = Random.nextInt(queue.size)
@@ -349,20 +359,20 @@ class MusicPlayerController @Inject constructor(
         return next
     }
 
-    // 跳转到指定播放进度
+    // 跳转到指定进度，并立即刷新进度/歌词展示
     fun seekTo(positionMs: Long) {
-        exoPlayer.seekTo(positionMs.coerceAtLeast(0L))
+        player.seekTo(positionMs.coerceAtLeast(0L))
         syncPositionAndLyric()
     }
 
-    // 从播放队列指定位置开始播放
+    // 从当前队列按索引播放；越界则忽略
     fun playQueueItemAt(index: Int) {
         val state = _playbackState.value
         if (index !in state.queue.indices) return
         playSong(state.queue[index], state.queue)
     }
 
-    // 切换当前歌曲收藏状态，调用网易云 like 接口
+    // 切换收藏（乐观更新）；未登录报错，请求失败则 revertFavoriteState 回滚
     fun toggleFavorite() {
         val state = _playbackState.value
         val songId = state.currentSong?.id ?: state.previewSong?.id ?: return
@@ -392,7 +402,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 拉取用户红心歌单 ID 并刷新当前歌曲收藏状态
+    // 从服务端刷新红心 id 集合，并同步当前曲收藏态
     private fun refreshLikedSongIds(userId: Long) {
         scope.launch {
             runCatching {
@@ -404,7 +414,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 根据缓存的红心列表同步当前展示歌曲的收藏状态
+    // 用 likedSongIds 同步当前/预览曲的 isFavorite
     private fun syncFavoriteForCurrentSong() {
         val songId = _playbackState.value.currentSong?.id
             ?: _playbackState.value.previewSong?.id
@@ -415,7 +425,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 接口失败时回滚收藏状态
+    // 收藏请求失败时回滚本地缓存与 UI 状态
     private fun revertFavoriteState(songId: Long, attemptedFavorite: Boolean, message: String) {
         likedSongIds = if (attemptedFavorite) likedSongIds - songId else likedSongIds + songId
         _playbackState.update {
@@ -423,7 +433,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 异步写入最近播放与本周次数，失败不影响当前播放流程
+    // 记录最近播放与周播放次数（失败静默忽略）
     private fun recordPlayStats(song: Song) {
         scope.launch {
             runCatching { recordRecentPlayUseCase(song) }
@@ -431,14 +441,14 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 标记一段连续出声区间的起点
+    // 开始一段听歌计时；已在计时则不重置，避免短暂抖动重复开段
     private fun markListeningStarted() {
         if (listeningSinceElapsedRealtime == null) {
             listeningSinceElapsedRealtime = SystemClock.elapsedRealtime()
         }
     }
 
-    // 结算自上次出声以来的实际听歌时长并落库
+    // 结束当前听歌段并累加时长；切歌/暂停时调用
     private fun settleListenDuration() {
         val since = listeningSinceElapsedRealtime ?: return
         listeningSinceElapsedRealtime = null
@@ -449,7 +459,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 异步拉取歌曲歌词；切歌时会取消上一次请求，避免旧歌词覆盖新歌
+    // 异步加载歌词；仅当仍是同一首歌时写入状态，并按需启动进度跟踪
     private fun loadLyrics(songId: Long) {
         lyricJob?.cancel()
         lyricJob = scope.launch {
@@ -457,34 +467,34 @@ class MusicPlayerController @Inject constructor(
                 getSongLyricsUseCase(songId)
             }.onSuccess { lyrics ->
                 _playbackState.update { state ->
-                    // 请求返回时可能已切到别的歌，丢弃过期结果
                     if (state.currentSong?.id != songId) return@update state
                     state.copy(lyrics = lyrics)
                 }
                 if (_playbackState.value.currentSong?.id == songId) {
                     syncPositionAndLyric()
                 }
-                if (exoPlayer.isPlaying) {
+                if (player.isPlaying) {
                     startPositionTracking()
                 }
             }
         }
     }
 
-    // 播放中每 200ms 同步进度与当前歌词句
+    // 播放中轮询进度与歌词（约 200ms）；暂停时由 Listener 取消
     private fun startPositionTracking() {
         positionJob?.cancel()
         positionJob = scope.launch {
-            while (isActive && exoPlayer.isPlaying) {
+            while (isActive && player.isPlaying) {
                 syncPositionAndLyric()
                 delay(200)
             }
         }
     }
 
+    // 从 Player 读取进度/时长，解析当前歌词句并更新状态（无变化则跳过）
     private fun syncPositionAndLyric() {
-        val positionMs = exoPlayer.currentPosition.coerceAtLeast(0L)
-        val durationMs = exoPlayer.duration.coerceAtLeast(0L)
+        val positionMs = player.currentPosition.coerceAtLeast(0L)
+        val durationMs = player.duration.coerceAtLeast(0L)
         val state = _playbackState.value
         val lyricLine = resolveLyricLine(
             lyrics = state.lyrics,
@@ -506,7 +516,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 优先返回当前进度匹配的歌词；无歌词时回退到歌名，都没有则显示默认文案
+    // 有匹配歌词用原句；否则退回歌名；都没有则用默认文案（展示时统一加引号）
     private fun resolveLyricLine(
         lyrics: List<LyricLine>,
         positionMs: Long,
@@ -521,4 +531,27 @@ class MusicPlayerController @Inject constructor(
     }
 
     private fun formatFallbackLyric(song: Song): String = "\"${song.name}\""
+
+    // 将 Song + 可播 URL 转为 Media3 MediaItem；Metadata 供通知栏/锁屏，mediaId 用歌曲 id
+    private fun buildMediaItem(song: Song, url: String): MediaItem {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(song.name)
+            .setArtist(song.artists)
+            .setAlbumTitle(song.album)
+            .setArtworkUri(song.coverUrl?.takeIf { it.isNotBlank() }?.let(Uri::parse))
+            .build()
+        return MediaItem.Builder()
+            .setUri(Uri.parse(url))
+            .setMediaId(song.id.toString())
+            .setMediaMetadata(metadata)
+            .build()
+    }
+
+    // 启动 MediaSession 服务；由 Media3 在真正播放时升为前台
+    // 用 startService 而非 startForegroundService，避免拉 URL 期间前台超时
+    // 暂停后服务可能被系统回收，故 togglePlayPause 恢复播放前也会再调一次
+    private fun ensurePlaybackService() {
+        val intent = Intent(context, MusicPlaybackService::class.java)
+        context.startService(intent)
+    }
 }

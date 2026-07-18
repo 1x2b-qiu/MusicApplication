@@ -30,6 +30,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.R
+import com.example.musicapp.util.rememberCoverRequest
 
 @Composable
 fun ProfileScreen(
@@ -54,7 +55,10 @@ fun ProfileScreen(
                 .border(1.dp, colorScheme.surfaceBright, CircleShape)
         ) {
             AsyncImage(
-                model = uiState.loginState.avatarUrl ?: R.drawable.img_avatar_default,
+                model = rememberCoverRequest(
+                    uiState.loginState.avatarUrl ?: R.drawable.img_avatar_default,
+                    88.dp
+                ),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxSize()

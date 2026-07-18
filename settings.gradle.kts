@@ -1,5 +1,7 @@
 pluginManagement {
     repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
         google {
             content {
                 includeGroupByRegex("com\\.android.*")
@@ -14,6 +16,9 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        maven { url = uri("https://maven.aliyun.com/repository/google") }
+        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        maven { url = uri("https://maven.aliyun.com/repository/public") }
         google()
         mavenCentral()
     }
@@ -23,3 +28,4 @@ rootProject.name = "MusicApplication"
 include(":app")
 include(":domain")
 include(":data")
+include(":baselineprofile")
