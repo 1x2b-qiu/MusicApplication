@@ -73,6 +73,7 @@ import coil.compose.AsyncImage
 import com.example.musicapp.R
 import com.example.musicapp.controller.PlayerPlayMode
 import com.example.musicapp.domain.model.Song
+import com.example.musicapp.ui.component.download.DownloadQualityBottomSheet
 import com.example.musicapp.ui.component.player.PlayerQueueBottomSheet
 import com.example.musicapp.ui.home.formatSongDuration
 import com.example.musicapp.util.rememberCoverRequest
@@ -89,6 +90,7 @@ private val PlayerBottomControlsInset = 240.dp
 @Composable
 fun PlayerScreen(
     onBack: () -> Unit,
+    onDownloadsClick: () -> Unit,
     viewModel: PlayerViewModel = hiltViewModel()
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -99,6 +101,7 @@ fun PlayerScreen(
     // 播放队列
     var queueSheetOpen by remember { mutableStateOf(false) }
     var immersiveMode by remember { mutableStateOf(false) }
+    var downloadSheetOpen by remember { mutableStateOf(false) }
 
     // 沉浸聆听：全屏歌词，与常规布局互斥
     if (immersiveMode) {
@@ -129,7 +132,13 @@ fun PlayerScreen(
                     onBack = onBack,
                     isDownloaded = uiState.isDownloaded,
                     isDownloading = uiState.isDownloading,
-                    onDownloadClick = viewModel::downloadCurrentSong,
+                    downloadProgress = uiState.downloadProgress,
+                    onDownloadClick = {
+                        when {
+                            uiState.isDownloaded || uiState.isDownloading -> onDownloadsClick()
+                            else -> downloadSheetOpen = true
+                        }
+                    },
                     onImmersiveClick = { immersiveMode = true }
                 )
 
@@ -242,6 +251,24 @@ fun PlayerScreen(
                 }
             )
         }
+
+        if (downloadSheetOpen && uiState.songId > 0L) {
+            DownloadQualityBottomSheet(
+                song = Song(
+                    id = uiState.songId,
+                    name = uiState.songName,
+                    artists = uiState.artistName,
+                    album = uiState.albumName,
+                    coverUrl = uiState.coverUrl,
+                    durationMs = uiState.durationMs
+                ),
+                onDismiss = { downloadSheetOpen = false },
+                onConfirm = { quality ->
+                    downloadSheetOpen = false
+                    viewModel.downloadCurrentSong(quality)
+                }
+            )
+        }
     }
 }
 
@@ -251,6 +278,7 @@ private fun PlayerTopBar(
     onBack: () -> Unit,
     isDownloaded: Boolean,
     isDownloading: Boolean,
+    downloadProgress: Float,
     onDownloadClick: () -> Unit,
     onImmersiveClick: () -> Unit
 ) {
@@ -276,37 +304,76 @@ private fun PlayerTopBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        PlayerIconButton(
-            onClick = {
-                if (!isDownloaded && !isDownloading) onDownloadClick()
-            }
-        ) {
-            when {
-                isDownloading -> {
-                }
-                isDownloaded -> {
-                    Icon(
-                        imageVector = Icons.Outlined.DownloadDone,
-                        contentDescription = "已下载",
-                        tint = colorScheme.onBackground,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-                else -> {
-                    Icon(
-                        imageVector = Icons.Outlined.Download,
-                        contentDescription = "下载",
-                        tint = colorScheme.onBackground,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-            }
-        }
+        PlayerDownloadButton(
+            isDownloaded = isDownloaded,
+            isDownloading = isDownloading,
+            downloadProgress = downloadProgress,
+            onClick = onDownloadClick
+        )
 
         PlayerIconButton(onClick = onImmersiveClick) {
             Icon(
                 painter = painterResource(R.drawable.ic_maximize_2),
                 contentDescription = "进入沉浸聆听",
+                tint = colorScheme.onBackground,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+// 下载按钮：下载中描边为真实字节环形进度；已下载 / 下载中点击进列表
+@Composable
+private fun PlayerDownloadButton(
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    downloadProgress: Float,
+    onClick: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val progress = downloadProgress.coerceIn(0f, 1f)
+
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .clip(CircleShape)
+            .background(colorScheme.surfaceVariant)
+            .then(
+                if (isDownloading) {
+                    Modifier
+                } else {
+                    Modifier.border(0.67.dp, colorScheme.outlineVariant, CircleShape)
+                }
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isDownloading) {
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(36.dp),
+                color = colorScheme.primary,
+                strokeWidth = 1.5.dp,
+                trackColor = colorScheme.outlineVariant,
+                strokeCap = StrokeCap.Round
+            )
+            Icon(
+                imageVector = Icons.Outlined.Download,
+                contentDescription = "下载中，查看本地下载",
+                tint = colorScheme.onBackground,
+                modifier = Modifier.size(16.dp)
+            )
+        } else if (isDownloaded) {
+            Icon(
+                imageVector = Icons.Outlined.DownloadDone,
+                contentDescription = "已下载，查看本地下载",
+                tint = colorScheme.onBackground,
+                modifier = Modifier.size(16.dp)
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Outlined.Download,
+                contentDescription = "下载",
                 tint = colorScheme.onBackground,
                 modifier = Modifier.size(16.dp)
             )

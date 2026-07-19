@@ -7,6 +7,7 @@ import com.example.musicapp.data.mapper.toDownloadedSong
 import com.example.musicapp.data.mapper.toDownloadedSongEntity
 import com.example.musicapp.data.remote.api.NeteaseApi
 import com.example.musicapp.domain.model.DownloadedSong
+import com.example.musicapp.domain.model.DownloadQuality
 import com.example.musicapp.domain.model.Song
 import com.example.musicapp.domain.repository.DownloadRepository
 import kotlinx.coroutines.Dispatchers
@@ -28,13 +29,18 @@ class DownloadRepositoryImpl @Inject constructor(
 ) : DownloadRepository {
 
     // 下载歌曲：库里已有且文件仍在则直接返回；否则先下到临时文件再落盘，避免半成品被当成成功
-    override suspend fun downloadSong(song: Song): DownloadedSong = withContext(Dispatchers.IO) {
+    override suspend fun downloadSong(
+        song: Song,
+        quality: DownloadQuality,
+        onProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)?
+    ): DownloadedSong = withContext(Dispatchers.IO) {
         val existing = downloadedSongDao.getById(song.id)
         if (existing != null && File(existing.localPath).isFile) {
+            onProgress?.invoke(existing.fileSizeBytes, existing.fileSizeBytes)
             return@withContext existing.toDownloadedSong()
         }
 
-        val response = neteaseApi.getSongUrl(song.id)
+        val response = neteaseApi.getSongUrl(songId = song.id, bitrate = quality.bitrate)
         if (response.code != 200) {
             throw IllegalStateException("获取下载地址失败：${response.code}")
         }
@@ -51,7 +57,7 @@ class DownloadRepositoryImpl @Inject constructor(
 
         try {
             if (tempFile.exists()) tempFile.delete()
-            val size = songDownloader.download(url, tempFile)
+            val size = songDownloader.download(url, tempFile, onProgress)
             if (targetFile.exists()) targetFile.delete()
             // rename 失败时退化为 copy，保证跨存储场景也能落盘
             if (!tempFile.renameTo(targetFile)) {

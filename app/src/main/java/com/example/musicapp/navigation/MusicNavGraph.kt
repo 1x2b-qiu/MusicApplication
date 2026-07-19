@@ -22,6 +22,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.musicapp.ui.component.bottombar.BottomTabBar
 import com.example.musicapp.ui.component.minplayer.MiniPlayerBar
+import com.example.musicapp.ui.downloads.DownloadsScreen
 import com.example.musicapp.ui.home.HomeScreen
 import com.example.musicapp.ui.liked.LikedScreen
 import com.example.musicapp.ui.login.LoginScreen
@@ -61,11 +62,12 @@ fun MusicNavGraph(
     val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
             currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
             currentDestination?.hasRoute<MusicRoute.Profile>() == true
-    // 搜索 / 喜欢 / 最近：只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
+    // 搜索 / 喜欢 / 最近 / 本地下载：只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
     val showMiniPlayerBar = showBottomTabBar ||
             currentDestination?.hasRoute<MusicRoute.Search>() == true ||
             currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Recent>() == true
+            currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
+            currentDestination?.hasRoute<MusicRoute.Downloads>() == true
 
     // 创建 Haze 模糊状态，供底部 Tab 栏做玻璃磨砂背景
     val hazeState = rememberHazeState()
@@ -158,12 +160,23 @@ fun MusicNavGraph(
                         navController.navigate(MusicRoute.Settings) {
                             launchSingleTop = true
                         }
+                    },
+                    onDownloadsClick = {
+                        navController.navigate(MusicRoute.Downloads) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
 
             composable<MusicRoute.Settings> {
                 SettingsScreen(
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable<MusicRoute.Downloads> {
+                DownloadsScreen(
                     onBack = { navController.popBackStack() }
                 )
             }
@@ -219,7 +232,12 @@ fun MusicNavGraph(
                 }
             ) {
                 PlayerScreen(
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onDownloadsClick = {
+                        navController.navigate(MusicRoute.Downloads) {
+                            launchSingleTop = true
+                        }
+                    }
                 )
             }
         }

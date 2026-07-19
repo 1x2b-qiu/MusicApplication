@@ -48,20 +48,22 @@ private val FeatureCardShape = RoundedCornerShape(16.dp)
 private val FeatureIconShape = RoundedCornerShape(14.dp)
 
 private data class ProfileFeatureItem(
+    val id: String,
     val label: String,
     val icon: ImageVector
 )
 
 private val profileFeatures = listOf(
-    ProfileFeatureItem("添加歌单", Icons.Outlined.AddCircleOutline),
-    ProfileFeatureItem("本地下载", Icons.Outlined.Download),
-    ProfileFeatureItem("一起听", Icons.Outlined.Groups),
-    ProfileFeatureItem("听歌识曲", Icons.Outlined.MicNone)
+    ProfileFeatureItem("new", "添加歌单", Icons.Outlined.AddCircleOutline),
+    ProfileFeatureItem("download", "本地下载", Icons.Outlined.Download),
+    ProfileFeatureItem("together", "一起听", Icons.Outlined.Groups),
+    ProfileFeatureItem("identify", "听歌识曲", Icons.Outlined.MicNone)
 )
 
 @Composable
 fun ProfileScreen(
     onSettingsClick: () -> Unit,
+    onDownloadsClick: () -> Unit,
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -141,17 +143,27 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        // 功能入口列表：仅视觉对齐，暂不接功能
+        // 功能入口列表
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             profileFeatures.forEach { item ->
-                ProfileFeatureCard(item = item)
+                ProfileFeatureCard(
+                    item = item,
+                    onClick = {
+                        when (item.id) {
+                            "download" -> onDownloadsClick()
+                        }
+                    }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ProfileFeatureCard(item: ProfileFeatureItem) {
+private fun ProfileFeatureCard(
+    item: ProfileFeatureItem,
+    onClick: () -> Unit
+) {
     val colorScheme = MaterialTheme.colorScheme
 
     Row(
@@ -160,6 +172,7 @@ private fun ProfileFeatureCard(item: ProfileFeatureItem) {
             .clip(FeatureCardShape)
             .background(colorScheme.surfaceVariant)
             .border(1.dp, colorScheme.surfaceDim, FeatureCardShape)
+            .clickable(onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)

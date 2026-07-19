@@ -1,6 +1,7 @@
 package com.example.musicapp.domain.repository
 
 import com.example.musicapp.domain.model.DownloadedSong
+import com.example.musicapp.domain.model.DownloadQuality
 import com.example.musicapp.domain.model.Song
 import kotlinx.coroutines.flow.Flow
 
@@ -8,7 +9,12 @@ import kotlinx.coroutines.flow.Flow
 interface DownloadRepository {
 
     // 下载歌曲到私有目录；已存在则直接返回记录
-    suspend fun downloadSong(song: Song): DownloadedSong
+    // onProgress：已读字节 / Content-Length（未知为 -1）
+    suspend fun downloadSong(
+        song: Song,
+        quality: DownloadQuality = DownloadQuality.Default,
+        onProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)? = null
+    ): DownloadedSong
 
     // 若已下载返回本地绝对路径，否则 null
     suspend fun getLocalPath(songId: Long): String?

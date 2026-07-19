@@ -1,9 +1,10 @@
-﻿package com.example.musicapp.ui.player
+package com.example.musicapp.ui.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicapp.controller.MusicPlayerController
 import com.example.musicapp.controller.PlayerPlayMode
+import com.example.musicapp.domain.model.DownloadQuality
 import com.example.musicapp.domain.model.LyricLine
 import com.example.musicapp.domain.model.LyricMatcher
 import com.example.musicapp.domain.model.Song
@@ -45,9 +46,10 @@ data class PlayerUiState(
     // 进度（毫秒），来自 PlaybackState
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
-    // 本地下载：是否已落盘 / 是否进行中 / 失败文案
+    // 本地下载：是否已落盘 / 是否进行中 / 字节进度 / 失败文案
     val isDownloaded: Boolean = false,
     val isDownloading: Boolean = false,
+    val downloadProgress: Float = 0f,
     val downloadError: String? = null
 ) {
     // 当前高亮歌词行（与 Controller / LyricMatcher 同一套匹配算法）
@@ -63,6 +65,7 @@ data class PlayerUiState(
 private data class DownloadUi(
     val targetSongId: Long = 0L,
     val isDownloading: Boolean = false,
+    val progress: Float = 0f,
     val error: String? = null
 )
 
@@ -93,6 +96,7 @@ class PlayerViewModel @Inject constructor(
         downloadUi
     ) { state, isDownloaded, download ->
         val song = state.displaySong
+        val downloadingCurrent = download.isDownloading && download.targetSongId == song?.id
         PlayerUiState(
             songId = song?.id ?: 0L,
             songName = song?.name.orEmpty(),
@@ -111,8 +115,9 @@ class PlayerViewModel @Inject constructor(
             currentPositionMs = state.currentPositionMs,
             durationMs = song?.durationMs ?: 0L,
             isDownloaded = isDownloaded,
-            // 仅当下载任务针对当前展示曲时才展示进行中 / 错误
-            isDownloading = download.isDownloading && download.targetSongId == song?.id,
+            // 仅当下载任务针对当前展示曲时才展示进行中 / 错误 / 进度
+            isDownloading = downloadingCurrent,
+            downloadProgress = if (downloadingCurrent) download.progress else 0f,
             downloadError = download.error?.takeIf { download.targetSongId == song?.id }
         )
     }
@@ -147,25 +152,33 @@ class PlayerViewModel @Inject constructor(
     fun cyclePlayMode() = playerController.cyclePlayMode()
 
     // 下载当前展示曲到应用私有目录；已下载或下载中则忽略重复点击
-    fun downloadCurrentSong() {
+    fun downloadCurrentSong(quality: DownloadQuality = DownloadQuality.Default) {
         val song = playerController.playbackState.value.displaySong ?: return
         if (uiState.value.isDownloaded || uiState.value.isDownloading) return
 
         downloadUi.update {
-            DownloadUi(targetSongId = song.id, isDownloading = true, error = null)
+            DownloadUi(targetSongId = song.id, isDownloading = true, progress = 0f, error = null)
         }
         viewModelScope.launch {
             runCatching {
-                downloadSongUseCase(song)
+                downloadSongUseCase(song, quality) { bytesRead, totalBytes ->
+                    if (totalBytes <= 0L) return@downloadSongUseCase
+                    val fraction = (bytesRead.toFloat() / totalBytes).coerceIn(0f, 1f)
+                    downloadUi.update { current ->
+                        if (current.targetSongId != song.id || !current.isDownloading) current
+                        else current.copy(progress = fraction)
+                    }
+                }
             }.onSuccess {
                 downloadUi.update {
-                    DownloadUi(targetSongId = song.id, isDownloading = false, error = null)
+                    DownloadUi(targetSongId = song.id, isDownloading = false, progress = 1f, error = null)
                 }
             }.onFailure { error ->
                 downloadUi.update {
                     DownloadUi(
                         targetSongId = song.id,
                         isDownloading = false,
+                        progress = 0f,
                         error = error.message ?: "下载失败"
                     )
                 }

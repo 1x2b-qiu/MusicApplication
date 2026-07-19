@@ -30,6 +30,9 @@ sealed interface MusicRoute {
     data object Recent : MusicRoute
 
     @Serializable
+    data object Downloads : MusicRoute
+
+    @Serializable
     data object Login : MusicRoute
 
     @Serializable

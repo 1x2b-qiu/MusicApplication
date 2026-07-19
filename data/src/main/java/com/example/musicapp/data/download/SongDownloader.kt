@@ -21,8 +21,12 @@ class SongDownloader @Inject constructor(
         .build()
 
     // 同步 GET 下载到 destination，成功返回文件字节数
-    // 调用方负责选用临时文件，并在失败时清理
-    fun download(url: String, destination: File): Long {
+    // onProgress：已读字节 / Content-Length（未知时为 -1）；调用方负责选用临时文件并在失败时清理
+    fun download(
+        url: String,
+        destination: File,
+        onProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)? = null
+    ): Long {
         val request = Request.Builder()
             .url(url)
             .get()
@@ -34,11 +38,33 @@ class SongDownloader @Inject constructor(
             }
             val body = response.body ?: throw IllegalStateException("下载失败：空响应")
             destination.parentFile?.mkdirs()
-            // 流式拷贝，避免整文件进内存
+
+            val totalBytes = body.contentLength()
+            var bytesRead = 0L
+            var lastReported = -1L
+            onProgress?.invoke(0L, totalBytes)
+
+            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
             body.byteStream().use { input ->
                 destination.outputStream().use { output ->
-                    input.copyTo(output)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read == -1) break
+                        output.write(buffer, 0, read)
+                        bytesRead += read
+                        // 约每 64KB 或结束时回调，避免 UI 被过密进度打爆
+                        if (onProgress != null &&
+                            (bytesRead - lastReported >= PROGRESS_REPORT_INTERVAL_BYTES ||
+                                (totalBytes > 0L && bytesRead >= totalBytes))
+                        ) {
+                            lastReported = bytesRead
+                            onProgress(bytesRead, totalBytes)
+                        }
+                    }
                 }
+            }
+            if (onProgress != null && lastReported != bytesRead) {
+                onProgress(bytesRead, if (totalBytes > 0L) totalBytes else bytesRead)
             }
             return destination.length()
         }
@@ -62,6 +88,8 @@ class SongDownloader @Inject constructor(
     }
 
     companion object {
+        private const val DEFAULT_BUFFER_SIZE = 8 * 1024
+        private const val PROGRESS_REPORT_INTERVAL_BYTES = 64L * 1024L
         // URL 路径里可直接认作音频后缀的集合
         private val KNOWN_AUDIO_EXTS = setOf("mp3", "flac", "m4a", "aac", "ogg", "wav")
     }

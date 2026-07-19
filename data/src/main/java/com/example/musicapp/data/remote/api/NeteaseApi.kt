@@ -28,10 +28,11 @@ interface NeteaseApi {
         @Query("type") type: Int = 1
     ): SearchResponse
 
-    // 获取歌曲播放地址
+    // 获取歌曲播放地址；br 为可选码率（bps），不传则由服务端默认最高可用
     @GET("song/url")
     suspend fun getSongUrl(
-        @Query("id") songId: Long
+        @Query("id") songId: Long,
+        @Query("br") bitrate: Int? = null
     ): SongUrlResponse
 
     // 获取歌曲歌词
