@@ -106,7 +106,7 @@ fun SettingsScreen(
                 label = "下载设置",
                 detail = if (uiState.wifiOnlyDownload) "仅 Wi-Fi" else "允许移动网络",
                 showDivider = true,
-                onClick = { viewModel.openDialog(SettingsDialog.Download) }
+                onClick = { }
             )
 
             // 清理缓存：右侧展示缓存体积文案
@@ -114,7 +114,7 @@ fun SettingsScreen(
                 label = "清理缓存",
                 detail = uiState.cacheSizeLabel,
                 showDivider = true,
-                onClick = { viewModel.openDialog(SettingsDialog.ClearCache) }
+                onClick = {  }
             )
 
             // 检查更新：右侧展示版本号；检查中时隐藏箭头
@@ -132,7 +132,7 @@ fun SettingsScreen(
                 labelColor = LogoutTextColor,
                 chevronTint = LogoutTextColor.copy(alpha = 0.6f),
                 showDivider = false,
-                onClick = { viewModel.openDialog(SettingsDialog.Logout) }
+                onClick = {}
             )
         }
     }

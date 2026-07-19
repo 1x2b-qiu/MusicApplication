@@ -1,10 +1,10 @@
-package com.example.musicapp.ui.theme
+﻿package com.example.musicapp.ui.theme
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicapp.domain.model.ThemeSetting
-import com.example.musicapp.domain.usecase.ObserveThemeSettingUseCase
-import com.example.musicapp.domain.usecase.SetUserThemeUseCase
+import com.example.musicapp.domain.usecase.theme.ObserveThemeSettingUseCase
+import com.example.musicapp.domain.usecase.theme.SetUserThemeUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow

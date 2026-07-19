@@ -1,9 +1,9 @@
-package com.example.musicapp.ui.login
+﻿package com.example.musicapp.ui.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musicapp.domain.usecase.LoginWithCaptchaUseCase
-import com.example.musicapp.domain.usecase.SendCaptchaUseCase
+import com.example.musicapp.domain.usecase.auth.LoginWithCaptchaUseCase
+import com.example.musicapp.domain.usecase.auth.SendCaptchaUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

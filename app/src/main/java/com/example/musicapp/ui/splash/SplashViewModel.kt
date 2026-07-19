@@ -1,9 +1,9 @@
-package com.example.musicapp.ui.splash
+﻿package com.example.musicapp.ui.splash
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
-import com.example.musicapp.domain.usecase.RestoreSessionUseCase
+import com.example.musicapp.domain.usecase.auth.ObserveLoginStateUseCase
+import com.example.musicapp.domain.usecase.auth.RestoreSessionUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

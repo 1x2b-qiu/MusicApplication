@@ -1,13 +1,13 @@
-package com.example.musicapp.ui.home
+﻿package com.example.musicapp.ui.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicapp.controller.MusicPlayerController
 import com.example.musicapp.domain.model.LoginState
 import com.example.musicapp.domain.model.Song
-import com.example.musicapp.domain.usecase.GetLikedMusicPlaylistSongsUseCase
-import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
-import com.example.musicapp.domain.usecase.ObserveRecentPlayedSongsUseCase
+import com.example.musicapp.domain.usecase.music.GetLikedMusicPlaylistSongsUseCase
+import com.example.musicapp.domain.usecase.auth.ObserveLoginStateUseCase
+import com.example.musicapp.domain.usecase.history.ObserveRecentPlayedSongsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow

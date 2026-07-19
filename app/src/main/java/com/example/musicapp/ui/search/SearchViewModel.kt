@@ -1,14 +1,14 @@
-package com.example.musicapp.ui.search
+﻿package com.example.musicapp.ui.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicapp.controller.MusicPlayerController
 import com.example.musicapp.domain.model.Song
-import com.example.musicapp.domain.usecase.AddRecentSearchUseCase
-import com.example.musicapp.domain.usecase.ClearRecentSearchesUseCase
-import com.example.musicapp.domain.usecase.ObserveRecentSearchesUseCase
-import com.example.musicapp.domain.usecase.RemoveRecentSearchUseCase
-import com.example.musicapp.domain.usecase.SearchSongsUseCase
+import com.example.musicapp.domain.usecase.history.AddRecentSearchUseCase
+import com.example.musicapp.domain.usecase.history.ClearRecentSearchesUseCase
+import com.example.musicapp.domain.usecase.history.ObserveRecentSearchesUseCase
+import com.example.musicapp.domain.usecase.history.RemoveRecentSearchUseCase
+import com.example.musicapp.domain.usecase.music.SearchSongsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow

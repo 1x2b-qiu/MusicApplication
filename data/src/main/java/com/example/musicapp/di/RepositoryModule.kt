@@ -1,12 +1,14 @@
 package com.example.musicapp.di
 
 import com.example.musicapp.data.repository.impl.AuthRepositoryImpl
+import com.example.musicapp.data.repository.impl.DownloadRepositoryImpl
 import com.example.musicapp.data.repository.impl.MusicRepositoryImpl
 import com.example.musicapp.data.repository.impl.PlayHistoryRepositoryImpl
 import com.example.musicapp.data.repository.impl.PlayStatsRepositoryImpl
 import com.example.musicapp.data.repository.impl.SearchHistoryRepositoryImpl
 import com.example.musicapp.data.repository.impl.ThemeRepositoryImpl
 import com.example.musicapp.domain.repository.AuthRepository
+import com.example.musicapp.domain.repository.DownloadRepository
 import com.example.musicapp.domain.repository.MusicRepository
 import com.example.musicapp.domain.repository.PlayHistoryRepository
 import com.example.musicapp.domain.repository.PlayStatsRepository
@@ -64,4 +66,11 @@ abstract class RepositoryModule {
     abstract fun bindSearchHistoryRepository(
         searchHistoryRepositoryImpl: SearchHistoryRepositoryImpl
     ): SearchHistoryRepository
+
+    @Binds
+    @Singleton
+    // 本地下载仓储
+    abstract fun bindDownloadRepository(
+        downloadRepositoryImpl: DownloadRepositoryImpl
+    ): DownloadRepository
 }

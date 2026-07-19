@@ -29,6 +29,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.RepeatOne
@@ -53,6 +55,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -70,9 +73,9 @@ import coil.compose.AsyncImage
 import com.example.musicapp.R
 import com.example.musicapp.controller.PlayerPlayMode
 import com.example.musicapp.domain.model.Song
-import com.example.musicapp.util.rememberCoverRequest
 import com.example.musicapp.ui.component.player.PlayerQueueBottomSheet
 import com.example.musicapp.ui.home.formatSongDuration
+import com.example.musicapp.util.rememberCoverRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
@@ -124,6 +127,9 @@ fun PlayerScreen(
             ) {
                 PlayerTopBar(
                     onBack = onBack,
+                    isDownloaded = uiState.isDownloaded,
+                    isDownloading = uiState.isDownloading,
+                    onDownloadClick = viewModel::downloadCurrentSong,
                     onImmersiveClick = { immersiveMode = true }
                 )
 
@@ -239,10 +245,13 @@ fun PlayerScreen(
     }
 }
 
-// 顶栏：收起 + 进入沉浸聆听
+// 顶栏：收起 + 下载 + 进入沉浸聆听
 @Composable
 private fun PlayerTopBar(
     onBack: () -> Unit,
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    onDownloadClick: () -> Unit,
     onImmersiveClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -266,6 +275,33 @@ private fun PlayerTopBar(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        PlayerIconButton(
+            onClick = {
+                if (!isDownloaded && !isDownloading) onDownloadClick()
+            }
+        ) {
+            when {
+                isDownloading -> {
+                }
+                isDownloaded -> {
+                    Icon(
+                        imageVector = Icons.Outlined.DownloadDone,
+                        contentDescription = "已下载",
+                        tint = colorScheme.onBackground,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+                else -> {
+                    Icon(
+                        imageVector = Icons.Outlined.Download,
+                        contentDescription = "下载",
+                        tint = colorScheme.onBackground,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
 
         PlayerIconButton(onClick = onImmersiveClick) {
             Icon(
@@ -613,9 +649,9 @@ private fun PlayerControlsCard(
                     }
                 }
 
-                uiState.error != null -> {
+                uiState.error != null || uiState.downloadError != null -> {
                     Text(
-                        text = uiState.error.orEmpty(),
+                        text = uiState.error ?: uiState.downloadError.orEmpty(),
                         color = colorScheme.primary,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center,

@@ -1,4 +1,4 @@
-package com.example.musicapp.controller
+﻿package com.example.musicapp.controller
 
 import android.content.Context
 import android.content.Intent
@@ -13,14 +13,15 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.example.musicapp.domain.model.LyricLine
 import com.example.musicapp.domain.model.LyricMatcher
 import com.example.musicapp.domain.model.Song
-import com.example.musicapp.domain.usecase.AddListenDurationUseCase
-import com.example.musicapp.domain.usecase.GetLikedSongIdsUseCase
-import com.example.musicapp.domain.usecase.GetSongLyricsUseCase
-import com.example.musicapp.domain.usecase.GetSongUrlUseCase
-import com.example.musicapp.domain.usecase.LikeSongUseCase
-import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
-import com.example.musicapp.domain.usecase.RecordRecentPlayUseCase
-import com.example.musicapp.domain.usecase.RecordWeekPlayUseCase
+import com.example.musicapp.domain.usecase.stats.AddListenDurationUseCase
+import com.example.musicapp.domain.usecase.music.GetLikedSongIdsUseCase
+import com.example.musicapp.domain.usecase.download.GetLocalSongPathUseCase
+import com.example.musicapp.domain.usecase.music.GetSongLyricsUseCase
+import com.example.musicapp.domain.usecase.music.GetSongUrlUseCase
+import com.example.musicapp.domain.usecase.music.LikeSongUseCase
+import com.example.musicapp.domain.usecase.auth.ObserveLoginStateUseCase
+import com.example.musicapp.domain.usecase.history.RecordRecentPlayUseCase
+import com.example.musicapp.domain.usecase.stats.RecordWeekPlayUseCase
 import com.example.musicapp.service.MusicPlaybackService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -36,6 +37,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.random.Random
@@ -93,6 +95,8 @@ class MusicPlayerController @Inject constructor(
     @ApplicationContext private val context: Context,
     // 按歌曲 id 拉取可播流媒体 URL
     private val getSongUrlUseCase: GetSongUrlUseCase,
+    // 已下载时返回本地文件路径
+    private val getLocalSongPathUseCase: GetLocalSongPathUseCase,
     // 拉取并解析 LRC 歌词
     private val getSongLyricsUseCase: GetSongLyricsUseCase,
     // 写入最近播放记录
@@ -225,12 +229,18 @@ class MusicPlayerController @Inject constructor(
         val requestSongId = song.id
         urlJob = scope.launch {
             try {
-                val songUrl = getSongUrlUseCase(requestSongId)
+                // 已下载优先播本地文件，否则拉在线流地址
+                val localPath = getLocalSongPathUseCase(requestSongId)
+                val playUri = if (localPath != null) {
+                    Uri.fromFile(File(localPath)).toString()
+                } else {
+                    val songUrl = getSongUrlUseCase(requestSongId)
+                    songUrl.url
+                }
                 // 用户已切到别的歌：丢弃本次结果
                 if (_playbackState.value.currentSong?.id != requestSongId) return@launch
 
-                val url = songUrl.url
-                if (url.isNullOrBlank()) {
+                if (playUri.isNullOrBlank()) {
                     _playbackState.update {
                         it.copy(
                             isLoading = false,
@@ -239,10 +249,10 @@ class MusicPlayerController @Inject constructor(
                     }
                 } else {
                     _playbackState.update {
-                        it.copy(isLoading = false, playUrl = url, error = null)
+                        it.copy(isLoading = false, playUrl = playUri, error = null)
                     }
                     recordPlayStats(song)
-                    player.setMediaItem(buildMediaItem(song, url))
+                    player.setMediaItem(buildMediaItem(song, playUri))
                     player.prepare()
                     player.playWhenReady = true
                 }

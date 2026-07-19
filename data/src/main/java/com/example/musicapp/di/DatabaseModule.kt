@@ -3,6 +3,7 @@ package com.example.musicapp.di
 import android.content.Context
 import androidx.room.Room
 import com.example.musicapp.data.local.MusicDatabase
+import com.example.musicapp.data.local.dao.DownloadedSongDao
 import com.example.musicapp.data.local.dao.PlayStatsDao
 import com.example.musicapp.data.local.dao.RecentPlayDao
 import dagger.Module
@@ -43,5 +44,11 @@ object DatabaseModule {
     // 提供播放统计 DAO
     fun providePlayStatsDao(database: MusicDatabase): PlayStatsDao {
         return database.playStatsDao()
+    }
+
+    @Provides
+    // 提供本地下载 DAO
+    fun provideDownloadedSongDao(database: MusicDatabase): DownloadedSongDao {
+        return database.downloadedSongDao()
     }
 }

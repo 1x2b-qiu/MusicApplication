@@ -1,6 +1,6 @@
 package com.example.musicapp.data.repository.impl
 
-import com.example.musicapp.data.local.PlayStatsWeek
+import com.example.musicapp.data.util.PlayStatsWeek
 import com.example.musicapp.data.local.dao.PlayStatsDao
 import com.example.musicapp.data.local.entity.PlayStatsEntity
 import com.example.musicapp.domain.model.PlayStats

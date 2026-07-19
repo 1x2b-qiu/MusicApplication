@@ -1,0 +1,15 @@
+﻿package com.example.musicapp.domain.usecase.download
+
+import com.example.musicapp.domain.model.DownloadedSong
+import com.example.musicapp.domain.model.Song
+import com.example.musicapp.domain.repository.DownloadRepository
+import javax.inject.Inject
+
+// 将歌曲下载到应用私有目录
+class DownloadSongUseCase @Inject constructor(
+    private val downloadRepository: DownloadRepository
+) {
+    suspend operator fun invoke(song: Song): DownloadedSong {
+        return downloadRepository.downloadSong(song)
+    }
+}

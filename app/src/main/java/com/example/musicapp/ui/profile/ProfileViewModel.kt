@@ -1,9 +1,9 @@
-package com.example.musicapp.ui.profile
+﻿package com.example.musicapp.ui.profile
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicapp.domain.model.LoginState
-import com.example.musicapp.domain.usecase.ObserveLoginStateUseCase
+import com.example.musicapp.domain.usecase.auth.ObserveLoginStateUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
