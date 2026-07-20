@@ -55,7 +55,6 @@ fun DownloadQualityBottomSheet(
     onConfirm: (DownloadQuality) -> Unit
 ) {
 
-
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedQuality by remember { mutableStateOf(DownloadQuality.Default) }

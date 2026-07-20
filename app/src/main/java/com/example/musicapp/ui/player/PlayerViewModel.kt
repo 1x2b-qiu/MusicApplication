@@ -148,6 +148,12 @@ class PlayerViewModel @Inject constructor(
     // 播放队列中指定项
     fun playQueueItemAt(index: Int) = playerController.playQueueItemAt(index)
 
+    // 从播放队列移除指定下标
+    fun removeFromQueue(index: Int) = playerController.removeFromQueue(index)
+
+    // 清空播放队列
+    fun clearQueue() = playerController.clearQueue()
+
     // 切换播放模式，逻辑在 Controller
     fun cyclePlayMode() = playerController.cyclePlayMode()
 

@@ -382,6 +382,44 @@ class MusicPlayerController @Inject constructor(
         playSong(state.queue[index], state.queue)
     }
 
+    // 从播放队列移除指定下标；删当前曲则续播相邻项，清空则停播
+    fun removeFromQueue(index: Int) {
+        val state = _playbackState.value
+        if (index !in state.queue.indices) return
+        val newQueue = state.queue.toMutableList().also { it.removeAt(index) }
+        if (newQueue.isEmpty()) {
+            clearQueue()
+            return
+        }
+        when {
+            index < state.queueIndex -> {
+                _playbackState.update {
+                    it.copy(queue = newQueue, queueIndex = state.queueIndex - 1)
+                }
+            }
+            index > state.queueIndex -> {
+                _playbackState.update { it.copy(queue = newQueue) }
+            }
+            else -> {
+                val nextIndex = index.coerceAtMost(newQueue.lastIndex)
+                playSong(newQueue[nextIndex], newQueue)
+            }
+        }
+    }
+
+    // 清空播放队列并停止当前播放，保留播放模式
+    fun clearQueue() {
+        settleListenDuration()
+        positionJob?.cancel()
+        lyricJob?.cancel()
+        urlJob?.cancel()
+        player.stop()
+        player.clearMediaItems()
+        _playbackState.update { state ->
+            PlaybackState(playMode = state.playMode)
+        }
+    }
+
     // 切换收藏（乐观更新）；未登录报错，请求失败则 revertFavoriteState 回滚
     fun toggleFavorite() {
         val state = _playbackState.value

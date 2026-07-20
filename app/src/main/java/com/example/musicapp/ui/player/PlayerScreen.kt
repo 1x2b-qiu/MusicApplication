@@ -226,29 +226,15 @@ fun PlayerScreen(
 
         if (queueSheetOpen) {
             PlayerQueueBottomSheet(
-                queue = uiState.queue.ifEmpty {
-                    listOfNotNull(
-                        if (uiState.songId > 0L) {
-                            Song(
-                                id = uiState.songId,
-                                name = uiState.songName,
-                                artists = uiState.artistName,
-                                album = uiState.albumName,
-                                coverUrl = uiState.coverUrl,
-                                durationMs = uiState.durationMs
-                            )
-                        } else {
-                            null
-                        }
-                    )
-                },
+                queue = uiState.queue,
                 currentIndex = uiState.queueIndex,
                 isPlaying = uiState.isPlaying,
                 onDismiss = { queueSheetOpen = false },
                 onSongClick = { index ->
                     viewModel.playQueueItemAt(index)
-                    queueSheetOpen = false
-                }
+                },
+                onRemoveSong = viewModel::removeFromQueue,
+                onClearQueue = viewModel::clearQueue
             )
         }
 
