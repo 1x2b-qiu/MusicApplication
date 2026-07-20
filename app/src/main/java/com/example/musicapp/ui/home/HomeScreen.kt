@@ -180,6 +180,7 @@ fun HomeScreen(
     onLikedClick: () -> Unit,
     onRecentClick: () -> Unit,
     onLoginClick: () -> Unit,
+    onOpenSidebar: (nickname: String?, avatarUrl: String?, likedCount: Int) -> Unit = { _, _, _ -> },
     darkTheme: Boolean = true,
     onToggleTheme: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -201,9 +202,16 @@ fun HomeScreen(
             onSearchClick = onSearchClick,
             onToggleTheme = onToggleTheme,
             onAvatarClick = {
-                // 未登录时点头像跳转登录页
+                // 未登录跳转登录；已登录打开侧边栏
                 if (!uiState.loginState.isLoggedIn) {
                     onLoginClick()
+                } else {
+                    val likedCount = uiState.likedSongs.size.takeIf { it > 0 } ?: 1_024
+                    onOpenSidebar(
+                        uiState.loginState.nickname,
+                        uiState.loginState.avatarUrl,
+                        likedCount
+                    )
                 }
             }
         )

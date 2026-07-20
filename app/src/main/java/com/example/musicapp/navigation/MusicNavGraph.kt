@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -22,6 +25,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.musicapp.ui.component.bottombar.BottomTabBar
 import com.example.musicapp.ui.component.minplayer.MiniPlayerBar
+import com.example.musicapp.ui.component.sidebar.AppSidebar
 import com.example.musicapp.ui.downloads.DownloadsScreen
 import com.example.musicapp.ui.home.HomeScreen
 import com.example.musicapp.ui.liked.LikedScreen
@@ -53,7 +57,7 @@ fun MusicNavGraph(
         currentDestination?.hasRoute<MusicRoute.Home>() == true -> MainTab.Home
         // 在电台页 → 高亮「电台」
         currentDestination?.hasRoute<MusicRoute.Radio>() == true -> MainTab.Radio
-        // 在我的页 → 高亮「我的」
+        // 在分类页 → 高亮「分类」
         currentDestination?.hasRoute<MusicRoute.Profile>() == true -> MainTab.Profile
         // 登录/播放器等非 Tab 页 → 默认高亮首页
         else -> MainTab.Home
@@ -69,208 +73,245 @@ fun MusicNavGraph(
             currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
             currentDestination?.hasRoute<MusicRoute.Downloads>() == true
 
-    // 创建 Haze 模糊状态，供底部 Tab 栏做玻璃磨砂背景
+    // 创建 Haze 模糊状态，供底部 Tab 栏 / 侧边栏做玻璃磨砂背景
     val hazeState = rememberHazeState()
+    // 侧边栏开关；头像与用户信息由首页回传，仅做 UI 展示
+    var sidebarOpen by remember { mutableStateOf(false) }
+    var sidebarNickname by remember { mutableStateOf<String?>(null) }
+    var sidebarAvatarUrl by remember { mutableStateOf<String?>(null) }
+    var sidebarLikedCount by remember { mutableStateOf(1_024) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp)
     ) {
-        NavHost(
-            navController = navController,
-            startDestination = MusicRoute.Splash,
-            modifier = Modifier.hazeSource(state = hazeState)
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp)
         ) {
-            composable<MusicRoute.Splash> {
-                SplashScreen(
-                    onSuccess = {
-                        // Splash / 登录成功后进入首页，并清空 auth 栈（含 Splash）
-                        navController.navigate(MusicRoute.Home) {
-                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                            launchSingleTop = true
+            NavHost(
+                navController = navController,
+                startDestination = MusicRoute.Splash,
+                modifier = Modifier.hazeSource(state = hazeState)
+            ) {
+                composable<MusicRoute.Splash> {
+                    SplashScreen(
+                        onSuccess = {
+                            // Splash / 登录成功后进入首页，并清空 auth 栈（含 Splash）
+                            navController.navigate(MusicRoute.Home) {
+                                popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                                launchSingleTop = true
+                            }
+                        },
+                        onFail = {
+                            // Splash 未登录时进入登录页，并移除 Splash，避免返回
+                            navController.navigate(MusicRoute.Login) {
+                                popUpTo<MusicRoute.Splash> { inclusive = true }
+                                launchSingleTop = true
+                            }
                         }
-                    },
-                    onFail = {
-                        // Splash 未登录时进入登录页，并移除 Splash，避免返回
-                        navController.navigate(MusicRoute.Login) {
-                            popUpTo<MusicRoute.Splash> { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }
-                )
-            }
-
-            composable<MusicRoute.Login> {
-                LoginScreen(
-                    onBack = {
-                        if (navController.previousBackStackEntry != null) {
-                            navController.popBackStack()
-                        }
-                    },
-                    onLoginSuccess = {
-                        // Splash / 登录成功后进入首页，并清空 auth 栈（含 Splash）
-                        navController.navigate(MusicRoute.Home) {
-                            popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    }
-                )
-            }
-
-            composable<MusicRoute.Home> {
-                HomeScreen(
-                    hazeState = hazeState,
-                    onSearchClick = {
-                        navController.navigate(MusicRoute.Search) {
-                            popUpTo(MusicRoute.Home) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    onLikedClick = {
-                        navController.navigate(MusicRoute.Liked) {
-                            launchSingleTop = true
-                        }
-                    },
-                    onRecentClick = {
-                        navController.navigate(MusicRoute.Recent) {
-                            launchSingleTop = true
-                        }
-                    },
-                    onLoginClick = {
-                        navController.navigate(MusicRoute.Login) {
-                            launchSingleTop = true
-                        }
-                    },
-                    darkTheme = darkTheme,
-                    onToggleTheme = onToggleTheme
-                )
-            }
-
-            composable<MusicRoute.Radio> {
-                RadioScreen()
-            }
-
-            composable<MusicRoute.Profile> {
-                ProfileScreen(
-                    onSettingsClick = {
-                        navController.navigate(MusicRoute.Settings) {
-                            launchSingleTop = true
-                        }
-                    },
-                    onDownloadsClick = {
-                        navController.navigate(MusicRoute.Downloads) {
-                            launchSingleTop = true
-                        }
-                    }
-                )
-            }
-
-            composable<MusicRoute.Settings> {
-                SettingsScreen(
-                    onBack = { navController.popBackStack() }
-                )
-            }
-
-            composable<MusicRoute.Downloads> {
-                DownloadsScreen(
-                    onBack = { navController.popBackStack() }
-                )
-            }
-
-            composable<MusicRoute.Search> {
-                SearchScreen(
-                    onBack = { navController.popBackStack() },
-                    darkTheme = darkTheme,
-                    hazeState = hazeState
-                )
-            }
-
-            composable<MusicRoute.Liked> {
-                LikedScreen(
-                    onBack = { navController.popBackStack() },
-                    darkTheme = darkTheme,
-                    hazeState = hazeState
-                )
-            }
-
-            composable<MusicRoute.Recent> {
-                RecentScreen(
-                    onBack = { navController.popBackStack() },
-                    darkTheme = darkTheme,
-                    hazeState = hazeState
-                )
-            }
-
-            composable<MusicRoute.Player>(
-                enterTransition = {
-                    slideIntoContainer(
-                        towards = AnimatedContentTransitionScope.SlideDirection.Up,
-                        animationSpec = tween(320)
-                    )
-                },
-                exitTransition = {
-                    slideOutOfContainer(
-                        towards = AnimatedContentTransitionScope.SlideDirection.Down,
-                        animationSpec = tween(280)
-                    )
-                },
-                popEnterTransition = {
-                    slideIntoContainer(
-                        towards = AnimatedContentTransitionScope.SlideDirection.Up,
-                        animationSpec = tween(320)
-                    )
-                },
-                popExitTransition = {
-                    slideOutOfContainer(
-                        towards = AnimatedContentTransitionScope.SlideDirection.Down,
-                        animationSpec = tween(280)
                     )
                 }
-            ) {
-                PlayerScreen(
-                    onBack = { navController.popBackStack() },
-                    onDownloadsClick = {
-                        navController.navigate(MusicRoute.Downloads) {
-                            launchSingleTop = true
-                        }
-                    }
-                )
-            }
-        }
 
-        if (showMiniPlayerBar) {
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .navigationBarsPadding()
-                    .padding(bottom = 12.dp)
-            ) {
-                MiniPlayerBar(
-                    hazeState = hazeState,
-                    onPlayerClick = {
-                        navController.navigate(MusicRoute.Player) {
-                            launchSingleTop = true
+                composable<MusicRoute.Login> {
+                    LoginScreen(
+                        onBack = {
+                            if (navController.previousBackStackEntry != null) {
+                                navController.popBackStack()
+                            }
+                        },
+                        onLoginSuccess = {
+                            // Splash / 登录成功后进入首页，并清空 auth 栈（含 Splash）
+                            navController.navigate(MusicRoute.Home) {
+                                popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                                launchSingleTop = true
+                            }
                         }
-                    }
-                )
-                if (showBottomTabBar) {
-                    BottomTabBar(
+                    )
+                }
+
+                composable<MusicRoute.Home> {
+                    HomeScreen(
                         hazeState = hazeState,
-                        selectedTab = selectedTab,
-                        onTabSelected = { tab ->
-                            navController.navigate(tab.toRoute()) {
+                        onSearchClick = {
+                            navController.navigate(MusicRoute.Search) {
                                 popUpTo(MusicRoute.Home) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
+                            }
+                        },
+                        onLikedClick = {
+                            navController.navigate(MusicRoute.Liked) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onRecentClick = {
+                            navController.navigate(MusicRoute.Recent) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onLoginClick = {
+                            navController.navigate(MusicRoute.Login) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onOpenSidebar = { nickname, avatarUrl, likedCount ->
+                            sidebarNickname = nickname
+                            sidebarAvatarUrl = avatarUrl
+                            sidebarLikedCount = likedCount
+                            sidebarOpen = true
+                        },
+                        darkTheme = darkTheme,
+                        onToggleTheme = onToggleTheme
+                    )
+                }
+
+                composable<MusicRoute.Radio> {
+                    RadioScreen()
+                }
+
+                composable<MusicRoute.Profile> {
+                    ProfileScreen(
+                        onSettingsClick = {
+                            navController.navigate(MusicRoute.Settings) {
+                                launchSingleTop = true
+                            }
+                        },
+                        onDownloadsClick = {
+                            navController.navigate(MusicRoute.Downloads) {
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                }
+
+                composable<MusicRoute.Settings> {
+                    SettingsScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable<MusicRoute.Downloads> {
+                    DownloadsScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable<MusicRoute.Search> {
+                    SearchScreen(
+                        onBack = { navController.popBackStack() },
+                        darkTheme = darkTheme,
+                        hazeState = hazeState
+                    )
+                }
+
+                composable<MusicRoute.Liked> {
+                    LikedScreen(
+                        onBack = { navController.popBackStack() },
+                        darkTheme = darkTheme,
+                        hazeState = hazeState
+                    )
+                }
+
+                composable<MusicRoute.Recent> {
+                    RecentScreen(
+                        onBack = { navController.popBackStack() },
+                        darkTheme = darkTheme,
+                        hazeState = hazeState
+                    )
+                }
+
+                composable<MusicRoute.Player>(
+                    enterTransition = {
+                        slideIntoContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                            animationSpec = tween(320)
+                        )
+                    },
+                    exitTransition = {
+                        slideOutOfContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                            animationSpec = tween(280)
+                        )
+                    },
+                    popEnterTransition = {
+                        slideIntoContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                            animationSpec = tween(320)
+                        )
+                    },
+                    popExitTransition = {
+                        slideOutOfContainer(
+                            towards = AnimatedContentTransitionScope.SlideDirection.Down,
+                            animationSpec = tween(280)
+                        )
+                    }
+                ) {
+                    PlayerScreen(
+                        onBack = { navController.popBackStack() },
+                        onDownloadsClick = {
+                            navController.navigate(MusicRoute.Downloads) {
+                                launchSingleTop = true
                             }
                         }
                     )
                 }
             }
+
+            if (showMiniPlayerBar) {
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .navigationBarsPadding()
+                        .padding(bottom = 12.dp)
+                ) {
+                    MiniPlayerBar(
+                        hazeState = hazeState,
+                        onPlayerClick = {
+                            navController.navigate(MusicRoute.Player) {
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                    if (showBottomTabBar) {
+                        BottomTabBar(
+                            hazeState = hazeState,
+                            selectedTab = selectedTab,
+                            onTabSelected = { tab ->
+                                navController.navigate(tab.toRoute()) {
+                                    popUpTo(MusicRoute.Home) { saveState = true }
+                                    launchSingleTop = true
+                                    restoreState = true
+                                }
+                            }
+                        )
+                    }
+                }
+            }
         }
+
+        // 侧边栏铺满全屏（不受内容区 16dp 边距约束）
+        AppSidebar(
+            open = sidebarOpen,
+            onDismiss = { sidebarOpen = false },
+            nickname = sidebarNickname,
+            avatarUrl = sidebarAvatarUrl,
+            likedCount = sidebarLikedCount,
+            darkTheme = darkTheme,
+            hazeState = hazeState,
+            onMenuClick = { id ->
+                when (id) {
+                    "download" -> navController.navigate(MusicRoute.Downloads) {
+                        launchSingleTop = true
+                    }
+                    "settings" -> navController.navigate(MusicRoute.Settings) {
+                        launchSingleTop = true
+                    }
+                }
+            }
+        )
     }
 }

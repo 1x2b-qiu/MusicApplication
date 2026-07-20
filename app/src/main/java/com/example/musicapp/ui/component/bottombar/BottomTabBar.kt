@@ -64,6 +64,7 @@ fun BottomTabBar(
                 noiseFactor = 0.15f
             }
             .border(1.dp, Color(0x26FFFFFF), barShape)
+            .clickable{}
     ) {
         Box(
             modifier = Modifier

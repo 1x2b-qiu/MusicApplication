@@ -28,11 +28,11 @@ fun MacrobenchmarkScope.musicAppJourney(startActivity: Boolean = true) {
             device.waitForIdle()
         }
 
-        // 底部 Tab：电台 / 我的 / 回首页
+        // 底部 Tab：电台 / 分类 / 回首页
         clickTextIfExists("电台")
         device.wait(Until.hasObject(By.text("电台")), 5_000)
-        clickTextIfExists("我的")
-        device.wait(Until.hasObject(By.text("我的")), 5_000)
+        clickTextIfExists("分类")
+        device.wait(Until.hasObject(By.text("分类")), 5_000)
         clickTextIfExists("首页")
         device.wait(Until.hasObject(By.text("首页")), 5_000)
 

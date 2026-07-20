@@ -9,7 +9,7 @@ enum class MainTab(
 ) {
     Home("首页", R.drawable.ic_tab_home),
     Radio("电台", R.drawable.ic_tab_radio),
-    Profile("我的", R.drawable.ic_tab_profile)
+    Profile("分类", R.drawable.ic_tab_category)
 }
 
 fun MainTab.toRoute(): MusicRoute = when (this) {
