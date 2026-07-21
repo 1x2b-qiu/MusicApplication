@@ -2,6 +2,12 @@ package com.example.musicapp.ui.component.sidebar
 
 import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -73,10 +79,11 @@ private val sidebarMenuItems = listOf(
 )
 
 // 左侧抽屉侧边栏：实色面板 + 半透明遮罩；昵称/头像由 ViewModel 订阅
+// 展开/收起动画：面板左侧滑入滑出、遮罩同步淡入淡出，统一 300ms
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun AppSidebar(
-    // 是否打开；关闭时直接从组合树移除
+    // 是否打开；关闭时播放退出动画后再移出组合
     open: Boolean,
     // 点击遮罩 / 系统返回时回调
     onDismiss: () -> Unit,
@@ -88,106 +95,117 @@ fun AppSidebar(
     onLogoutClick: () -> Unit = {},
     viewModel: SidebarViewModel = hiltViewModel()
 ) {
-    if (!open) return
-
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    BackHandler(enabled = true) { onDismiss() }
+    // 关闭后自动失效，避免退出动画期间重复触发
+    BackHandler(enabled = open) { onDismiss() }
 
     // 宽度：屏宽 78%，上限 320dp（与设计稿 maxWidth 一致）
     val panelWidthDp = minOf(LocalConfiguration.current.screenWidthDp * 0.78f, 320f).dp
 
     val colorScheme = MaterialTheme.colorScheme
     Box(modifier = Modifier.fillMaxSize()) {
-        // 全屏遮罩：半透明压暗 + 点击关闭
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.45f))
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onDismiss
-                )
-        )
-
-        // 左侧实色面板
-        Box(
-            modifier = Modifier
-                .width(panelWidthDp)
-                .fillMaxHeight()
-                .background(colorScheme.background)
-                // 吞掉点击，避免穿透到遮罩导致误关
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = {}
-                )
+        // 全屏遮罩：半透明压暗 + 点击关闭；淡入淡出，退出动画播完后再移出组合
+        AnimatedVisibility(
+            visible = open,
+            enter = fadeIn(tween(300)),
+            exit = fadeOut(tween(300))
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .statusBarsPadding()
-                    .navigationBarsPadding()
-            ) {
-                // 顶部：头像 + 昵称
-                SidebarProfileSection(
-                    nickname = uiState.nickname,
-                    avatarUrl = uiState.avatarUrl,
-                    darkTheme = darkTheme,
-                    textPrimary = colorScheme.onBackground,
-                )
+                    .background(Color.Black.copy(alpha = 0.45f))
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onDismiss
+                    )
+            )
+        }
 
-                // 中部可滚动菜单；点击后回调并关闭侧栏
+        // 左侧实色面板：从屏外左侧滑入；退出时滑出动画播完后再移出组合
+        AnimatedVisibility(
+            visible = open,
+            enter = slideInHorizontally(tween(300)) { -it },
+            exit = slideOutHorizontally(tween(300)) { -it }
+        ) {
+            Box(
+                modifier = Modifier
+                    .width(panelWidthDp)
+                    .fillMaxHeight()
+                    .background(colorScheme.background)
+                    // 吞掉点击，避免穿透到遮罩导致误关
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    )
+            ) {
                 Column(
                     modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding()
                 ) {
-                    sidebarMenuItems.forEach { item ->
-                        SidebarMenuRow(
-                            item = item,
-                            darkTheme = darkTheme,
-                            textPrimary = colorScheme.onBackground,
-                            textSecondary = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                            onClick = {
-                                onMenuClick(item.id)
-                                onDismiss()
-                            }
-                        )
-                    }
-                }
+                    // 顶部：头像 + 昵称
+                    SidebarProfileSection(
+                        nickname = uiState.nickname,
+                        avatarUrl = uiState.avatarUrl,
+                        darkTheme = darkTheme,
+                        textPrimary = colorScheme.onBackground,
+                    )
 
-                // 底部退出登录
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp)
-                        .padding(bottom = 24.dp, top = 8.dp)
-                        .clip(MenuItemShape)
-                        .clickable(onClick = {
-                            onLogoutClick()
-                            onDismiss()
-                        })
-                        .padding(vertical = 12.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    // 中部可滚动菜单；点击后回调并关闭侧栏
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.Logout,
-                            contentDescription = null,
-                            tint = colorScheme.onBackground,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "退出登录",
-                            color = colorScheme.onBackground,
-                            fontSize = 14.sp
-                        )
+                        sidebarMenuItems.forEach { item ->
+                            SidebarMenuRow(
+                                item = item,
+                                darkTheme = darkTheme,
+                                textPrimary = colorScheme.onBackground,
+                                textSecondary = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
+                                onClick = {
+                                    onMenuClick(item.id)
+                                    onDismiss()
+                                }
+                            )
+                        }
+                    }
+
+                    // 底部退出登录
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp)
+                            .padding(bottom = 24.dp, top = 8.dp)
+                            .clip(MenuItemShape)
+                            .clickable(onClick = {
+                                onLogoutClick()
+                                onDismiss()
+                            })
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.Logout,
+                                contentDescription = null,
+                                tint = colorScheme.onBackground,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "退出登录",
+                                color = colorScheme.onBackground,
+                                fontSize = 14.sp
+                            )
+                        }
                     }
                 }
             }
