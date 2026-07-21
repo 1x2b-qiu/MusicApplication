@@ -388,10 +388,10 @@ private fun LikedIntroTitle(modifier: Modifier = Modifier) {
         Text(
             text = "我喜欢的",
             color = colorScheme.onBackground,
-            fontSize = 34.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
             letterSpacing = (-1.6).sp,
-            lineHeight = 40.sp,
+//            lineHeight = 40.sp,
             modifier = Modifier.padding(top = 5.dp)
         )
         Text(
