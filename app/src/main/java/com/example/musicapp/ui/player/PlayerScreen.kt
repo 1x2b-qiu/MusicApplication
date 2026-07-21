@@ -694,18 +694,6 @@ private fun PlayerControlsCard(
 
             when {
                 uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = colorScheme.primary,
-                            strokeWidth = 2.dp
-                        )
-                    }
                 }
 
                 uiState.error != null || uiState.downloadError != null -> {

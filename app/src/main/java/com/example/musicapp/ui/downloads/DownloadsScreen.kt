@@ -1,6 +1,5 @@
 package com.example.musicapp.ui.downloads
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,15 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.scale
-import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -57,20 +51,21 @@ import androidx.compose.ui.window.PopupProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.example.musicapp.R
 import com.example.musicapp.controller.ActiveDownloadTask
 import com.example.musicapp.domain.model.DownloadedSong
 import com.example.musicapp.ui.home.formatSongDuration
+import com.example.musicapp.util.formatFileSize
 import com.example.musicapp.util.rememberCoverRequest
 
+// 封面缩略图圆角
 private val CoverShape = RoundedCornerShape(12.dp)
-private val CardShape = RoundedCornerShape(24.dp)
-private val EmptyIconShape = RoundedCornerShape(28.dp)
 
-// 设计稿空态图标：托盘 + 音符（细线描边）
-private const val EmptyIconTrayPath =
-    "M5.25 14.25v3.375A2.625 2.625 0 007.875 20.25h8.25a2.625 2.625 0 002.625-2.625V14.25M4.5 14.25h15"
-private const val EmptyIconNotesPath =
-    "M14.25 5.25v7.125a2.625 2.625 0 11-1.5-2.385V6.375l5.25-1.5V10.5a2.625 2.625 0 11-1.5-2.385V3.75l-3.75 1.5"
+// 下载列表外层卡片圆角
+private val CardShape = RoundedCornerShape(24.dp)
+
+// 空态图标容器圆角
+private val EmptyIconShape = RoundedCornerShape(28.dp)
 
 // 本地下载页：顶栏居中标题；下载中 / 已下载圆角卡片；全空时空态
 @Composable
@@ -80,10 +75,7 @@ fun DownloadsScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val tasks = uiState.activeTasks
-    val downloaded = uiState.downloadedSongs
-    val hasContent = tasks.isNotEmpty() || downloaded.isNotEmpty()
-    // 底部迷你播放栏预留
+    // 底部留白：迷你播放栏 66dp + 导航层间距 12dp
     val miniPlayerBottomInset = 78.dp
 
     Column(
@@ -94,28 +86,29 @@ fun DownloadsScreen(
     ) {
         DownloadsTopBar(onBack = onBack)
 
-        if (!hasContent) {
+        // 无进行中下载且无已下载文件时展示空态
+        if (uiState.activeTasks.isEmpty() && uiState.downloadedSongs.isEmpty()) {
             DownloadsEmptyState(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
             )
         } else {
+            // 有内容时：分区展示「正在下载」与「已下载」
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp)
                     .padding(bottom = 24.dp)
             ) {
-                if (tasks.isNotEmpty()) {
+                if (uiState.activeTasks.isNotEmpty()) {
                     SectionHeader(
                         title = "正在下载",
-                        trailing = "${tasks.size} 首"
+                        trailing = "${uiState.activeTasks.size} 首"
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     DownloadsCard {
-                        tasks.forEach { task ->
+                        uiState.activeTasks.forEach { task ->
                             ActiveDownloadRow(
                                 task = task,
                                 onCancel = { viewModel.cancelDownload(task.songId) }
@@ -124,17 +117,18 @@ fun DownloadsScreen(
                     }
                 }
 
-                if (downloaded.isNotEmpty()) {
-                    if (tasks.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(32.dp))
+                if (uiState.downloadedSongs.isNotEmpty()) {
+                    // 两区同时存在时加大间距
+                    if (uiState.activeTasks.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                     SectionHeader(
                         title = "已下载",
-                        trailing = "${downloaded.size} 首 · ${formatFileSize(uiState.totalSizeBytes)}"
+                        trailing = "${uiState.downloadedSongs.size} 首 · ${formatFileSize(uiState.totalSizeBytes)}"
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     DownloadsCard {
-                        downloaded.forEach { song ->
+                        uiState.downloadedSongs.forEach { song ->
                             DownloadedSongRow(
                                 song = song,
                                 onClick = { viewModel.playSong(song) },
@@ -148,31 +142,40 @@ fun DownloadsScreen(
     }
 }
 
+// 顶栏布局与 SearchScreen 一致：top 14dp + 行高 46dp，返回按钮垂直居中
 @Composable
 private fun DownloadsTopBar(onBack: () -> Unit) {
     val colorScheme = MaterialTheme.colorScheme
-    Box(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
             .padding(top = 14.dp)
-            .height(46.dp)
+            .height(46.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        DownloadsBackButton(
-            onClick = onBack,
-            modifier = Modifier.align(Alignment.CenterStart)
-        )
+        DownloadsHeaderIconButton(onClick = onBack) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
+                contentDescription = null,
+                tint = colorScheme.onBackground,
+                modifier = Modifier.size(20.dp)
+            )
+        }
         Text(
             text = "本地下载",
-            modifier = Modifier.align(Alignment.Center),
+            modifier = Modifier.weight(1f),
             color = colorScheme.onBackground,
             fontSize = 18.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = (-0.3).sp
+            fontWeight = FontWeight.Medium,
+            letterSpacing = (-0.3).sp,
+            textAlign = TextAlign.Center
         )
+        // 与左侧返回按钮等宽，保证标题视觉居中
+        Spacer(modifier = Modifier.size(36.dp))
     }
 }
 
+// 全空态：居中图标 +「还没有本地音乐」文案
 @Composable
 private fun DownloadsEmptyState(modifier: Modifier = Modifier) {
     val colorScheme = MaterialTheme.colorScheme
@@ -187,77 +190,24 @@ private fun DownloadsEmptyState(modifier: Modifier = Modifier) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // 容器表面与列表卡片一致：surfaceVariant + outline，外加设计稿柔和投影
-        Box(
-            modifier = Modifier
-                .size(80.dp)
-                .shadow(
-                    elevation = 18.dp,
-                    shape = EmptyIconShape,
-                    clip = false,
-                    ambientColor = Color.Black.copy(alpha = 0.12f),
-                    spotColor = Color.Black.copy(alpha = 0.16f)
-                )
-                .clip(EmptyIconShape)
-                .background(colorScheme.surfaceVariant)
-                .border(0.67.dp, colorScheme.outlineVariant, EmptyIconShape),
-            contentAlignment = Alignment.Center
-        ) {
-            // 顶部内高光，贴近设计稿 inset 高光
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .background(colorScheme.onBackground.copy(alpha = 0.1f))
-            )
-            DownloadsEmptyMusicIcon(
-                tint = colorScheme.onBackground,
-                modifier = Modifier.size(32.dp)
-            )
-        }
+        Icon(
+            painter = painterResource(R.drawable.ic_downloads_empty),
+            contentDescription = null,
+            tint = colorScheme.onBackground,
+            modifier = Modifier.size(64.dp)
+        )
         Spacer(modifier = Modifier.height(24.dp))
         Text(
             text = "还没有本地音乐",
             color = colorScheme.onBackground,
-            fontSize = 16.sp,
+            fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center
         )
     }
 }
 
-// 设计稿空态线框图标（托盘 + 双音符）
-@Composable
-private fun DownloadsEmptyMusicIcon(
-    tint: Color,
-    modifier: Modifier = Modifier
-) {
-    val trayPath = remember {
-        PathParser().parsePathString(EmptyIconTrayPath).toPath()
-    }
-    val notesPath = remember {
-        PathParser().parsePathString(EmptyIconNotesPath).toPath()
-    }
-
-    Canvas(modifier = modifier) {
-        val stroke = Stroke(
-            width = 1.3.dp.toPx(),
-            cap = StrokeCap.Round,
-            join = StrokeJoin.Round
-        )
-        val scaleFactor = size.minDimension / 24f
-        scale(
-            scaleX = scaleFactor,
-            scaleY = scaleFactor,
-            pivot = Offset.Zero
-        ) {
-            drawPath(path = trayPath, color = tint, style = stroke)
-            drawPath(path = notesPath, color = tint, style = stroke)
-        }
-    }
-}
-
+// 分区标题行：左侧标题 + 右侧统计文案
 @Composable
 private fun SectionHeader(
     title: String,
@@ -283,6 +233,7 @@ private fun SectionHeader(
     }
 }
 
+// 列表外层卡片外壳（surfaceVariant + 细描边）
 @Composable
 private fun DownloadsCard(
     content: @Composable () -> Unit
@@ -299,6 +250,7 @@ private fun DownloadsCard(
     }
 }
 
+// 进行中下载单行：封面 + 进度条 + 取消按钮
 @Composable
 private fun ActiveDownloadRow(
     task: ActiveDownloadTask,
@@ -484,38 +436,22 @@ private fun DownloadedSongRow(
     }
 }
 
+// 与 SearchScreen 顶栏一致的圆形图标按钮
 @Composable
-private fun DownloadsBackButton(
+private fun DownloadsHeaderIconButton(
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    content: @Composable () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     Box(
-        modifier = modifier
-            .size(40.dp)
+        modifier = Modifier
+            .size(36.dp)
             .clip(CircleShape)
             .background(colorScheme.surfaceVariant)
             .border(0.67.dp, colorScheme.outlineVariant, CircleShape)
-            .semantics { contentDescription = "返回" }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
-            contentDescription = null,
-            tint = colorScheme.onBackground,
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-// 字节数格式化为 MB 文案
-private fun formatFileSize(bytes: Long): String {
-    if (bytes <= 0L) return "0 MB"
-    val mb = bytes / (1024.0 * 1024.0)
-    return if (mb >= 10.0) {
-        "${mb.toInt()} MB"
-    } else {
-        String.format("%.1f MB", mb)
+        content()
     }
 }
