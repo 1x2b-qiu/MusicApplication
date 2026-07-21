@@ -74,10 +74,8 @@ data class PlaybackState(
     val lyrics: List<LyricLine> = emptyList(),
     // 顶栏/迷你场景展示的当前歌词句
     val currentLyricLine: String = "听点音乐吧",
-    // ExoPlayer 播放进度（毫秒）
-    val currentPositionMs: Long = 0L,
-    // ExoPlayer 时长（毫秒）；未就绪时为 0
-    val durationMs: Long = 0L,
+    // 当前高亮歌词行下标；仅在行切换时更新（低频）
+    val activeLyricIndex: Int = 0,
     // 全局播放模式，驱动自动切歌与手动上下首
     val playMode: PlayerPlayMode = PlayerPlayMode.Shuffle
 ) {
@@ -85,6 +83,13 @@ data class PlaybackState(
     val displaySong: Song?
         get() = currentSong ?: previewSong
 }
+
+// 高频播放进度快照（约 200ms 更新）
+// 独立于 PlaybackState：仅进度条/时间文本订阅，避免整棵播放页 UI 树跟随高频重组
+data class PlaybackPosition(
+    val positionMs: Long = 0L,
+    val durationMs: Long = 0L
+)
 
 // 全局音乐播放控制器（Hilt 单例）
 // 拉 URL / 队列 / 歌词 / PlaybackState / 听歌统计与收藏；
@@ -158,6 +163,10 @@ class MusicPlayerController @Inject constructor(
     // UI 订阅的全局播放状态
     val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
+    private val _playbackPosition = MutableStateFlow(PlaybackPosition())
+    // UI 订阅的高频播放进度（约 200ms）；只应由进度条等局部控件就近订阅
+    val playbackPosition: StateFlow<PlaybackPosition> = _playbackPosition.asStateFlow()
+
     // 播放中每 200ms 同步进度与歌词
     private var positionJob: Job? = null
     // 异步拉取歌词；切歌时取消旧任务
@@ -217,10 +226,10 @@ class MusicPlayerController @Inject constructor(
                 playUrl = null,
                 lyrics = emptyList(),
                 currentLyricLine = formatFallbackLyric(song),
-                currentPositionMs = 0L,
-                durationMs = 0L
+                activeLyricIndex = 0
             )
         }
+        _playbackPosition.value = PlaybackPosition()
 
         ensurePlaybackService()
         loadLyrics(song.id)
@@ -415,6 +424,7 @@ class MusicPlayerController @Inject constructor(
         urlJob?.cancel()
         player.stop()
         player.clearMediaItems()
+        _playbackPosition.value = PlaybackPosition()
         _playbackState.update { state ->
             PlaybackState(playMode = state.playMode)
         }
@@ -539,38 +549,40 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 从 Player 读取进度/时长，解析当前歌词句并更新状态（无变化则跳过）
+    // 从 Player 读取进度/时长并写入高频 position flow；
+    // 歌词行/下标仅在变化时更新 PlaybackState，低频订阅者不被进度带着重组
     private fun syncPositionAndLyric() {
         val positionMs = player.currentPosition.coerceAtLeast(0L)
         val durationMs = player.duration.coerceAtLeast(0L)
+        val position = _playbackPosition.value
+        if (position.positionMs != positionMs || position.durationMs != durationMs) {
+            _playbackPosition.value = PlaybackPosition(positionMs, durationMs)
+        }
+
         val state = _playbackState.value
+        val lyricIndex = LyricMatcher.currentIndex(state.lyrics, positionMs)
         val lyricLine = resolveLyricLine(
             lyrics = state.lyrics,
+            lyricIndex = lyricIndex,
             positionMs = positionMs,
             song = state.currentSong ?: state.previewSong
         )
-        if (state.currentPositionMs == positionMs &&
-            state.durationMs == durationMs &&
-            state.currentLyricLine == lyricLine
-        ) {
-            return
-        }
-        _playbackState.update {
-            it.copy(
-                currentPositionMs = positionMs,
-                durationMs = durationMs,
-                currentLyricLine = lyricLine
-            )
+        if (state.activeLyricIndex != lyricIndex || state.currentLyricLine != lyricLine) {
+            _playbackState.update {
+                it.copy(activeLyricIndex = lyricIndex, currentLyricLine = lyricLine)
+            }
         }
     }
 
     // 有匹配歌词用原句；否则退回歌名；都没有则用默认文案（展示时统一加引号）
     private fun resolveLyricLine(
         lyrics: List<LyricLine>,
+        lyricIndex: Int,
         positionMs: Long,
         song: Song?
     ): String {
-        val lyricText = LyricMatcher.currentLine(lyrics, positionMs)
+        // 进度尚未到达第一句时（下标停在 0）不展示歌词
+        val lyricText = lyrics.getOrNull(lyricIndex)?.takeIf { it.timeMs <= positionMs }?.text
         return when {
             lyricText != null -> "\"$lyricText\""
             song != null -> formatFallbackLyric(song)

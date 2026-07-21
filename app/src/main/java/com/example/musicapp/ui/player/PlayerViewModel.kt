@@ -3,10 +3,10 @@ package com.example.musicapp.ui.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.musicapp.controller.MusicPlayerController
+import com.example.musicapp.controller.PlaybackPosition
 import com.example.musicapp.controller.PlayerPlayMode
 import com.example.musicapp.domain.model.DownloadQuality
 import com.example.musicapp.domain.model.LyricLine
-import com.example.musicapp.domain.model.LyricMatcher
 import com.example.musicapp.domain.model.Song
 import com.example.musicapp.domain.usecase.download.DownloadSongUseCase
 import com.example.musicapp.domain.usecase.download.ObserveSongDownloadedUseCase
@@ -42,24 +42,17 @@ data class PlayerUiState(
     val queue: List<Song> = emptyList(),
     val queueIndex: Int = 0,
     val lyrics: List<LyricLine> = emptyList(),
+    // 当前高亮歌词行下标（低频，仅行切换时更新）
+    val activeLyricIndex: Int = 0,
     val playMode: PlayerPlayMode = PlayerPlayMode.Shuffle,
-    // 进度（毫秒），来自 PlaybackState
-    val currentPositionMs: Long = 0L,
+    // 歌曲总时长（毫秒），来自 Song 元数据；播放器实际时长见 positionState
     val durationMs: Long = 0L,
     // 本地下载：是否已落盘 / 是否进行中 / 字节进度 / 失败文案
     val isDownloaded: Boolean = false,
     val isDownloading: Boolean = false,
     val downloadProgress: Float = 0f,
     val downloadError: String? = null
-) {
-    // 当前高亮歌词行（与 Controller / LyricMatcher 同一套匹配算法）
-    val activeLyricIndex: Int
-        get() = LyricMatcher.currentIndex(lyrics, currentPositionMs)
-
-    // 进度条比例 0f..1f
-    val progressFraction: Float
-        get() = if (durationMs <= 0L) 0f else (currentPositionMs.toFloat() / durationMs).coerceIn(0f, 1f)
-}
+)
 
 // 本页下载过程的瞬时状态；用 targetSongId 避免切歌后旧任务污染新曲 UI
 private data class DownloadUi(
@@ -81,6 +74,9 @@ class PlayerViewModel @Inject constructor(
 
     // 下载进行中 / 失败信息（不进 Controller，仅本页使用）
     private val downloadUi = MutableStateFlow(DownloadUi())
+
+    // 高频播放进度（约 200ms）；不进 uiState，由进度条等局部控件就近订阅
+    val positionState: StateFlow<PlaybackPosition> = playerController.playbackPosition
 
     // 合并三路：全局播放态 + 当前曲是否已下载 + 本页下载瞬时态
     val uiState: StateFlow<PlayerUiState> = combine(
@@ -111,8 +107,8 @@ class PlayerViewModel @Inject constructor(
             queue = state.queue,
             queueIndex = state.queueIndex,
             lyrics = state.lyrics,
+            activeLyricIndex = state.activeLyricIndex,
             playMode = state.playMode,
-            currentPositionMs = state.currentPositionMs,
             durationMs = song?.durationMs ?: 0L,
             isDownloaded = isDownloaded,
             // 仅当下载任务针对当前展示曲时才展示进行中 / 错误 / 进度

@@ -1,6 +1,9 @@
 package com.example.musicapp.domain.model
 
+import androidx.compose.runtime.Immutable
+
 // 用户创建或收藏的歌单
+@Immutable
 data class UserPlaylist(
     // 歌单 ID
     val id: Long,

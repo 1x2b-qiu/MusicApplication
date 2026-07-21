@@ -26,12 +26,12 @@ import androidx.navigation.compose.rememberNavController
 import com.example.musicapp.ui.component.bottombar.BottomTabBar
 import com.example.musicapp.ui.component.minplayer.MiniPlayerBar
 import com.example.musicapp.ui.component.sidebar.AppSidebar
+import com.example.musicapp.ui.category.CategoryScreen
 import com.example.musicapp.ui.downloads.DownloadsScreen
 import com.example.musicapp.ui.home.HomeScreen
 import com.example.musicapp.ui.liked.LikedScreen
 import com.example.musicapp.ui.login.LoginScreen
 import com.example.musicapp.ui.player.PlayerScreen
-import com.example.musicapp.ui.profile.ProfileScreen
 import com.example.musicapp.ui.radio.RadioScreen
 import com.example.musicapp.ui.recent.RecentScreen
 import com.example.musicapp.ui.search.SearchScreen
@@ -58,14 +58,14 @@ fun MusicNavGraph(
         // 在电台页 → 高亮「电台」
         currentDestination?.hasRoute<MusicRoute.Radio>() == true -> MainTab.Radio
         // 在分类页 → 高亮「分类」
-        currentDestination?.hasRoute<MusicRoute.Profile>() == true -> MainTab.Profile
+        currentDestination?.hasRoute<MusicRoute.Category>() == true -> MainTab.Category
         // 登录/播放器等非 Tab 页 → 默认高亮首页
         else -> MainTab.Home
     }
-    // 仅在 Home / Radio / Profile 三个 Tab 页显示底部 Tab 栏
+    // 仅在 Home / Radio / Category 三个 Tab 页显示底部 Tab 栏
     val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
             currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Profile>() == true
+            currentDestination?.hasRoute<MusicRoute.Category>() == true
     // 搜索 / 喜欢 / 最近 / 本地下载：只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
     val showMiniPlayerBar = showBottomTabBar ||
             currentDestination?.hasRoute<MusicRoute.Search>() == true ||
@@ -75,26 +75,28 @@ fun MusicNavGraph(
 
     // 创建 Haze 模糊状态，供底部 Tab 栏 / 侧边栏做玻璃磨砂背景
     val hazeState = rememberHazeState()
-    // 侧边栏开关；头像与用户信息由首页回传，仅做 UI 展示
+    // 侧边栏开关（昵称 / 头像由 SidebarViewModel 自行订阅）
     var sidebarOpen by remember { mutableStateOf(false) }
-    var sidebarNickname by remember { mutableStateOf<String?>(null) }
-    var sidebarAvatarUrl by remember { mutableStateOf<String?>(null) }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
+        // 模糊源铺满全屏（含状态栏与左右边缘），侧边栏顶部/左缘才能采到内容；
+        // 状态栏避让与左右边距下沉到 NavHost / 底部栏自身
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp)
+                .hazeSource(state = hazeState)
         ) {
             NavHost(
                 navController = navController,
                 startDestination = MusicRoute.Splash,
-                modifier = Modifier.hazeSource(state = hazeState)
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp)
             ) {
                 composable<MusicRoute.Splash> {
                     SplashScreen(
@@ -157,11 +159,7 @@ fun MusicNavGraph(
                                 launchSingleTop = true
                             }
                         },
-                        onOpenSidebar = { nickname, avatarUrl ->
-                            sidebarNickname = nickname
-                            sidebarAvatarUrl = avatarUrl
-                            sidebarOpen = true
-                        },
+                        onOpenSidebar = { sidebarOpen = true },
                         darkTheme = darkTheme,
                         onToggleTheme = onToggleTheme
                     )
@@ -171,19 +169,8 @@ fun MusicNavGraph(
                     RadioScreen()
                 }
 
-                composable<MusicRoute.Profile> {
-                    ProfileScreen(
-                        onSettingsClick = {
-                            navController.navigate(MusicRoute.Settings) {
-                                launchSingleTop = true
-                            }
-                        },
-                        onDownloadsClick = {
-                            navController.navigate(MusicRoute.Downloads) {
-                                launchSingleTop = true
-                            }
-                        }
-                    )
+                composable<MusicRoute.Category> {
+                    CategoryScreen()
                 }
 
                 composable<MusicRoute.Settings> {
@@ -258,35 +245,36 @@ fun MusicNavGraph(
                     )
                 }
             }
+        }
 
-            if (showMiniPlayerBar) {
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .navigationBarsPadding()
-                        .padding(bottom = 12.dp)
-                ) {
-                    MiniPlayerBar(
+        if (showMiniPlayerBar) {
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp)
+            ) {
+                MiniPlayerBar(
+                    hazeState = hazeState,
+                    onPlayerClick = {
+                        navController.navigate(MusicRoute.Player) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+                if (showBottomTabBar) {
+                    BottomTabBar(
                         hazeState = hazeState,
-                        onPlayerClick = {
-                            navController.navigate(MusicRoute.Player) {
+                        selectedTab = selectedTab,
+                        onTabSelected = { tab ->
+                            navController.navigate(tab.toRoute()) {
+                                popUpTo(MusicRoute.Home) { saveState = true }
                                 launchSingleTop = true
+                                restoreState = true
                             }
                         }
                     )
-                    if (showBottomTabBar) {
-                        BottomTabBar(
-                            hazeState = hazeState,
-                            selectedTab = selectedTab,
-                            onTabSelected = { tab ->
-                                navController.navigate(tab.toRoute()) {
-                                    popUpTo(MusicRoute.Home) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        )
-                    }
                 }
             }
         }
@@ -295,10 +283,7 @@ fun MusicNavGraph(
         AppSidebar(
             open = sidebarOpen,
             onDismiss = { sidebarOpen = false },
-            nickname = sidebarNickname,
-            avatarUrl = sidebarAvatarUrl,
             darkTheme = darkTheme,
-            hazeState = hazeState,
             onMenuClick = { id ->
                 when (id) {
                     "download" -> navController.navigate(MusicRoute.Downloads) {

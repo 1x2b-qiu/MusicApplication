@@ -1,6 +1,9 @@
 package com.example.musicapp.domain.model
 
+import androidx.compose.runtime.Immutable
+
 // 歌曲播放地址信息
+@Immutable
 data class SongUrl(
     // 对应的歌曲 ID
     val songId: Long,

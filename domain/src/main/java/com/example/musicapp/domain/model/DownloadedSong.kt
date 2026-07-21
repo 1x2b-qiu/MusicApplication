@@ -1,6 +1,9 @@
 package com.example.musicapp.domain.model
 
+import androidx.compose.runtime.Immutable
+
 // 已下载到本地的歌曲元数据
+@Immutable
 data class DownloadedSong(
     val songId: Long,
     val name: String,

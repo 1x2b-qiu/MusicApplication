@@ -180,7 +180,7 @@ fun HomeScreen(
     onLikedClick: () -> Unit,
     onRecentClick: () -> Unit,
     onLoginClick: () -> Unit,
-    onOpenSidebar: (nickname: String?, avatarUrl: String?) -> Unit = { _, _ -> },
+    onOpenSidebar: () -> Unit = {},
     darkTheme: Boolean = true,
     onToggleTheme: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -206,10 +206,7 @@ fun HomeScreen(
                 if (!uiState.loginState.isLoggedIn) {
                     onLoginClick()
                 } else {
-                    onOpenSidebar(
-                        uiState.loginState.nickname,
-                        uiState.loginState.avatarUrl
-                    )
+                    onOpenSidebar()
                 }
             }
         )

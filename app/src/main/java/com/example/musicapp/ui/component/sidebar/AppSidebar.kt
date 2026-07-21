@@ -1,25 +1,19 @@
 package com.example.musicapp.ui.component.sidebar
 
+import android.annotation.SuppressLint
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -32,55 +26,37 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
-import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.MicNone
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.util.rememberCoverRequest
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
-import kotlin.math.roundToInt
 
-private val SidebarShape = RoundedCornerShape(topEnd = 0.dp, bottomEnd = 0.dp)
 private val MenuItemShape = RoundedCornerShape(16.dp)
 private val IconBoxShape = RoundedCornerShape(12.dp)
-private val StatsCardShape = RoundedCornerShape(16.dp)
 
-private val SidebarSlideEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
-private const val SidebarAnimMs = 380
-private const val BackdropAnimMs = 300
-
+// 侧边栏菜单项：id 供外部路由，label / icon 仅展示
 private data class SidebarMenuItem(
     val id: String,
     val label: String,
@@ -92,87 +68,42 @@ private val sidebarMenuItems = listOf(
     SidebarMenuItem("download", "本地下载", Icons.Outlined.Download),
     SidebarMenuItem("together", "一起听", Icons.Outlined.Groups),
     SidebarMenuItem("identify", "听歌识曲", Icons.Outlined.MicNone),
+    SidebarMenuItem("import_local", "导入本地歌曲", Icons.Outlined.LibraryMusic),
     SidebarMenuItem("settings", "设置", Icons.Outlined.Settings)
 )
 
-/**
- * 左侧抽屉侧边栏：遮罩淡入 + 面板滑入，仅 UI / 动画。
- */
+// 左侧抽屉侧边栏：实色面板 + 半透明遮罩；昵称/头像由 ViewModel 订阅
+@SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun AppSidebar(
+    // 是否打开；关闭时直接从组合树移除
     open: Boolean,
+    // 点击遮罩 / 系统返回时回调
     onDismiss: () -> Unit,
-    nickname: String?,
-    avatarUrl: String?,
-    listeningHours: Int = 2_481,
+    // 深浅色，影响遮罩与卡片高光
     darkTheme: Boolean = true,
-    hazeState: HazeState,
+    // 菜单项 id 回调（playlist / download / import_local / …）
     onMenuClick: (String) -> Unit = {},
-    onLogoutClick: () -> Unit = {}
+    // 底部「退出登录」
+    onLogoutClick: () -> Unit = {},
+    viewModel: SidebarViewModel = hiltViewModel()
 ) {
-    var visible by remember { mutableStateOf(open) }
-    var dragOffsetPx by remember { mutableFloatStateOf(0f) }
+    if (!open) return
 
-    LaunchedEffect(open) {
-        if (open) {
-            visible = true
-        }
-        dragOffsetPx = 0f
-    }
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    val panelProgress by animateFloatAsState(
-        targetValue = if (open) 1f else 0f,
-        animationSpec = tween(SidebarAnimMs, easing = SidebarSlideEasing),
-        label = "sidebar_panel",
-        finishedListener = { if (!open) visible = false }
-    )
-    val backdropProgress by animateFloatAsState(
-        targetValue = if (open) 1f else 0f,
-        animationSpec = tween(BackdropAnimMs),
-        label = "sidebar_backdrop"
-    )
+    BackHandler(enabled = true) { onDismiss() }
 
-    if (!visible && panelProgress == 0f) return
-
-    BackHandler(enabled = open) { onDismiss() }
-
-    val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
-    val panelWidthDp = minOf(configuration.screenWidthDp * 0.78f, 320f).dp
-    val panelWidthPx = with(density) { panelWidthDp.toPx() }
+    // 宽度：屏宽 78%，上限 320dp（与设计稿 maxWidth 一致）
+    val panelWidthDp = minOf(LocalConfiguration.current.screenWidthDp * 0.78f, 320f).dp
 
     val colorScheme = MaterialTheme.colorScheme
-    val textPrimary = colorScheme.onBackground
-    val textSecondary = colorScheme.onSurfaceVariant.copy(alpha = if (darkTheme) 0.55f else 0.45f)
-
     Box(modifier = Modifier.fillMaxSize()) {
-        // 遮罩：点击关闭
+        // 全屏遮罩：半透明压暗 + 点击关闭
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer { alpha = backdropProgress }
-                .drawBehind {
-                    val gradient = if (darkTheme) {
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.04f),
-                                Color.Black.copy(alpha = 0.6f)
-                            ),
-                            center = Offset(0f, 0f),
-                            radius = size.maxDimension
-                        )
-                    } else {
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.02f),
-                                Color.Black.copy(alpha = 0.25f)
-                            ),
-                            center = Offset(0f, 0f),
-                            radius = size.maxDimension
-                        )
-                    }
-                    drawRect(brush = gradient)
-                }
+                .background(Color.Black.copy(alpha = 0.45f))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -180,69 +111,13 @@ fun AppSidebar(
                 )
         )
 
-        // 面板
+        // 左侧实色面板
         Box(
             modifier = Modifier
                 .width(panelWidthDp)
                 .fillMaxHeight()
-                .offset {
-                    val slide = (1f - panelProgress) * -panelWidthPx
-                    IntOffset((slide + dragOffsetPx).roundToInt(), 0)
-                }
-                .pointerInput(open) {
-                    if (!open) return@pointerInput
-                    detectHorizontalDragGestures(
-                        onDragEnd = {
-                            if (dragOffsetPx < -panelWidthPx * 0.28f) {
-                                onDismiss()
-                            } else {
-                                dragOffsetPx = 0f
-                            }
-                        },
-                        onDragCancel = { dragOffsetPx = 0f },
-                        onHorizontalDrag = { _, dragAmount ->
-                            dragOffsetPx = (dragOffsetPx + dragAmount).coerceIn(-panelWidthPx, 0f)
-                        }
-                    )
-                }
-                .clip(SidebarShape)
-                .then(
-                    Modifier.hazeEffect(state = hazeState) {
-                        blurRadius = 24.dp
-                        tints = listOf(
-                            HazeTint(
-                                if (darkTheme) Color.Black.copy(alpha = 0.55f)
-                                else Color.White.copy(alpha = 0.55f)
-                            ),
-                            HazeTint(
-                                if (darkTheme) Color.White.copy(alpha = 0.06f)
-                                else Color.Black.copy(alpha = 0.04f)
-                            )
-                        )
-                        noiseFactor = 0.12f
-                    }
-                )
-                .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        colors = if (darkTheme) {
-                            listOf(
-                                Color.Transparent,
-                                Color.White.copy(alpha = 0.15f),
-                                Color.White.copy(alpha = 0.08f),
-                                Color.Transparent
-                            )
-                        } else {
-                            listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.1f),
-                                Color.Black.copy(alpha = 0.05f),
-                                Color.Transparent
-                            )
-                        }
-                    ),
-                    shape = SidebarShape
-                )
+                .background(colorScheme.background)
+                // 吞掉点击，避免穿透到遮罩导致误关
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
@@ -255,27 +130,27 @@ fun AppSidebar(
                     .statusBarsPadding()
                     .navigationBarsPadding()
             ) {
+                // 顶部：头像 + 昵称
                 SidebarProfileSection(
-                    nickname = nickname,
-                    avatarUrl = avatarUrl,
-                    listeningHours = listeningHours,
+                    nickname = uiState.nickname,
+                    avatarUrl = uiState.avatarUrl,
                     darkTheme = darkTheme,
-                    textPrimary = textPrimary,
-                    textSecondary = textSecondary
+                    textPrimary = colorScheme.onBackground,
                 )
 
+                // 中部可滚动菜单；点击后回调并关闭侧栏
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     sidebarMenuItems.forEach { item ->
                         SidebarMenuRow(
                             item = item,
                             darkTheme = darkTheme,
-                            textPrimary = textPrimary,
-                            textSecondary = textSecondary,
+                            textPrimary = colorScheme.onBackground,
+                            textSecondary = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
                             onClick = {
                                 onMenuClick(item.id)
                                 onDismiss()
@@ -284,6 +159,7 @@ fun AppSidebar(
                     }
                 }
 
+                // 底部退出登录
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -304,12 +180,12 @@ fun AppSidebar(
                         Icon(
                             imageVector = Icons.AutoMirrored.Outlined.Logout,
                             contentDescription = null,
-                            tint = textSecondary,
+                            tint = colorScheme.onBackground,
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
                             text = "退出登录",
-                            color = textSecondary,
+                            color = colorScheme.onBackground,
                             fontSize = 14.sp
                         )
                     }
@@ -319,35 +195,29 @@ fun AppSidebar(
     }
 }
 
+// 资料区：头像 + 昵称
 @Composable
 private fun SidebarProfileSection(
+    // 用户昵称；空则显示「未登录」
     nickname: String?,
+    // 头像 URL
     avatarUrl: String?,
-    listeningHours: Int,
+    // 深浅色，影响头像描边
     darkTheme: Boolean,
+    // 主文字色（昵称）
     textPrimary: Color,
-    textSecondary: Color
 ) {
-    val glowColor = if (darkTheme) Color.White.copy(alpha = 0.15f) else Color.Black.copy(alpha = 0.1f)
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 20.dp)
+            .padding(start = 16.dp, end = 24.dp, top = 20.dp, bottom = 20.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Box {
-                // 头像背后柔光
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .offset(x = (-2).dp, y = (-2).dp)
-                        .graphicsLayer { alpha = 0.9f }
-                        .background(glowColor, CircleShape)
-                )
                 Box(
                     modifier = Modifier
                         .size(56.dp)
@@ -368,7 +238,7 @@ private fun SidebarProfileSection(
                         contentScale = ContentScale.Crop
                     )
                 }
-                // 在线绿点
+                // 右下角在线状态绿点
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -395,75 +265,10 @@ private fun SidebarProfileSection(
                 lineHeight = 20.sp
             )
         }
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // 听歌时长卡片
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(StatsCardShape)
-                .background(
-                    brush = if (darkTheme) {
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color.White.copy(alpha = 0.08f),
-                                Color.White.copy(alpha = 0.04f)
-                            )
-                        )
-                    } else {
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.05f),
-                                Color.Black.copy(alpha = 0.02f)
-                            )
-                        )
-                    }
-                )
-                .border(
-                    width = 1.dp,
-                    color = if (darkTheme) Color.White.copy(alpha = 0.08f)
-                    else Color.White.copy(alpha = 0.9f),
-                    shape = StatsCardShape
-                )
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.AccessTime,
-                contentDescription = null,
-                tint = textSecondary,
-                modifier = Modifier.size(16.dp)
-            )
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Text(
-                    text = "%,d".format(listeningHours),
-                    color = textPrimary,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
-                    lineHeight = 24.sp
-                )
-                Text(
-                    text = "小时",
-                    color = textSecondary,
-                    fontSize = 12.sp,
-                    modifier = Modifier.padding(bottom = 2.dp)
-                )
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Text(
-                text = "听歌总时长",
-                color = textSecondary,
-                fontSize = 12.sp
-            )
-        }
     }
 }
 
+// 单行菜单：图标盒 + 标题 + 右箭头
 @Composable
 private fun SidebarMenuRow(
     item: SidebarMenuItem,
@@ -478,9 +283,12 @@ private fun SidebarMenuRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 4.dp)
-            .clip(MenuItemShape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 14.dp),
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {

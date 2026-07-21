@@ -15,7 +15,7 @@ sealed interface MusicRoute {
     data object Radio : MusicRoute
 
     @Serializable
-    data object Profile : MusicRoute
+    data object Category : MusicRoute
 
     @Serializable
     data object Settings : MusicRoute

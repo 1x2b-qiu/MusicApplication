@@ -71,6 +71,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.R
+import com.example.musicapp.controller.PlaybackPosition
 import com.example.musicapp.controller.PlayerPlayMode
 import com.example.musicapp.domain.model.Song
 import com.example.musicapp.ui.component.download.DownloadQualityBottomSheet
@@ -82,6 +83,7 @@ import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.flow.StateFlow
 
 // 底部浮层控制区预留高度：控制卡 + 间距 + 工具栏 + 底边距
 private val PlayerBottomControlsInset = 240.dp
@@ -206,6 +208,7 @@ fun PlayerScreen(
             PlayerControlsCard(
                 hazeState = playerHazeState,
                 uiState = uiState,
+                positionState = viewModel.positionState,
                 onSeek = viewModel::seekTo,
                 onTogglePlayPause = viewModel::togglePlayPause,
                 onSkipPrevious = viewModel::skipToPrevious,
@@ -638,27 +641,30 @@ private fun PlayerToolButton(
 private fun PlayerControlsCard(
     hazeState: HazeState,
     uiState: PlayerUiState,
+    positionState: StateFlow<PlaybackPosition>,
     onSeek: (Long) -> Unit,
     onTogglePlayPause: () -> Unit,
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    // 高频进度仅在本卡片内订阅，重组范围被限制在这里，不波及歌词/封面
+    val playbackPosition by positionState.collectAsStateWithLifecycle()
+    // 播放器时长优先；未就绪时退回 Song 元数据时长
+    val durationMs = playbackPosition.durationMs.takeIf { it > 0L } ?: uiState.durationMs
     // 拖动中用本地进度，松手后再 seek；切歌时重置
-    var progressFraction by remember(uiState.songId) { mutableFloatStateOf(0f) }
+    var dragFraction by remember(uiState.songId) { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
 
-    // 非拖动时跟随全局播放进度
-    LaunchedEffect(uiState.currentPositionMs, uiState.durationMs, uiState.songId) {
-        if (!isDragging && uiState.durationMs > 0L) {
-            progressFraction = uiState.progressFraction
-        }
+    val progressFraction = when {
+        isDragging -> dragFraction
+        durationMs > 0L -> (playbackPosition.positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+        else -> 0f
     }
-
-    val displayPositionMs = if (isDragging && uiState.durationMs > 0L) {
-        (progressFraction * uiState.durationMs).toLong()
+    val displayPositionMs = if (isDragging && durationMs > 0L) {
+        (dragFraction * durationMs).toLong()
     } else {
-        uiState.currentPositionMs
+        playbackPosition.positionMs
     }
 
     PlayerGlassSurface(hazeState = hazeState) {
@@ -679,7 +685,7 @@ private fun PlayerControlsCard(
                     fontFamily = FontFamily.Monospace
                 )
                 Text(
-                    text = formatSongDuration(uiState.durationMs),
+                    text = formatSongDuration(durationMs),
                     color = colorScheme.onSurfaceVariant,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace
@@ -718,12 +724,12 @@ private fun PlayerControlsCard(
                         progress = progressFraction.coerceIn(0f, 1f),
                         onProgressChange = { fraction ->
                             isDragging = true
-                            progressFraction = fraction
+                            dragFraction = fraction
                         },
                         onProgressChangeFinished = {
                             isDragging = false
-                            if (uiState.durationMs > 0L) {
-                                onSeek((progressFraction * uiState.durationMs).toLong())
+                            if (durationMs > 0L) {
+                                onSeek((dragFraction * durationMs).toLong())
                             }
                         }
                     )

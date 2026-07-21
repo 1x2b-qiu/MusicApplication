@@ -1,6 +1,9 @@
 package com.example.musicapp.domain.model
 
+import androidx.compose.runtime.Immutable
+
 // 当前登录用户的持久化状态快照
+@Immutable
 data class LoginState(
     // 是否已登录
     val isLoggedIn: Boolean = false,
@@ -13,6 +16,7 @@ data class LoginState(
 )
 
 // 登录或验证码请求的操作结果
+@Immutable
 data class LoginResult(
     // 操作是否成功
     val success: Boolean,

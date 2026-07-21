@@ -70,6 +70,12 @@ android {
     }
 }
 
+composeCompiler {
+    // 稳定性配置：将 List/Set/Map 接口及 HazeState 声明为稳定类型，
+    // 使以它们为参数的 composable 可跳过（项目内集合均为 StateFlow 不可变快照，承诺成立）
+    stabilityConfigurationFile.set(file("compose-stability.conf"))
+}
+
 dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))

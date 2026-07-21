@@ -9,19 +9,19 @@ enum class MainTab(
 ) {
     Home("首页", R.drawable.ic_tab_home),
     Radio("电台", R.drawable.ic_tab_radio),
-    Profile("分类", R.drawable.ic_tab_category)
+    Category("分类", R.drawable.ic_tab_category)
 }
 
 fun MainTab.toRoute(): MusicRoute = when (this) {
     MainTab.Home -> MusicRoute.Home
     MainTab.Radio -> MusicRoute.Radio
-    MainTab.Profile -> MusicRoute.Profile
+    MainTab.Category -> MusicRoute.Category
 }
 
 fun MusicRoute.toMainTab(): MainTab? = when (this) {
     MusicRoute.Home -> MainTab.Home
     MusicRoute.Radio -> MainTab.Radio
-    MusicRoute.Profile -> MainTab.Profile
+    MusicRoute.Category -> MainTab.Category
     else -> null
 }
 
