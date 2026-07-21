@@ -13,8 +13,9 @@ class DownloadSongUseCase @Inject constructor(
     suspend operator fun invoke(
         song: Song,
         quality: DownloadQuality = DownloadQuality.Default,
-        onProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)? = null
+        onProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)? = null,
+        isCancelled: () -> Boolean = { false }
     ): DownloadedSong {
-        return downloadRepository.downloadSong(song, quality, onProgress)
+        return downloadRepository.downloadSong(song, quality, onProgress, isCancelled)
     }
 }

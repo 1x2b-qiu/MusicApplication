@@ -5,14 +5,13 @@ import androidx.lifecycle.viewModelScope
 import com.example.musicapp.controller.MusicPlayerController
 import com.example.musicapp.controller.PlaybackPosition
 import com.example.musicapp.controller.PlayerPlayMode
+import com.example.musicapp.controller.SongDownloadManager
 import com.example.musicapp.domain.model.DownloadQuality
 import com.example.musicapp.domain.model.LyricLine
 import com.example.musicapp.domain.model.Song
-import com.example.musicapp.domain.usecase.download.DownloadSongUseCase
 import com.example.musicapp.domain.usecase.download.ObserveSongDownloadedUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -21,11 +20,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// 全屏播放页 UI 状态（播放数据来自全局 MusicPlayerController，下载态由本页维护）
+// 全屏播放页 UI 状态（播放数据来自全局 MusicPlayerController，下载态来自 SongDownloadManager）
 data class PlayerUiState(
     val songId: Long = 0L,
     val songName: String = "",
@@ -54,31 +51,20 @@ data class PlayerUiState(
     val downloadError: String? = null
 )
 
-// 本页下载过程的瞬时状态；用 targetSongId 避免切歌后旧任务污染新曲 UI
-private data class DownloadUi(
-    val targetSongId: Long = 0L,
-    val isDownloading: Boolean = false,
-    val progress: Float = 0f,
-    val error: String? = null
-)
-
 // 全屏播放页 ViewModel
-// 播控只委托 MusicPlayerController；下载由本页 UseCase 驱动并合并进 uiState
+// 播控只委托 MusicPlayerController；下载委托 SongDownloadManager
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     private val playerController: MusicPlayerController,
-    private val downloadSongUseCase: DownloadSongUseCase,
+    private val downloadManager: SongDownloadManager,
     private val observeSongDownloadedUseCase: ObserveSongDownloadedUseCase
 ) : ViewModel() {
-
-    // 下载进行中 / 失败信息（不进 Controller，仅本页使用）
-    private val downloadUi = MutableStateFlow(DownloadUi())
 
     // 高频播放进度（约 200ms）；不进 uiState，由进度条等局部控件就近订阅
     val positionState: StateFlow<PlaybackPosition> = playerController.playbackPosition
 
-    // 合并三路：全局播放态 + 当前曲是否已下载 + 本页下载瞬时态
+    // 合并三路：全局播放态 + 当前曲是否已下载 + 全局下载任务
     val uiState: StateFlow<PlayerUiState> = combine(
         playerController.playbackState,
         // 切歌后切换观察目标，避免一直订阅上一首的下载标记
@@ -89,12 +75,13 @@ class PlayerViewModel @Inject constructor(
                 if (songId == 0L) flowOf(false)
                 else observeSongDownloadedUseCase(songId)
             },
-        downloadUi
-    ) { state, isDownloaded, download ->
+        downloadManager.tasks
+    ) { state, isDownloaded, tasks ->
         val song = state.displaySong
-        val downloadingCurrent = download.isDownloading && download.targetSongId == song?.id
+        val songId = song?.id ?: 0L
+        val activeTask = tasks.firstOrNull { it.songId == songId }
         PlayerUiState(
-            songId = song?.id ?: 0L,
+            songId = songId,
             songName = song?.name.orEmpty(),
             artistName = song?.artists.orEmpty(),
             albumName = song?.album.orEmpty(),
@@ -111,10 +98,9 @@ class PlayerViewModel @Inject constructor(
             playMode = state.playMode,
             durationMs = song?.durationMs ?: 0L,
             isDownloaded = isDownloaded,
-            // 仅当下载任务针对当前展示曲时才展示进行中 / 错误 / 进度
-            isDownloading = downloadingCurrent,
-            downloadProgress = if (downloadingCurrent) download.progress else 0f,
-            downloadError = download.error?.takeIf { download.targetSongId == song?.id }
+            isDownloading = activeTask != null && activeTask.error == null,
+            downloadProgress = activeTask?.progress ?: 0f,
+            downloadError = activeTask?.error
         )
     }
         .distinctUntilChanged()
@@ -157,34 +143,6 @@ class PlayerViewModel @Inject constructor(
     fun downloadCurrentSong(quality: DownloadQuality = DownloadQuality.Default) {
         val song = playerController.playbackState.value.displaySong ?: return
         if (uiState.value.isDownloaded || uiState.value.isDownloading) return
-
-        downloadUi.update {
-            DownloadUi(targetSongId = song.id, isDownloading = true, progress = 0f, error = null)
-        }
-        viewModelScope.launch {
-            runCatching {
-                downloadSongUseCase(song, quality) { bytesRead, totalBytes ->
-                    if (totalBytes <= 0L) return@downloadSongUseCase
-                    val fraction = (bytesRead.toFloat() / totalBytes).coerceIn(0f, 1f)
-                    downloadUi.update { current ->
-                        if (current.targetSongId != song.id || !current.isDownloading) current
-                        else current.copy(progress = fraction)
-                    }
-                }
-            }.onSuccess {
-                downloadUi.update {
-                    DownloadUi(targetSongId = song.id, isDownloading = false, progress = 1f, error = null)
-                }
-            }.onFailure { error ->
-                downloadUi.update {
-                    DownloadUi(
-                        targetSongId = song.id,
-                        isDownloading = false,
-                        progress = 0f,
-                        error = error.message ?: "下载失败"
-                    )
-                }
-            }
-        }
+        downloadManager.enqueue(song, quality)
     }
 }

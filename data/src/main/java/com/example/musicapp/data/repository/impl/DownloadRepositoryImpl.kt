@@ -32,7 +32,8 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun downloadSong(
         song: Song,
         quality: DownloadQuality,
-        onProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)?
+        onProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)?,
+        isCancelled: () -> Boolean
     ): DownloadedSong = withContext(Dispatchers.IO) {
         val existing = downloadedSongDao.getById(song.id)
         if (existing != null && File(existing.localPath).isFile) {
@@ -57,7 +58,7 @@ class DownloadRepositoryImpl @Inject constructor(
 
         try {
             if (tempFile.exists()) tempFile.delete()
-            val size = songDownloader.download(url, tempFile, onProgress)
+            val size = songDownloader.download(url, tempFile, onProgress, isCancelled)
             if (targetFile.exists()) targetFile.delete()
             // rename 失败时退化为 copy，保证跨存储场景也能落盘
             if (!tempFile.renameTo(targetFile)) {
