@@ -25,12 +25,14 @@ data class ActiveDownloadTask(
     val coverUrl: String?,
     // 0f..1f；Content-Length 未知时不更新，保留上次值
     val progress: Float = 0f,
+    // true 表示用户暂停；任务仍留在列表，可继续
+    val paused: Boolean = false,
     // 非空表示失败；成功或取消会从列表移除，不会长期停留在此
     val error: String? = null
 )
 
 // 全局下载任务管理（Hilt 单例）
-// 统一入队 / 进度 / 取消，避免播放页与下载页各维护一份状态
+// 统一入队 / 进度 / 暂停 / 取消，避免播放页与下载页各维护一份状态
 @Singleton
 class SongDownloadManager @Inject constructor(
     private val downloadSongUseCase: DownloadSongUseCase
@@ -41,14 +43,21 @@ class SongDownloadManager @Inject constructor(
 
     // SupervisorJob：单个任务失败不影响同 scope 里其他下载
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    // songId → 协程 Job，用于判断是否在下、以及 cancel
+    // songId → 协程 Job，用于判断是否在下、以及 cancel / pause
     private val jobs = mutableMapOf<Long, Job>()
+    // 暂停后继续需要原 Song / 音质，故单独缓存请求参数
+    private val requests = mutableMapOf<Long, DownloadRequest>()
 
-    // 入队下载；同曲已有活跃 Job 则忽略，避免重复请求
+    // 入队下载；同曲已在列表（含暂停）则忽略或恢复，避免重复请求
     fun enqueue(song: Song, quality: DownloadQuality = DownloadQuality.Default) {
+        val existing = _tasks.value.find { it.songId == song.id }
+        if (existing != null && existing.error == null) {
+            if (existing.paused) resume(song.id)
+            return
+        }
         if (jobs[song.id]?.isActive == true) return
 
-        // 先写入 UI，再启动协程，保证列表立刻出现进度行
+        requests[song.id] = DownloadRequest(song, quality)
         upsertTask(
             ActiveDownloadTask(
                 songId = song.id,
@@ -56,10 +65,47 @@ class SongDownloadManager @Inject constructor(
                 artist = song.artists,
                 coverUrl = song.coverUrl,
                 progress = 0f,
+                paused = false,
                 error = null
             )
         )
+        startJob(song, quality)
+    }
 
+    // 暂停：停协程但保留任务与进度，封面区可展示暂停态
+    fun pause(songId: Long) {
+        val task = _tasks.value.find { it.songId == songId } ?: return
+        if (task.paused || task.error != null) return
+        _tasks.update { list ->
+            list.map { if (it.songId == songId) it.copy(paused = true) else it }
+        }
+        jobs.remove(songId)?.cancel()
+    }
+
+    // 继续：用缓存的请求参数重新拉流（当前下载器不支持断点，进度会重新累计）
+    fun resume(songId: Long) {
+        val request = requests[songId] ?: return
+        val task = _tasks.value.find { it.songId == songId } ?: return
+        if (!task.paused) return
+        if (jobs[songId]?.isActive == true) return
+
+        upsertTask(task.copy(paused = false, progress = 0f, error = null))
+        startJob(request.song, request.quality)
+    }
+
+    fun togglePause(songId: Long) {
+        val task = _tasks.value.find { it.songId == songId } ?: return
+        if (task.paused) resume(songId) else pause(songId)
+    }
+
+    // 取消指定歌曲下载：先停协程，再从 UI 列表移除
+    fun cancel(songId: Long) {
+        jobs.remove(songId)?.cancel()
+        requests.remove(songId)
+        removeTask(songId)
+    }
+
+    private fun startJob(song: Song, quality: DownloadQuality) {
         val job = scope.launch {
             runCatching {
                 downloadSongUseCase(
@@ -76,11 +122,16 @@ class SongDownloadManager @Inject constructor(
                 )
             }.onSuccess {
                 // 落盘成功后由 ObserveDownloadedSongs 刷新「已下载」，此处只清进行中项
+                requests.remove(song.id)
                 removeTask(song.id)
             }.onFailure { error ->
                 if (error is CancellationException) {
-                    // 用户取消：直接移除，不当作失败展示
-                    removeTask(song.id)
+                    // pause 会先标 paused 再 cancel，需保留任务；cancel() 已先 removeTask
+                    val stillPaused = _tasks.value.any { it.songId == song.id && it.paused }
+                    if (!stillPaused) {
+                        requests.remove(song.id)
+                        removeTask(song.id)
+                    }
                 } else {
                     // 失败保留一条带 error 的任务，供播放页展示文案
                     updateError(song.id, error.message ?: "下载失败")
@@ -89,12 +140,6 @@ class SongDownloadManager @Inject constructor(
             jobs.remove(song.id)
         }
         jobs[song.id] = job
-    }
-
-    // 取消指定歌曲下载：先停协程，再从 UI 列表移除
-    fun cancel(songId: Long) {
-        jobs.remove(songId)?.cancel()
-        removeTask(songId)
     }
 
     // 有则替换、无则追加，保证同一 songId 在列表中最多一条
@@ -109,7 +154,11 @@ class SongDownloadManager @Inject constructor(
     private fun updateProgress(songId: Long, progress: Float) {
         _tasks.update { list ->
             list.map { task ->
-                if (task.songId == songId) task.copy(progress = progress, error = null) else task
+                if (task.songId == songId) {
+                    task.copy(progress = progress, paused = false, error = null)
+                } else {
+                    task
+                }
             }
         }
     }
@@ -117,7 +166,7 @@ class SongDownloadManager @Inject constructor(
     private fun updateError(songId: Long, message: String) {
         _tasks.update { list ->
             list.map { task ->
-                if (task.songId == songId) task.copy(error = message) else task
+                if (task.songId == songId) task.copy(error = message, paused = false) else task
             }
         }
     }
@@ -125,4 +174,9 @@ class SongDownloadManager @Inject constructor(
     private fun removeTask(songId: Long) {
         _tasks.update { list -> list.filterNot { it.songId == songId } }
     }
+
+    private data class DownloadRequest(
+        val song: Song,
+        val quality: DownloadQuality
+    )
 }

@@ -24,7 +24,7 @@ data class DownloadsUiState(
     val totalSizeBytes: Long = 0L
 )
 
-// 本地下载列表：观察进行中任务与已下载记录；支持播放、取消、删除
+// 本地下载列表：观察进行中任务与已下载记录；支持播放、暂停/继续、取消、删除
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
     observeDownloadedSongsUseCase: ObserveDownloadedSongsUseCase,
@@ -56,6 +56,10 @@ class DownloadsViewModel @Inject constructor(
 
     fun cancelDownload(songId: Long) {
         downloadManager.cancel(songId)
+    }
+
+    fun togglePauseDownload(songId: Long) {
+        downloadManager.togglePause(songId)
     }
 
     fun deleteDownload(songId: Long) {

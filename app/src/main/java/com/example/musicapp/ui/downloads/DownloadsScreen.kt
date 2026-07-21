@@ -22,6 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -33,9 +36,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -111,6 +117,7 @@ fun DownloadsScreen(
                         uiState.activeTasks.forEach { task ->
                             ActiveDownloadRow(
                                 task = task,
+                                onTogglePause = { viewModel.togglePauseDownload(task.songId) },
                                 onCancel = { viewModel.cancelDownload(task.songId) }
                             )
                         }
@@ -250,63 +257,129 @@ private fun DownloadsCard(
     }
 }
 
-// 进行中下载单行：封面 + 进度条 + 取消按钮
+// 进行中下载单行：封面 + 暂停/继续 + 删除；进度条在下方（与设计稿一致）
 @Composable
 private fun ActiveDownloadRow(
     task: ActiveDownloadTask,
+    onTogglePause: () -> Unit,
     onCancel: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val progressPercent = (task.progress * 100f).toInt().coerceIn(0, 100)
+    val grayscaleFilter = remember {
+        ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) })
+    }
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(14.dp)
     ) {
-        AsyncImage(
-            model = rememberCoverRequest(task.coverUrl, 48.dp),
-            contentDescription = null,
-            modifier = Modifier
-                .size(48.dp)
-                .clip(CoverShape),
-            contentScale = ContentScale.Crop
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CoverShape)
             ) {
+                AsyncImage(
+                    model = rememberCoverRequest(task.coverUrl, 48.dp),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (task.paused) Modifier.alpha(0.7f) else Modifier),
+                    contentScale = ContentScale.Crop,
+                    colorFilter = if (task.paused) grayscaleFilter else null
+                )
+                if (task.paused) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.15f))
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = task.title,
                     color = colorScheme.onBackground,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    text = "$progressPercent%",
+                    text = task.artist,
+                    modifier = Modifier.padding(top = 2.dp),
                     color = colorScheme.onSurfaceVariant,
-                    fontSize = 11.sp
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
-            Text(
-                text = task.artist,
-                modifier = Modifier.padding(top = 2.dp),
-                color = colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (task.paused) {
+                                colorScheme.onBackground
+                            } else {
+                                colorScheme.onBackground.copy(alpha = 0.055f)
+                            }
+                        )
+                        .semantics {
+                            contentDescription =
+                                if (task.paused) "继续下载 ${task.title}" else "暂停下载 ${task.title}"
+                        }
+                        .clickable(onClick = onTogglePause),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (task.paused) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                        contentDescription = null,
+                        tint = if (task.paused) {
+                            colorScheme.background
+                        } else {
+                            colorScheme.onBackground.copy(alpha = 0.7f)
+                        },
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .semantics { contentDescription = "删除下载任务 ${task.title}" }
+                        .clickable(onClick = onCancel),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.DeleteOutline,
+                        contentDescription = null,
+                        tint = colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp)
+                    .weight(1f)
                     .height(3.dp)
                     .clip(RoundedCornerShape(50))
                     .background(colorScheme.onBackground.copy(alpha = 0.1f))
@@ -316,23 +389,20 @@ private fun ActiveDownloadRow(
                         .fillMaxWidth(task.progress.coerceIn(0f, 1f))
                         .height(3.dp)
                         .clip(RoundedCornerShape(50))
+                        .alpha(if (task.paused) 0.35f else 1f)
                         .background(colorScheme.onBackground.copy(alpha = 0.7f))
                 )
             }
-        }
-        Box(
-            modifier = Modifier
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(colorScheme.onBackground.copy(alpha = 0.06f))
-                .semantics { contentDescription = "取消下载 ${task.title}" }
-                .clickable(onClick = onCancel),
-            contentAlignment = Alignment.Center
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(10.dp)
-                    .border(1.dp, colorScheme.onSurfaceVariant, RoundedCornerShape(2.dp))
+            Text(
+                text = "$progressPercent%",
+                modifier = Modifier.width(32.dp),
+                color = if (task.paused) {
+                    colorScheme.onSurfaceVariant
+                } else {
+                    colorScheme.onBackground
+                },
+                fontSize = 11.sp,
+                textAlign = TextAlign.End
             )
         }
     }
