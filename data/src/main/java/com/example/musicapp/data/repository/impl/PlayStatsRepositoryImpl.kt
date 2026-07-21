@@ -28,7 +28,8 @@ class PlayStatsRepositoryImpl @Inject constructor(
             }
             PlayStats(
                 weekPlayCount = weekCount,
-                totalListenDurationMs = stats.totalListenDurationMs
+                totalListenDurationMs = stats.totalListenDurationMs,
+                playMode = stats.playMode
             )
         }
     }
@@ -57,6 +58,16 @@ class PlayStatsRepositoryImpl @Inject constructor(
             current.copy(
                 id = PlayStatsEntity.SINGLETON_ID,
                 totalListenDurationMs = current.totalListenDurationMs + durationMs
+            )
+        )
+    }
+
+    override suspend fun setPlayMode(playMode: String) {
+        val current = playStatsDao.get() ?: PlayStatsEntity()
+        playStatsDao.upsert(
+            current.copy(
+                id = PlayStatsEntity.SINGLETON_ID,
+                playMode = playMode
             )
         )
     }

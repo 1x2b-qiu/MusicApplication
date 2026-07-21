@@ -16,7 +16,7 @@ import com.example.musicapp.data.local.entity.RecentPlayEntity
         PlayStatsEntity::class,
         DownloadedSongEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {

@@ -3,7 +3,7 @@ package com.example.musicapp.data.local.entity
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
-// 播放统计单行表：本周播放次数 + 累计实际听歌时长
+// 播放统计单行表：本周播放次数 + 累计听歌时长 + 播放模式
 @Entity(tableName = "play_stats")
 data class PlayStatsEntity(
     // 固定为 1，整表只保留一行汇总
@@ -13,9 +13,12 @@ data class PlayStatsEntity(
     // 当前计数所属周的周一 epochDay，用于跨周判定
     val weekStartEpochDay: Long = 0L,
     // 累计实际听歌时长（毫秒）
-    val totalListenDurationMs: Long = 0L
+    val totalListenDurationMs: Long = 0L,
+    // 播放模式枚举名：Shuffle / Loop / Single
+    val playMode: String = DEFAULT_PLAY_MODE
 ) {
     companion object {
         const val SINGLETON_ID = 1
+        const val DEFAULT_PLAY_MODE = "Loop"
     }
 }

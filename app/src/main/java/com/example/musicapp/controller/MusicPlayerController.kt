@@ -21,7 +21,9 @@ import com.example.musicapp.domain.usecase.music.GetSongUrlUseCase
 import com.example.musicapp.domain.usecase.music.LikeSongUseCase
 import com.example.musicapp.domain.usecase.auth.ObserveLoginStateUseCase
 import com.example.musicapp.domain.usecase.history.RecordRecentPlayUseCase
+import com.example.musicapp.domain.usecase.stats.ObservePlayStatsUseCase
 import com.example.musicapp.domain.usecase.stats.RecordWeekPlayUseCase
+import com.example.musicapp.domain.usecase.stats.UpdatePlayModeUseCase
 import com.example.musicapp.service.MusicPlaybackService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -77,7 +79,7 @@ data class PlaybackState(
     // 当前高亮歌词行下标；仅在行切换时更新（低频）
     val activeLyricIndex: Int = 0,
     // 全局播放模式，驱动自动切歌与手动上下首
-    val playMode: PlayerPlayMode = PlayerPlayMode.Shuffle
+    val playMode: PlayerPlayMode = PlayerPlayMode.Loop
 ) {
     // 迷你栏展示用：优先显示正在播的歌，否则显示预览歌
     val displaySong: Song?
@@ -110,6 +112,10 @@ class MusicPlayerController @Inject constructor(
     private val recordWeekPlayUseCase: RecordWeekPlayUseCase,
     // 累加听歌时长（本地统计）
     private val addListenDurationUseCase: AddListenDurationUseCase,
+    // 读取本地播放统计（含持久化的播放模式）
+    private val observePlayStatsUseCase: ObservePlayStatsUseCase,
+    // 持久化播放模式
+    private val updatePlayModeUseCase: UpdatePlayModeUseCase,
     // 红心收藏 / 取消收藏
     private val likeSongUseCase: LikeSongUseCase,
     // 拉取当前用户红心歌单 id 列表
@@ -180,6 +186,13 @@ class MusicPlayerController @Inject constructor(
     private var listeningSinceElapsedRealtime: Long? = null
 
     init {
+        // 启动时恢复本地播放模式
+        scope.launch {
+            val saved = observePlayStatsUseCase().first().playMode
+            val mode = runCatching { PlayerPlayMode.valueOf(saved) }
+                .getOrDefault(PlayerPlayMode.Loop)
+            _playbackState.update { it.copy(playMode = mode) }
+        }
         // 启动时根据登录态预热红心列表，避免首屏收藏图标闪错
         scope.launch {
             val loginState = observeLoginStateUseCase().first()
@@ -345,16 +358,16 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 循环切换播放模式：随机 → 列表循环 → 单曲循环 → 随机
+    // 循环切换播放模式：随机 → 列表循环 → 单曲循环 → 随机；并写入本地
     fun cyclePlayMode() {
-        _playbackState.update { state ->
-            state.copy(
-                playMode = when (state.playMode) {
-                    PlayerPlayMode.Shuffle -> PlayerPlayMode.Loop
-                    PlayerPlayMode.Loop -> PlayerPlayMode.Single
-                    PlayerPlayMode.Single -> PlayerPlayMode.Shuffle
-                }
-            )
+        val next = when (_playbackState.value.playMode) {
+            PlayerPlayMode.Shuffle -> PlayerPlayMode.Loop
+            PlayerPlayMode.Loop -> PlayerPlayMode.Single
+            PlayerPlayMode.Single -> PlayerPlayMode.Shuffle
+        }
+        _playbackState.update { it.copy(playMode = next) }
+        scope.launch {
+            updatePlayModeUseCase(next.name)
         }
     }
 
