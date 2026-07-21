@@ -180,7 +180,7 @@ fun HomeScreen(
     onLikedClick: () -> Unit,
     onRecentClick: () -> Unit,
     onLoginClick: () -> Unit,
-    onOpenSidebar: (nickname: String?, avatarUrl: String?, likedCount: Int) -> Unit = { _, _, _ -> },
+    onOpenSidebar: (nickname: String?, avatarUrl: String?) -> Unit = { _, _ -> },
     darkTheme: Boolean = true,
     onToggleTheme: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
@@ -206,11 +206,9 @@ fun HomeScreen(
                 if (!uiState.loginState.isLoggedIn) {
                     onLoginClick()
                 } else {
-                    val likedCount = uiState.likedSongs.size.takeIf { it > 0 } ?: 1_024
                     onOpenSidebar(
                         uiState.loginState.nickname,
-                        uiState.loginState.avatarUrl,
-                        likedCount
+                        uiState.loginState.avatarUrl
                     )
                 }
             }

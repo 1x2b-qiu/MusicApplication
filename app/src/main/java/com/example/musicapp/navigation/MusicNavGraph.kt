@@ -79,7 +79,6 @@ fun MusicNavGraph(
     var sidebarOpen by remember { mutableStateOf(false) }
     var sidebarNickname by remember { mutableStateOf<String?>(null) }
     var sidebarAvatarUrl by remember { mutableStateOf<String?>(null) }
-    var sidebarLikedCount by remember { mutableStateOf(1_024) }
 
     Box(
         modifier = Modifier
@@ -158,10 +157,9 @@ fun MusicNavGraph(
                                 launchSingleTop = true
                             }
                         },
-                        onOpenSidebar = { nickname, avatarUrl, likedCount ->
+                        onOpenSidebar = { nickname, avatarUrl ->
                             sidebarNickname = nickname
                             sidebarAvatarUrl = avatarUrl
-                            sidebarLikedCount = likedCount
                             sidebarOpen = true
                         },
                         darkTheme = darkTheme,
@@ -299,7 +297,6 @@ fun MusicNavGraph(
             onDismiss = { sidebarOpen = false },
             nickname = sidebarNickname,
             avatarUrl = sidebarAvatarUrl,
-            likedCount = sidebarLikedCount,
             darkTheme = darkTheme,
             hazeState = hazeState,
             onMenuClick = { id ->

@@ -104,7 +104,6 @@ fun AppSidebar(
     onDismiss: () -> Unit,
     nickname: String?,
     avatarUrl: String?,
-    likedCount: Int = 1_024,
     listeningHours: Int = 2_481,
     darkTheme: Boolean = true,
     hazeState: HazeState,
@@ -259,7 +258,6 @@ fun AppSidebar(
                 SidebarProfileSection(
                     nickname = nickname,
                     avatarUrl = avatarUrl,
-                    likedCount = likedCount,
                     listeningHours = listeningHours,
                     darkTheme = darkTheme,
                     textPrimary = textPrimary,
@@ -325,7 +323,6 @@ fun AppSidebar(
 private fun SidebarProfileSection(
     nickname: String?,
     avatarUrl: String?,
-    likedCount: Int,
     listeningHours: Int,
     darkTheme: Boolean,
     textPrimary: Color,
@@ -339,7 +336,7 @@ private fun SidebarProfileSection(
             .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 20.dp)
     ) {
         Row(
-            verticalAlignment = Alignment.Top,
+            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Box {
@@ -387,27 +384,16 @@ private fun SidebarProfileSection(
                 )
             }
 
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(top = 2.dp)
-            ) {
-                Text(
-                    text = nickname?.takeIf { it.isNotBlank() } ?: "未登录",
-                    color = textPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 20.sp
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = "%,d 首喜欢".format(likedCount),
-                    color = textSecondary,
-                    fontSize = 12.sp
-                )
-            }
+            Text(
+                text = nickname?.takeIf { it.isNotBlank() } ?: "未登录",
+                modifier = Modifier.weight(1f),
+                color = textPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 20.sp
+            )
         }
 
         Spacer(modifier = Modifier.height(28.dp))
