@@ -28,4 +28,7 @@ interface DownloadRepository {
     fun observeDownloadedSongs(): Flow<List<DownloadedSong>>
 
     suspend fun deleteDownload(songId: Long)
+
+    // 丢弃未完成的临时下载文件（用户取消时调用；暂停续传需保留临时文件）
+    suspend fun discardPartialDownload(songId: Long)
 }

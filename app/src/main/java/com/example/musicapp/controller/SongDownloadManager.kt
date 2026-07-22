@@ -2,6 +2,7 @@ package com.example.musicapp.controller
 
 import com.example.musicapp.domain.model.DownloadQuality
 import com.example.musicapp.domain.model.Song
+import com.example.musicapp.domain.usecase.download.DiscardPartialDownloadUseCase
 import com.example.musicapp.domain.usecase.download.DownloadSongUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -35,7 +36,8 @@ data class ActiveDownloadTask(
 // 统一入队 / 进度 / 暂停 / 取消，避免播放页与下载页各维护一份状态
 @Singleton
 class SongDownloadManager @Inject constructor(
-    private val downloadSongUseCase: DownloadSongUseCase
+    private val downloadSongUseCase: DownloadSongUseCase,
+    private val discardPartialDownloadUseCase: DiscardPartialDownloadUseCase
 ) {
     // 对外只读；UI 通过 collect 订阅进行中任务
     private val _tasks = MutableStateFlow<List<ActiveDownloadTask>>(emptyList())
@@ -72,7 +74,7 @@ class SongDownloadManager @Inject constructor(
         startJob(song, quality)
     }
 
-    // 暂停：停协程但保留任务与进度，封面区可展示暂停态
+    // 暂停：停协程但保留任务、进度与临时文件，供断点续传
     fun pause(songId: Long) {
         val task = _tasks.value.find { it.songId == songId } ?: return
         if (task.paused || task.error != null) return
@@ -82,14 +84,14 @@ class SongDownloadManager @Inject constructor(
         jobs.remove(songId)?.cancel()
     }
 
-    // 继续：用缓存的请求参数重新拉流（当前下载器不支持断点，进度会重新累计）
+    // 继续：保留当前进度，底层对已有临时文件发 Range 续传
     fun resume(songId: Long) {
         val request = requests[songId] ?: return
         val task = _tasks.value.find { it.songId == songId } ?: return
         if (!task.paused) return
         if (jobs[songId]?.isActive == true) return
 
-        upsertTask(task.copy(paused = false, progress = 0f, error = null))
+        upsertTask(task.copy(paused = false, error = null))
         startJob(request.song, request.quality)
     }
 
@@ -98,11 +100,17 @@ class SongDownloadManager @Inject constructor(
         if (task.paused) resume(songId) else pause(songId)
     }
 
-    // 取消指定歌曲下载：先停协程，再从 UI 列表移除
+    // 取消指定歌曲下载：先停协程，再清理临时文件与 UI 列表
     fun cancel(songId: Long) {
-        jobs.remove(songId)?.cancel()
+        val job = jobs.remove(songId)
         requests.remove(songId)
         removeTask(songId)
+        if (job == null || !job.isActive) {
+            // 已暂停或无活跃 Job：此处直接清临时文件
+            discardPartial(songId)
+        }
+        // 仍在下载：等协程取消回调里再清，避免与写盘竞态
+        job?.cancel()
     }
 
     private fun startJob(song: Song, quality: DownloadQuality) {
@@ -126,11 +134,12 @@ class SongDownloadManager @Inject constructor(
                 removeTask(song.id)
             }.onFailure { error ->
                 if (error is CancellationException) {
-                    // pause 会先标 paused 再 cancel，需保留任务；cancel() 已先 removeTask
+                    // pause 会先标 paused 再 cancel，需保留任务与临时文件
                     val stillPaused = _tasks.value.any { it.songId == song.id && it.paused }
                     if (!stillPaused) {
                         requests.remove(song.id)
                         removeTask(song.id)
+                        discardPartial(song.id)
                     }
                 } else {
                     // 失败保留一条带 error 的任务，供播放页展示文案
@@ -140,6 +149,12 @@ class SongDownloadManager @Inject constructor(
             jobs.remove(song.id)
         }
         jobs[song.id] = job
+    }
+
+    private fun discardPartial(songId: Long) {
+        scope.launch(Dispatchers.IO) {
+            runCatching { discardPartialDownloadUseCase(songId) }
+        }
     }
 
     // 有则替换、无则追加，保证同一 songId 在列表中最多一条

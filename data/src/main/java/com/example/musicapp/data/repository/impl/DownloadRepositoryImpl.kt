@@ -10,6 +10,7 @@ import com.example.musicapp.domain.model.DownloadedSong
 import com.example.musicapp.domain.model.DownloadQuality
 import com.example.musicapp.domain.model.Song
 import com.example.musicapp.domain.repository.DownloadRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -57,7 +58,7 @@ class DownloadRepositoryImpl @Inject constructor(
         val targetFile = audioFileStore.targetFile(song.id, extension)
 
         try {
-            if (tempFile.exists()) tempFile.delete()
+            // 保留已有临时文件，供 SongDownloader 通过 Range 断点续传
             val size = songDownloader.download(url, tempFile, onProgress, isCancelled)
             if (targetFile.exists()) targetFile.delete()
             // rename 失败时退化为 copy，保证跨存储场景也能落盘
@@ -72,8 +73,11 @@ class DownloadRepositoryImpl @Inject constructor(
             )
             downloadedSongDao.upsert(entity)
             entity.toDownloadedSong()
+        } catch (error: CancellationException) {
+            // 暂停会取消协程：保留临时文件以便继续下载；用户取消由 discardPartialDownload 清理
+            throw error
         } catch (error: Throwable) {
-            // 失败时清掉临时文件，避免残留占用空间
+            // 真正失败时清掉临时文件，避免残留占用空间
             tempFile.delete()
             throw error
         }
@@ -106,5 +110,12 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun deleteDownload(songId: Long) = withContext(Dispatchers.IO) {
         audioFileStore.deleteForSong(songId)
         downloadedSongDao.deleteById(songId)
+    }
+
+    // 仅删除未完成的临时文件
+    override suspend fun discardPartialDownload(songId: Long) {
+        withContext(Dispatchers.IO) {
+            audioFileStore.tempFile(songId).delete()
+        }
     }
 }
