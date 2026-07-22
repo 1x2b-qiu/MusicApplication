@@ -38,7 +38,8 @@ fun SongUrlDto.toSongUrl(): SongUrl {
     return SongUrl(
         songId = id,
         url = url,
-        bitrate = br
+        bitrate = br,
+        sizeBytes = size
     )
 }
 

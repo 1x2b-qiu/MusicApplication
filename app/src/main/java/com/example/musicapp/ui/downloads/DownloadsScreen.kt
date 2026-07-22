@@ -311,14 +311,31 @@ private fun ActiveDownloadRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Text(
-                    text = task.artist,
-                    modifier = Modifier.padding(top = 2.dp),
-                    color = colorScheme.onSurfaceVariant,
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                // 时长紧跟歌手；歌手过长时省略，不挤掉时长
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = task.artist,
+                        modifier = Modifier.weight(1f, fill = false),
+                        color = colorScheme.onSurfaceVariant,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (task.durationMs > 0L) {
+                        Text(
+                            text = " · ${formatSongDuration(task.durationMs)}",
+                            color = colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+                }
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -353,21 +370,21 @@ private fun ActiveDownloadRow(
                         modifier = Modifier.size(14.dp)
                     )
                 }
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .semantics { contentDescription = "删除下载任务 ${task.title}" }
-                        .clickable(onClick = onCancel),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteOutline,
-                        contentDescription = null,
-                        tint = colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+//                Box(
+//                    modifier = Modifier
+//                        .size(32.dp)
+//                        .clip(CircleShape)
+//                        .semantics { contentDescription = "删除下载任务 ${task.title}" }
+//                        .clickable(onClick = onCancel),
+//                    contentAlignment = Alignment.Center
+//                ) {
+//                    Icon(
+//                        imageVector = Icons.Outlined.DeleteOutline,
+//                        contentDescription = null,
+//                        tint = colorScheme.onSurfaceVariant,
+//                        modifier = Modifier.size(16.dp)
+//                    )
+//                }
             }
         }
         Row(
@@ -453,14 +470,31 @@ private fun DownloadedSongRow(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Text(
-                        text = "${song.artists} · ${formatSongDuration(song.durationMs)}",
-                        modifier = Modifier.padding(top = 2.dp),
-                        color = colorScheme.onSurfaceVariant,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    // 时长紧跟歌手；歌手过长时省略，不挤掉时长
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = song.artists,
+                            modifier = Modifier.weight(1f, fill = false),
+                            color = colorScheme.onSurfaceVariant,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (song.durationMs > 0L) {
+                            Text(
+                                text = " · ${formatSongDuration(song.durationMs)}",
+                                color = colorScheme.onSurfaceVariant,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
                 }
             }
             Box(

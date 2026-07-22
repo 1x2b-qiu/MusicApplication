@@ -3,9 +3,11 @@ package com.example.musicapp.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.example.musicapp.data.local.dao.DownloadedSongDao
+import com.example.musicapp.data.local.dao.PendingDownloadDao
 import com.example.musicapp.data.local.dao.PlayStatsDao
 import com.example.musicapp.data.local.dao.RecentPlayDao
 import com.example.musicapp.data.local.entity.DownloadedSongEntity
+import com.example.musicapp.data.local.entity.PendingDownloadEntity
 import com.example.musicapp.data.local.entity.PlayStatsEntity
 import com.example.musicapp.data.local.entity.RecentPlayEntity
 
@@ -14,9 +16,10 @@ import com.example.musicapp.data.local.entity.RecentPlayEntity
     entities = [
         RecentPlayEntity::class,
         PlayStatsEntity::class,
-        DownloadedSongEntity::class
+        DownloadedSongEntity::class,
+        PendingDownloadEntity::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -29,4 +32,7 @@ abstract class MusicDatabase : RoomDatabase() {
 
     // 本地下载记录 DAO
     abstract fun downloadedSongDao(): DownloadedSongDao
+
+    // 未完成下载任务 DAO
+    abstract fun pendingDownloadDao(): PendingDownloadDao
 }

@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -21,6 +20,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,9 +33,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.musicapp.domain.model.DownloadQuality
 import com.example.musicapp.domain.model.Song
+import com.example.musicapp.util.formatFileSize
 import com.example.musicapp.util.rememberCoverRequest
 
 private val SheetShape = RoundedCornerShape(28.dp)
@@ -46,18 +49,24 @@ private val ConfirmShape = RoundedCornerShape(16.dp)
 /**
  * 下载音质选择底部弹层（对齐设计稿）：
  * 歌曲信息 + 三档音质单选 + 确认下载
+ * 体积优先展示 song/url 返回的真实 size，失败再回退估算
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadQualityBottomSheet(
     song: Song,
     onDismiss: () -> Unit,
-    onConfirm: (DownloadQuality) -> Unit
+    onConfirm: (DownloadQuality) -> Unit,
+    viewModel: DownloadQualitySheetViewModel = hiltViewModel()
 ) {
-
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedQuality by remember { mutableStateOf(DownloadQuality.Default) }
+    val sizeByQuality by viewModel.sizeByQuality.collectAsStateWithLifecycle()
+
+    LaunchedEffect(song.id) {
+        viewModel.loadSizes(song.id)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -112,10 +121,15 @@ fun DownloadQualityBottomSheet(
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 DownloadQuality.entries.forEach { quality ->
+                    val realBytes = sizeByQuality[quality] ?: 0L
                     QualityOptionRow(
                         quality = quality,
                         selected = quality == selectedQuality,
-                        sizeHint = estimateSizeLabel(song.durationMs, quality),
+                        sizeHint = sizeLabel(
+                            durationMs = song.durationMs,
+                            quality = quality,
+                            realBytes = realBytes
+                        ),
                         onClick = { selectedQuality = quality }
                     )
                 }
@@ -210,6 +224,16 @@ private fun QualityOptionRow(
     }
 }
 
+// 优先真实 size；未返回时回退按时长与码率估算（带「约」）
+private fun sizeLabel(
+    durationMs: Long,
+    quality: DownloadQuality,
+    realBytes: Long
+): String {
+    if (realBytes > 0L) return formatFileSize(realBytes)
+    return estimateSizeLabel(durationMs, quality)
+}
+
 // 按时长与目标码率估算体积文案；时长未知时用设计稿量级占位
 private fun estimateSizeLabel(durationMs: Long, quality: DownloadQuality): String {
     if (durationMs <= 0L) {
@@ -226,5 +250,5 @@ private fun estimateSizeLabel(durationMs: Long, quality: DownloadQuality): Strin
     }
     val bytes = durationMs / 1000.0 * (estimateBps / 8.0)
     val mb = bytes / (1024.0 * 1024.0)
-    return String.format("%.1f MB", mb)
+    return String.format("约 %.1f MB", mb)
 }

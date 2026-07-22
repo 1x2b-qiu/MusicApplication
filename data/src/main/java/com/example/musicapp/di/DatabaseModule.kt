@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.example.musicapp.data.local.MusicDatabase
 import com.example.musicapp.data.local.dao.DownloadedSongDao
+import com.example.musicapp.data.local.dao.PendingDownloadDao
 import com.example.musicapp.data.local.dao.PlayStatsDao
 import com.example.musicapp.data.local.dao.RecentPlayDao
 import dagger.Module
@@ -50,5 +51,11 @@ object DatabaseModule {
     // 提供本地下载 DAO
     fun provideDownloadedSongDao(database: MusicDatabase): DownloadedSongDao {
         return database.downloadedSongDao()
+    }
+
+    @Provides
+    // 提供未完成下载任务 DAO
+    fun providePendingDownloadDao(database: MusicDatabase): PendingDownloadDao {
+        return database.pendingDownloadDao()
     }
 }

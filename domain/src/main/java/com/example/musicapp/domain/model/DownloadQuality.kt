@@ -14,5 +14,10 @@ enum class DownloadQuality(
 
     companion object {
         val Default: DownloadQuality = High
+
+        // 按码率还原档位；未知码率回退默认
+        fun fromBitrate(bitrate: Int): DownloadQuality {
+            return entries.find { it.bitrate == bitrate } ?: Default
+        }
     }
 }

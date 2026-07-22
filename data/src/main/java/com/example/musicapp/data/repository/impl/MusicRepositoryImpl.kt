@@ -31,9 +31,9 @@ class MusicRepositoryImpl @Inject constructor(
         return response.result?.songs.orEmpty().map { it.toSong() }
     }
 
-    // 获取歌曲可播放的音频 URL
-    override suspend fun getSongUrl(songId: Long): SongUrl {
-        val response = neteaseApi.getSongUrl(songId)
+    // 获取歌曲可播放的音频 URL；bitrate 指定目标码率时按该档返回
+    override suspend fun getSongUrl(songId: Long, bitrate: Int?): SongUrl {
+        val response = neteaseApi.getSongUrl(songId = songId, bitrate = bitrate)
         if (response.code != 200) {
             throw IllegalStateException("Get song url failed with code ${response.code}")
         }

@@ -10,8 +10,8 @@ import com.example.musicapp.domain.model.UserPlaylist
 interface MusicRepository {
     // 按关键词搜索歌曲
     suspend fun searchSongs(keywords: String, limit: Int = 20): List<Song>
-    // 获取歌曲流媒体播放地址
-    suspend fun getSongUrl(songId: Long): SongUrl
+    // 获取歌曲流媒体播放地址；bitrate 为可选目标码率（bps）
+    suspend fun getSongUrl(songId: Long, bitrate: Int? = null): SongUrl
     // 获取歌曲 LRC 歌词
     suspend fun getSongLyrics(songId: Long): List<LyricLine>
     // 收藏或取消收藏歌曲

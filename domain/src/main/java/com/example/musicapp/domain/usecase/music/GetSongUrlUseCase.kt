@@ -8,8 +8,8 @@ import javax.inject.Inject
 class GetSongUrlUseCase @Inject constructor(
     private val musicRepository: MusicRepository
 ) {
-    // 获取指定歌曲的流媒体播放地址
-    suspend operator fun invoke(songId: Long): SongUrl {
-        return musicRepository.getSongUrl(songId)
+    // bitrate：可选目标码率（bps）；不传则由服务端默认
+    suspend operator fun invoke(songId: Long, bitrate: Int? = null): SongUrl {
+        return musicRepository.getSongUrl(songId, bitrate)
     }
 }

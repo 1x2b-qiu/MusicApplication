@@ -2,6 +2,7 @@ package com.example.musicapp.domain.repository
 
 import com.example.musicapp.domain.model.DownloadedSong
 import com.example.musicapp.domain.model.DownloadQuality
+import com.example.musicapp.domain.model.PendingDownload
 import com.example.musicapp.domain.model.Song
 import kotlinx.coroutines.flow.Flow
 
@@ -31,4 +32,19 @@ interface DownloadRepository {
 
     // 丢弃未完成的临时下载文件（用户取消时调用；暂停续传需保留临时文件）
     suspend fun discardPartialDownload(songId: Long)
+
+    // 未完成下载任务：入队 / 暂停态持久化；进程恢复时读取
+    suspend fun upsertPendingDownload(pending: PendingDownload)
+
+    suspend fun updatePendingPaused(songId: Long, paused: Boolean)
+
+    // 首次获知真实总长时写入；已有有效值不覆盖
+    suspend fun updatePendingTotalBytes(songId: Long, totalBytes: Long)
+
+    suspend fun deletePendingDownload(songId: Long)
+
+    suspend fun getPendingDownloads(): List<PendingDownload>
+
+    // 临时文件已写入字节数；无文件时为 0
+    suspend fun getPartialDownloadBytes(songId: Long): Long
 }

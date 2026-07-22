@@ -3,11 +3,15 @@ package com.example.musicapp.data.repository.impl
 import com.example.musicapp.data.download.AudioFileStore
 import com.example.musicapp.data.download.SongDownloader
 import com.example.musicapp.data.local.dao.DownloadedSongDao
+import com.example.musicapp.data.local.dao.PendingDownloadDao
 import com.example.musicapp.data.mapper.toDownloadedSong
 import com.example.musicapp.data.mapper.toDownloadedSongEntity
+import com.example.musicapp.data.mapper.toEntity
+import com.example.musicapp.data.mapper.toPendingDownload
 import com.example.musicapp.data.remote.api.NeteaseApi
 import com.example.musicapp.domain.model.DownloadedSong
 import com.example.musicapp.domain.model.DownloadQuality
+import com.example.musicapp.domain.model.PendingDownload
 import com.example.musicapp.domain.model.Song
 import com.example.musicapp.domain.repository.DownloadRepository
 import kotlinx.coroutines.CancellationException
@@ -25,6 +29,7 @@ import javax.inject.Singleton
 class DownloadRepositoryImpl @Inject constructor(
     private val neteaseApi: NeteaseApi,
     private val downloadedSongDao: DownloadedSongDao,
+    private val pendingDownloadDao: PendingDownloadDao,
     private val audioFileStore: AudioFileStore,
     private val songDownloader: SongDownloader
 ) : DownloadRepository {
@@ -72,6 +77,8 @@ class DownloadRepositoryImpl @Inject constructor(
                 fileSizeBytes = size
             )
             downloadedSongDao.upsert(entity)
+            // 成功落盘后清掉进行中记录
+            pendingDownloadDao.deleteById(song.id)
             entity.toDownloadedSong()
         } catch (error: CancellationException) {
             // 暂停会取消协程：保留临时文件以便继续下载；用户取消由 discardPartialDownload 清理
@@ -110,6 +117,7 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun deleteDownload(songId: Long) = withContext(Dispatchers.IO) {
         audioFileStore.deleteForSong(songId)
         downloadedSongDao.deleteById(songId)
+        pendingDownloadDao.deleteById(songId)
     }
 
     // 仅删除未完成的临时文件
@@ -117,5 +125,39 @@ class DownloadRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             audioFileStore.tempFile(songId).delete()
         }
+    }
+
+    override suspend fun upsertPendingDownload(pending: PendingDownload) {
+        withContext(Dispatchers.IO) {
+            pendingDownloadDao.upsert(pending.toEntity())
+        }
+    }
+
+    override suspend fun updatePendingPaused(songId: Long, paused: Boolean) {
+        withContext(Dispatchers.IO) {
+            pendingDownloadDao.updatePaused(songId, paused)
+        }
+    }
+
+    override suspend fun updatePendingTotalBytes(songId: Long, totalBytes: Long) {
+        if (totalBytes <= 0L) return
+        withContext(Dispatchers.IO) {
+            pendingDownloadDao.updateTotalBytesIfAbsent(songId, totalBytes)
+        }
+    }
+
+    override suspend fun deletePendingDownload(songId: Long) {
+        withContext(Dispatchers.IO) {
+            pendingDownloadDao.deleteById(songId)
+        }
+    }
+
+    override suspend fun getPendingDownloads(): List<PendingDownload> = withContext(Dispatchers.IO) {
+        pendingDownloadDao.getAll().map { it.toPendingDownload() }
+    }
+
+    override suspend fun getPartialDownloadBytes(songId: Long): Long = withContext(Dispatchers.IO) {
+        val file = audioFileStore.tempFile(songId)
+        if (file.isFile) file.length() else 0L
     }
 }

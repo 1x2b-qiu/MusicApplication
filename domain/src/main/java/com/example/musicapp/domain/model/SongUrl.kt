@@ -9,6 +9,8 @@ data class SongUrl(
     val songId: Long,
     // 实际流媒体 URL，未获取到时为 null
     val url: String?,
-    // 比特率（kbps）
-    val bitrate: Int
+    // 比特率（bps）
+    val bitrate: Int,
+    // 该码率下文件大小（字节）；未知为 0
+    val sizeBytes: Long = 0L
 )
