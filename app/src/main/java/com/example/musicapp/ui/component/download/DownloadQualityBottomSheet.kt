@@ -62,7 +62,7 @@ fun DownloadQualityBottomSheet(
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var selectedQuality by remember { mutableStateOf(DownloadQuality.Default) }
-    val sizeByQuality by viewModel.sizeByQuality.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(song.id) {
         viewModel.loadSizes(song.id)
@@ -121,7 +121,7 @@ fun DownloadQualityBottomSheet(
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 DownloadQuality.entries.forEach { quality ->
-                    val realBytes = sizeByQuality[quality] ?: 0L
+                    val realBytes = uiState.sizeByQuality[quality] ?: 0L
                     QualityOptionRow(
                         quality = quality,
                         selected = quality == selectedQuality,
