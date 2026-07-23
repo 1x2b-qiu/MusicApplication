@@ -17,8 +17,6 @@ import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.usecase.download.GetLocalSongPathUseCase
 import com.leo.lune.domain.usecase.music.GetSongLyricsUseCase
 import com.leo.lune.domain.usecase.music.GetSongUrlUseCase
-import com.leo.lune.domain.usecase.stats.ObservePlayStatsUseCase
-import com.leo.lune.domain.usecase.stats.UpdatePlayModeUseCase
 import com.leo.lune.service.MusicPlaybackService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -30,14 +28,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.random.Random
 
 // 播放模式：随机 / 列表循环 / 单曲循环
 enum class PlayerPlayMode {
@@ -103,10 +99,8 @@ class MusicPlayerController @Inject constructor(
     private val getSongLyricsUseCase: GetSongLyricsUseCase,
     // 听歌统计记录器（最近播放 / 周次数 / 时长）
     private val playStatsRecorderManager: PlayStatsRecorderManager,
-    // 读取本地播放统计（含持久化的播放模式）
-    private val observePlayStatsUseCase: ObservePlayStatsUseCase,
-    // 持久化播放模式
-    private val updatePlayModeUseCase: UpdatePlayModeUseCase,
+    // 队列导航器（播放模式 + 上/下一首下标解析）
+    private val queueManager: QueueManager,
     // 红心收藏管理器（缓存 + 乐观更新 + 回滚）
     val favoriteManager: FavoriteManager,
     // 播放快照持久化（进程级恢复）
@@ -193,12 +187,13 @@ class MusicPlayerController @Inject constructor(
     private var prefetchedNextSongId: Long? = null
 
     init {
-        // 启动时恢复本地播放模式
+        // 订阅 QueueManager 的播放模式，同步进 PlaybackState
         scope.launch {
-            val saved = observePlayStatsUseCase().first().playMode
-            val mode = runCatching { PlayerPlayMode.valueOf(saved) }
-                .getOrDefault(PlayerPlayMode.Loop)
-            _playbackState.update { it.copy(playMode = mode) }
+            queueManager.playMode.collect { mode ->
+                _playbackState.update { state ->
+                    if (state.playMode == mode) state else state.copy(playMode = mode)
+                }
+            }
         }
         // 订阅 FavoriteManager 的收藏态，同步进 PlaybackState
         scope.launch {
@@ -344,7 +339,7 @@ class MusicPlayerController @Inject constructor(
     // 播放列表播完（下一首未预取或预取失败时）：单曲循环重播，其余模式切下一首
     @RequiresApi(Build.VERSION_CODES.O)
     private fun onPlaybackEnded() {
-        when (_playbackState.value.playMode) {
+        when (queueManager.playMode.value) {
             PlayerPlayMode.Single -> {
                 player.seekTo(0)
                 player.play()
@@ -366,7 +361,7 @@ class MusicPlayerController @Inject constructor(
             player.seekToNextMediaItem()
             return
         }
-        playSong(queue[resolveNextIndex(state)], queue)
+        playSong(queue[queueManager.resolveNextIndex(queue, state.queueIndex)], queue)
     }
 
     // 上一首：Shuffle 随机；Loop 环形回退；Single 在队首则回到开头，否则播上一曲
@@ -375,61 +370,18 @@ class MusicPlayerController @Inject constructor(
         val state = _playbackState.value
         val queue = state.queue
         if (queue.isEmpty()) return
-        when (state.playMode) {
-            PlayerPlayMode.Shuffle -> {
-                playSong(queue[resolveRandomIndex(queue, state.queueIndex)], queue)
-            }
-            PlayerPlayMode.Loop -> {
-                val previousIndex = if (state.queueIndex <= 0) {
-                    queue.lastIndex
-                } else {
-                    state.queueIndex - 1
-                }
-                playSong(queue[previousIndex], queue)
-            }
-            PlayerPlayMode.Single -> {
-                if (state.queueIndex <= 0) {
-                    player.seekTo(0)
-                    syncPositionAndLyric()
-                } else {
-                    playSong(queue[state.queueIndex - 1], queue)
-                }
-            }
+        // Single 模式在队首时仅 seekTo(0)，不切歌
+        if (queueManager.playMode.value == PlayerPlayMode.Single && state.queueIndex <= 0) {
+            player.seekTo(0)
+            syncPositionAndLyric()
+            return
         }
+        val prevIndex = queueManager.resolvePreviousIndex(queue, state.queueIndex)
+        playSong(queue[prevIndex], queue)
     }
 
-    // 循环切换播放模式：随机 → 列表循环 → 单曲循环 → 随机；并写入本地
-    fun cyclePlayMode() {
-        val next = when (_playbackState.value.playMode) {
-            PlayerPlayMode.Shuffle -> PlayerPlayMode.Loop
-            PlayerPlayMode.Loop -> PlayerPlayMode.Single
-            PlayerPlayMode.Single -> PlayerPlayMode.Shuffle
-        }
-        _playbackState.update { it.copy(playMode = next) }
-        scope.launch {
-            updatePlayModeUseCase(next.name)
-        }
-    }
-
-    // 解析「下一首」下标；单曲循环在手动/自动下一首时仍按列表前进
-    private fun resolveNextIndex(state: PlaybackState): Int {
-        val queue = state.queue
-        return when (state.playMode) {
-            PlayerPlayMode.Shuffle -> resolveRandomIndex(queue, state.queueIndex)
-            PlayerPlayMode.Loop, PlayerPlayMode.Single ->
-                (state.queueIndex + 1) % queue.size
-        }
-    }
-
-    // 随机选一首，尽量避开当前下标（队列长度 > 1）
-    private fun resolveRandomIndex(queue: List<Song>, currentIndex: Int): Int {
-        if (queue.size <= 1) return 0
-        var next = Random.nextInt(queue.size)
-        while (next == currentIndex) {
-            next = Random.nextInt(queue.size)
-        }
-        return next
-    }
+    // 循环切换播放模式：委托给 QueueManager
+    fun cyclePlayMode() = queueManager.cyclePlayMode()
 
     // 跳转到指定进度，并立即刷新进度/歌词展示
     fun seekTo(positionMs: Long) {
@@ -567,14 +519,14 @@ class MusicPlayerController @Inject constructor(
         if (durationMs <= 0L || durationMs - positionMs > PREFETCH_WINDOW_MS) return
         if (prefetchedNextSongId != null || prefetchJob != null) return
         val state = _playbackState.value
-        if (state.playMode == PlayerPlayMode.Single || state.queue.size <= 1) return
+        if (queueManager.playMode.value == PlayerPlayMode.Single || state.queue.size <= 1) return
         prefetchNext(state)
     }
 
     // 按当前播放模式选定下一首并异步取 URL；仅在仍播放原曲且未预取过时追加进播放列表
     private fun prefetchNext(state: PlaybackState) {
         val originSongId = state.currentSong?.id ?: return
-        val nextSong = state.queue[resolveNextIndex(state)]
+        val nextSong = state.queue[queueManager.resolveNextIndex(state.queue, state.queueIndex)]
         prefetchJob = scope.launch {
             try {
                 // 已下载优先用本地文件，否则拉在线流地址
