@@ -1,24 +1,32 @@
 package com.leo.lune.service
 
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.PowerManager
 import androidx.annotation.OptIn
+import androidx.annotation.RequiresApi
+import androidx.core.app.NotificationCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.leo.lune.MainActivity
+import com.leo.lune.R
 import com.leo.lune.controller.MusicPlayerController
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 // 前台媒体服务：托管 MediaSession，提供通知栏 / 锁屏 / 耳机控制
 // ExoPlayer 仍由 MusicPlayerController 持有，本服务只包装 Session；
-// 真正开播时由 Media3 升为前台，避免拉 URL 期间 startForeground 超时
+// 服务启动后立即发布「准备中」前台通知，满足 startForegroundService 5 秒限制；
+// 真正开播后由 Media3 替换为媒体播放通知
 @AndroidEntryPoint
 class MusicPlaybackService : MediaSessionService() {
 
@@ -35,12 +43,17 @@ class MusicPlaybackService : MediaSessionService() {
     // CPU 唤醒锁：播放期间保持 CPU 活跃，防止锁屏后解码线程被挂起
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // 监听播放状态变化，按需获取 / 释放 WiFi 锁与 CPU 唤醒锁
+    // 标记「准备中」前台通知是否仍在展示；播放开始后需移除以避免与 Media3 通知重复
+    private var isShowingPreparingNotification = false
+
+    // 监听播放状态变化：管理锁 + 移除准备中通知
     private val playbackLockListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) {
                 acquireWifiLock()
                 acquireWakeLock()
+                // 真正开播 → 移除「准备中」通知，Media3 随即发布媒体通知
+                dismissPreparingNotification()
             } else {
                 releaseWifiLock()
                 releaseWakeLock()
@@ -48,10 +61,14 @@ class MusicPlaybackService : MediaSessionService() {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.O)
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         val player = playerController.player
+
+        // 立即发布「准备中」前台通知，满足 startForegroundService 的 5 秒限制
+        postPreparingNotification()
 
         // 初始化 WiFi 锁（懒获取，播放时才持有）
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
@@ -68,10 +85,11 @@ class MusicPlaybackService : MediaSessionService() {
             "MusicApp::PlaybackWakeLock"
         ).apply { setReferenceCounted(false) }
 
-        // 若服务启动时播放器已在播放（如进程恢复），立即持锁
+        // 若服务启动时播放器已在播放（如进程恢复），立即持锁并移除准备通知
         if (player.isPlaying) {
             acquireWifiLock()
             acquireWakeLock()
+            dismissPreparingNotification()
         }
         player.addListener(playbackLockListener)
 
@@ -108,6 +126,7 @@ class MusicPlaybackService : MediaSessionService() {
     override fun onDestroy() {
         // 移除监听，避免泄漏
         playerController.player.removeListener(playbackLockListener)
+        dismissPreparingNotification()
         releaseWifiLock()
         releaseWakeLock()
         wifiLock = null
@@ -117,6 +136,49 @@ class MusicPlaybackService : MediaSessionService() {
         mediaSession = null
         super.onDestroy()
     }
+
+    // ── 准备中通知 ─────────────────────────────────────────────
+
+    // 服务启动后立即发布「准备中」前台通知，满足 startForegroundService 5 秒限制
+    private fun postPreparingNotification() {
+        ensureNotificationChannel()
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText("正在准备播放…")
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .build()
+        startForeground(NOTIFICATION_ID_PREPARING, notification)
+        isShowingPreparingNotification = true
+    }
+
+    // 真正开播后移除「准备中」通知；Media3 随即发布媒体播放通知接管前台
+    private fun dismissPreparingNotification() {
+        if (!isShowingPreparingNotification) return
+        isShowingPreparingNotification = false
+        stopForeground(STOP_FOREGROUND_REMOVE)
+    }
+
+    // 确保通知渠道存在（Android 8.0+）
+    private fun ensureNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_ID,
+                "媒体播放",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "播放控制与媒体通知"
+                setShowBadge(false)
+            }
+        )
+    }
+
+    // ── 锁管理 ─────────────────────────────────────────────────
 
     // 获取 WiFi 锁：在线流媒体播放期间保持 WiFi 活跃，防止 Doze 切断网络
     private fun acquireWifiLock() {
@@ -149,6 +211,11 @@ class MusicPlaybackService : MediaSessionService() {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+    }
+
+    private companion object {
+        const val CHANNEL_ID = "media_playback"
+        const val NOTIFICATION_ID_PREPARING = 1001
     }
 }
 

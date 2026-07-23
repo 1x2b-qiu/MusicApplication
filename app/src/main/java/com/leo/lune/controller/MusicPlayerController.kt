@@ -3,7 +3,9 @@ package com.leo.lune.controller
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.SystemClock
+import androidx.annotation.RequiresApi
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -152,6 +154,7 @@ class MusicPlayerController @Inject constructor(
                             }
                         }
 
+                        @RequiresApi(Build.VERSION_CODES.O)
                         override fun onPlaybackStateChanged(playbackState: Int) {
                             when (playbackState) {
                                 Player.STATE_READY -> syncPositionAndLyric()
@@ -241,6 +244,7 @@ class MusicPlayerController @Inject constructor(
 
     // 播放指定歌曲：结算上一曲时长 → 更新状态并拉歌词 → 启动服务 → 异步取 URL 后 prepare/play
     // 切歌会取消进行中的 URL/歌词任务，并用 songId 校验防止过期回调污染状态
+    @RequiresApi(Build.VERSION_CODES.O)
     fun playSong(song: Song, queue: List<Song> = emptyList()) {
         settleListenDuration()
         val resolvedQueue = queue.ifEmpty { listOf(song) }
@@ -317,6 +321,7 @@ class MusicPlayerController @Inject constructor(
 
     // 播放/暂停：无 currentSong 时用 preview 走 playSong；
     // 已有曲目时先 ensurePlaybackService（暂停期间服务可能被系统回收）再 play/pause
+    @RequiresApi(Build.VERSION_CODES.O)
     fun togglePlayPause() {
         val state = _playbackState.value
         if (state.currentSong == null) {
@@ -334,6 +339,7 @@ class MusicPlayerController @Inject constructor(
     }
 
     // 播放列表播完（下一首未预取或预取失败时）：单曲循环重播，其余模式切下一首
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun onPlaybackEnded() {
         when (_playbackState.value.playMode) {
             PlayerPlayMode.Single -> {
@@ -345,6 +351,7 @@ class MusicPlayerController @Inject constructor(
     }
 
     // 按当前播放模式切到下一首；已预取时直接切播放列表中的下一项，无缝衔接
+    @RequiresApi(Build.VERSION_CODES.O)
     fun skipToNext() {
         val state = _playbackState.value
         val queue = state.queue
@@ -360,6 +367,7 @@ class MusicPlayerController @Inject constructor(
     }
 
     // 上一首：Shuffle 随机；Loop 环形回退；Single 在队首则回到开头，否则播上一曲
+    @RequiresApi(Build.VERSION_CODES.O)
     fun skipToPrevious() {
         val state = _playbackState.value
         val queue = state.queue
@@ -427,6 +435,7 @@ class MusicPlayerController @Inject constructor(
     }
 
     // 从当前队列按索引播放；越界则忽略
+    @RequiresApi(Build.VERSION_CODES.O)
     fun playQueueItemAt(index: Int) {
         val state = _playbackState.value
         if (index !in state.queue.indices) return
@@ -434,6 +443,7 @@ class MusicPlayerController @Inject constructor(
     }
 
     // 从播放队列移除指定下标；删当前曲则续播相邻项，清空则停播
+    @RequiresApi(Build.VERSION_CODES.O)
     fun removeFromQueue(index: Int) {
         val state = _playbackState.value
         if (index !in state.queue.indices) return
@@ -735,11 +745,13 @@ class MusicPlayerController @Inject constructor(
             .build()
     }
 
-    // 启动 MediaSession 服务；由 Media3 在真正播放时升为前台
-    // 用 startService 而非 startForegroundService，避免拉 URL 期间前台超时
+    // 启动 MediaSession 服务（前台模式）
+    // 服务 onCreate 中立即发布「准备中」通知，满足 5 秒前台限制；
+    // 真正开播后 Media3 替换为媒体播放通知
     // 暂停后服务可能被系统回收，故 togglePlayPause 恢复播放前也会再调一次
+    @RequiresApi(Build.VERSION_CODES.O)
     private fun ensurePlaybackService() {
         val intent = Intent(context, MusicPlaybackService::class.java)
-        context.startService(intent)
+        context.startForegroundService(intent)
     }
 }
