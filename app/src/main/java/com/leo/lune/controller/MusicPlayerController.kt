@@ -13,14 +13,10 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.LyricMatcher
-import com.leo.lune.domain.model.PlaybackSnapshot
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.usecase.download.GetLocalSongPathUseCase
 import com.leo.lune.domain.usecase.music.GetSongLyricsUseCase
 import com.leo.lune.domain.usecase.music.GetSongUrlUseCase
-import com.leo.lune.domain.usecase.playback.ClearPlaybackSnapshotUseCase
-import com.leo.lune.domain.usecase.playback.GetPlaybackSnapshotUseCase
-import com.leo.lune.domain.usecase.playback.SavePlaybackSnapshotUseCase
 import com.leo.lune.domain.usecase.stats.ObservePlayStatsUseCase
 import com.leo.lune.domain.usecase.stats.UpdatePlayModeUseCase
 import com.leo.lune.service.MusicPlaybackService
@@ -113,12 +109,8 @@ class MusicPlayerController @Inject constructor(
     private val updatePlayModeUseCase: UpdatePlayModeUseCase,
     // 红心收藏管理器（缓存 + 乐观更新 + 回滚）
     val favoriteManager: FavoriteManager,
-    // 保存播放快照（进程级恢复）
-    private val savePlaybackSnapshotUseCase: SavePlaybackSnapshotUseCase,
-    // 读取上次播放快照
-    private val getPlaybackSnapshotUseCase: GetPlaybackSnapshotUseCase,
-    // 清除播放快照
-    private val clearPlaybackSnapshotUseCase: ClearPlaybackSnapshotUseCase
+    // 播放快照持久化（进程级恢复）
+    private val snapshotManager: PlaybackSnapshotManager
 ) {
     // 底层播放器（懒加载）；音频焦点与「拔出耳机暂停」交给 Media3
     // 播放/暂停状态通过 Listener 回写 playbackState
@@ -228,7 +220,7 @@ class MusicPlayerController @Inject constructor(
         }
         // 恢复上次播放快照：队列/下标/当前曲设为 preview，不自动播放
         scope.launch {
-            val snapshot = runCatching { getPlaybackSnapshotUseCase() }.getOrNull() ?: return@launch
+            val snapshot = snapshotManager.restore() ?: return@launch
             _playbackState.update { state ->
                 state.copy(
                     previewSong = snapshot.currentSong,
@@ -500,9 +492,7 @@ class MusicPlayerController @Inject constructor(
         _playbackState.update { state ->
             PlaybackState(playMode = state.playMode)
         }
-        scope.launch {
-            runCatching { clearPlaybackSnapshotUseCase() }
-        }
+        snapshotManager.clear()
     }
 
     // 切换收藏：委托给 FavoriteManager（乐观更新 + 回滚）
@@ -693,21 +683,8 @@ class MusicPlayerController @Inject constructor(
     }
 
     // 将当前播放状态快照持久化到 Room，供进程被杀后恢复
-    // 仅在有当前曲且队列非空时保存；无快照价值时静默跳过
     private fun saveSnapshot() {
         val state = _playbackState.value
-        val song = state.currentSong ?: return
-        if (state.queue.isEmpty()) return
-        scope.launch {
-            runCatching {
-                savePlaybackSnapshotUseCase(
-                    PlaybackSnapshot(
-                        currentSong = song,
-                        queue = state.queue,
-                        queueIndex = state.queueIndex
-                    )
-                )
-            }
-        }
+        snapshotManager.save(state.currentSong, state.queue, state.queueIndex)
     }
 }
