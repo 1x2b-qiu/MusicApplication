@@ -158,9 +158,26 @@ class MusicPlayerController @Inject constructor(
                                 Player.STATE_ENDED -> onPlaybackEnded()
                             }
                         }
+
+                        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                            // 自动播完或手动切到「已预取的下一首」：播放列表已无缝衔接，只需对齐业务状态
+                            if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO ||
+                                reason == Player.MEDIA_ITEM_TRANSITION_REASON_SEEK
+                            ) {
+                                val songId = mediaItem?.mediaId?.toLongOrNull() ?: return
+                                if (songId == prefetchedNextSongId) {
+                                    onPrefetchedSongStarted(songId)
+                                }
+                            }
+                        }
                     }
                 )
             }
+    }
+
+    private companion object {
+        // 距歌曲结束不足该时长时，预取下一首 URL 并追加进 Media3 播放列表
+        const val PREFETCH_WINDOW_MS = 15_000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -179,6 +196,10 @@ class MusicPlayerController @Inject constructor(
     private var lyricJob: Job? = null
     // 异步拉取播放 URL；切歌时取消，避免旧请求回写新状态
     private var urlJob: Job? = null
+    // 异步预取下一首 URL；切歌/清空时取消
+    private var prefetchJob: Job? = null
+    // 已追加进 Media3 播放列表的下一首歌曲 id；用于预取去重与自动切歌对账
+    private var prefetchedNextSongId: Long? = null
     // 本地缓存的红心歌单 id，用于即时判断收藏态
     private var likedSongIds: Set<Long> = emptySet()
     private var currentUserId: Long? = null
@@ -228,6 +249,8 @@ class MusicPlayerController @Inject constructor(
         positionJob?.cancel()
         lyricJob?.cancel()
         urlJob?.cancel()
+        prefetchJob?.cancel()
+        prefetchedNextSongId = null
 
         _playbackState.update {
             it.copy(
@@ -310,7 +333,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 单曲播完：单曲循环重播，其余模式切下一首
+    // 播放列表播完（下一首未预取或预取失败时）：单曲循环重播，其余模式切下一首
     private fun onPlaybackEnded() {
         when (_playbackState.value.playMode) {
             PlayerPlayMode.Single -> {
@@ -321,13 +344,19 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 按当前播放模式切到下一首
+    // 按当前播放模式切到下一首；已预取时直接切播放列表中的下一项，无缝衔接
     fun skipToNext() {
         val state = _playbackState.value
         val queue = state.queue
         if (queue.isEmpty()) return
-        val nextIndex = resolveNextIndex(state)
-        playSong(queue[nextIndex], queue)
+        val prefetchedReady = prefetchedNextSongId != null &&
+            player.currentMediaItemIndex + 1 < player.mediaItemCount &&
+            queue.any { it.id == prefetchedNextSongId }
+        if (prefetchedReady) {
+            player.seekToNextMediaItem()
+            return
+        }
+        playSong(queue[resolveNextIndex(state)], queue)
     }
 
     // 上一首：Shuffle 随机；Loop 环形回退；Single 在队首则回到开头，否则播上一曲
@@ -408,10 +437,15 @@ class MusicPlayerController @Inject constructor(
     fun removeFromQueue(index: Int) {
         val state = _playbackState.value
         if (index !in state.queue.indices) return
+        val removedSong = state.queue[index]
         val newQueue = state.queue.toMutableList().also { it.removeAt(index) }
         if (newQueue.isEmpty()) {
             clearQueue()
             return
+        }
+        // 删掉的若是已预取的下一首，同步移除播放列表中的预取项
+        if (removedSong.id == prefetchedNextSongId) {
+            removePrefetchedMediaItem()
         }
         when {
             index < state.queueIndex -> {
@@ -435,6 +469,8 @@ class MusicPlayerController @Inject constructor(
         positionJob?.cancel()
         lyricJob?.cancel()
         urlJob?.cancel()
+        prefetchJob?.cancel()
+        prefetchedNextSongId = null
         player.stop()
         player.clearMediaItems()
         _playbackPosition.value = PlaybackPosition()
@@ -585,6 +621,85 @@ class MusicPlayerController @Inject constructor(
                 it.copy(activeLyricIndex = lyricIndex, currentLyricLine = lyricLine)
             }
         }
+        maybePrefetchNext(positionMs, durationMs)
+    }
+
+    // 播到最后一小段时预取下一首 URL 并追加进 Media3 播放列表，播完由 ExoPlayer 自动无缝衔接；
+    // 单曲循环/单首队列无需预取，预取失败则退回 onPlaybackEnded 的全量切歌路径
+    private fun maybePrefetchNext(positionMs: Long, durationMs: Long) {
+        if (durationMs <= 0L || durationMs - positionMs > PREFETCH_WINDOW_MS) return
+        if (prefetchedNextSongId != null || prefetchJob != null) return
+        val state = _playbackState.value
+        if (state.playMode == PlayerPlayMode.Single || state.queue.size <= 1) return
+        prefetchNext(state)
+    }
+
+    // 按当前播放模式选定下一首并异步取 URL；仅在仍播放原曲且未预取过时追加进播放列表
+    private fun prefetchNext(state: PlaybackState) {
+        val originSongId = state.currentSong?.id ?: return
+        val nextSong = state.queue[resolveNextIndex(state)]
+        prefetchJob = scope.launch {
+            try {
+                // 已下载优先用本地文件，否则拉在线流地址
+                val localPath = getLocalSongPathUseCase(nextSong.id)
+                val playUri = if (localPath != null) {
+                    Uri.fromFile(File(localPath)).toString()
+                } else {
+                    getSongUrlUseCase(nextSong.id).url
+                }
+                if (playUri.isNullOrBlank()) return@launch
+                if (_playbackState.value.currentSong?.id != originSongId) return@launch
+                if (prefetchedNextSongId != null) return@launch
+                player.addMediaItem(buildMediaItem(nextSong, playUri))
+                prefetchedNextSongId = nextSong.id
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (throwable: Throwable) {
+                // 预取失败静默忽略：播完仍走 onPlaybackEnded → skipToNext 全量拉取
+            } finally {
+                prefetchJob = null
+            }
+        }
+    }
+
+    // 播放列表切到已预取的下一首：结算上一首并重开计时、对齐队列下标、清理已播项，续上歌词/收藏/统计
+    private fun onPrefetchedSongStarted(songId: Long) {
+        val state = _playbackState.value
+        val song = state.queue.firstOrNull { it.id == songId } ?: return
+        settleListenDuration()
+        // 自动衔接期间 isPlaying 不变，onIsPlayingChanged 不会重开计时，需手动开段
+        markListeningStarted()
+        prefetchedNextSongId = null
+        // 移除已播完的旧项，播放列表始终保持「当前曲 + 预取的下一首」
+        val currentIndex = player.currentMediaItemIndex
+        if (currentIndex > 0) {
+            player.removeMediaItems(0, currentIndex)
+        }
+        _playbackState.update {
+            it.copy(
+                currentSong = song,
+                queueIndex = state.queue.indexOfFirst { item -> item.id == songId }.coerceAtLeast(0),
+                isLoading = false,
+                error = null,
+                playUrl = player.currentMediaItem?.localConfiguration?.uri?.toString(),
+                lyrics = emptyList(),
+                currentLyricLine = formatFallbackLyric(song),
+                activeLyricIndex = 0
+            )
+        }
+        _playbackPosition.value = PlaybackPosition()
+        recordPlayStats(song)
+        loadLyrics(song.id)
+        syncFavoriteForCurrentSong()
+    }
+
+    // 从 Media3 播放列表移除预取的下一首（若存在），并清除预取标记
+    private fun removePrefetchedMediaItem() {
+        val nextIndex = player.currentMediaItemIndex + 1
+        if (nextIndex < player.mediaItemCount) {
+            player.removeMediaItem(nextIndex)
+        }
+        prefetchedNextSongId = null
     }
 
     // 有匹配歌词用原句；否则退回歌名；都没有则用默认文案（展示时统一加引号）

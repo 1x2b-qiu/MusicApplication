@@ -67,7 +67,8 @@ class MusicPlaybackService : MediaSessionService() {
     }
 }
 
-// 把队列切歌接到系统上一首 / 下一首（ExoPlayer 本身只有单曲 MediaItem，无队列概念）
+// 把系统上一首 / 下一首接到业务队列切歌（Shuffle / Loop 等模式在 Controller）；
+// ExoPlayer 播放列表仅承载「当前曲 + 预取的下一首」，完整业务队列仍由 Controller 维护
 @UnstableApi
 private class QueueAwarePlayer(
     player: ExoPlayer,
