@@ -1,6 +1,8 @@
 package com.leo.lune.ui.home
 
+import android.os.Build
 import androidx.annotation.DrawableRes
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -174,6 +176,7 @@ private data class FavoritesGlassStyle(
 )
 
 // 首页：固定顶栏 + 可滚动内容区
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
     hazeState: HazeState,
@@ -239,10 +242,12 @@ fun HomeScreen(
                         }
                     }
                     item {
-                        HomeSectionHeader(
-                            title = "最近播放",
-                            onViewAllClick = onRecentClick
-                        )
+                        if(uiState.recentSongs.isNotEmpty()) {
+                            HomeSectionHeader(
+                                title = "最近播放",
+                                onViewAllClick = onRecentClick
+                            )
+                        }
                     }
                     items(uiState.recentSongs, key = { it.id }) { song ->
                         HomeRecentItem(

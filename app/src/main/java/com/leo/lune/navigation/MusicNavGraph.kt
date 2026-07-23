@@ -3,6 +3,8 @@ package com.leo.lune.navigation
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -234,6 +236,11 @@ private fun MusicNavHost(
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {}
+                    )
                     .navigationBarsPadding()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 12.dp)
