@@ -109,6 +109,16 @@ class MusicPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         mediaSession
 
+    // startForegroundService() 要求 5 秒内调 startForeground()
+    // 服务已在运行时只走 onStartCommand（不走 onCreate），需在此补发前台通知；
+    // 播放中 Media3 已维持前台则无需补发，暂停/空闲时自行发布准备通知
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (!playerController.player.isPlaying) {
+            postPreparingNotification()
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
     // 用户从最近任务划掉 App 时触发：
     // 正在播放 → 脱离前台但保持服务运行（通知栏继续展示媒体控件，播放不中断）
     // 未在播放 → 交给父类默认行为（服务随任务一起移除）
@@ -155,10 +165,12 @@ class MusicPlaybackService : MediaSessionService() {
     }
 
     // 真正开播后移除「准备中」通知；Media3 随即发布媒体播放通知接管前台
+    // 仅取消通知而不调 stopForeground，消除服务退出前台的窗口期
     private fun dismissPreparingNotification() {
         if (!isShowingPreparingNotification) return
         isShowingPreparingNotification = false
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        val manager = getSystemService(NotificationManager::class.java)
+        manager?.cancel(NOTIFICATION_ID_PREPARING)
     }
 
     // 确保通知渠道存在（Android 8.0+）

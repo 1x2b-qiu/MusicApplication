@@ -12,11 +12,15 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.leo.lune.domain.model.LyricLine
-import com.leo.lune.domain.model.LyricMatcher
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.usecase.download.GetLocalSongPathUseCase
-import com.leo.lune.domain.usecase.music.GetSongLyricsUseCase
 import com.leo.lune.domain.usecase.music.GetSongUrlUseCase
+import com.leo.lune.manager.FavoriteManager
+import com.leo.lune.manager.FavoriteResult
+import com.leo.lune.manager.LyricManager
+import com.leo.lune.manager.PlayStatsRecorderManager
+import com.leo.lune.manager.PlaybackSnapshotManager
+import com.leo.lune.manager.QueueManager
 import com.leo.lune.service.MusicPlaybackService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -95,8 +99,8 @@ class MusicPlayerController @Inject constructor(
     private val getSongUrlUseCase: GetSongUrlUseCase,
     // 已下载时返回本地文件路径
     private val getLocalSongPathUseCase: GetLocalSongPathUseCase,
-    // 拉取并解析 LRC 歌词
-    private val getSongLyricsUseCase: GetSongLyricsUseCase,
+    // 歌词管理器（加载 / 匹配 / 展示文案）
+    private val lyricManager: LyricManager,
     // 听歌统计记录器（最近播放 / 周次数 / 时长）
     private val playStatsRecorderManager: PlayStatsRecorderManager,
     // 队列导航器（播放模式 + 上/下一首下标解析）
@@ -177,8 +181,6 @@ class MusicPlayerController @Inject constructor(
 
     // 播放中每 200ms 同步进度与歌词
     private var positionJob: Job? = null
-    // 异步拉取歌词；切歌时取消旧任务
-    private var lyricJob: Job? = null
     // 异步拉取播放 URL；切歌时取消，避免旧请求回写新状态
     private var urlJob: Job? = null
     // 异步预取下一首 URL；切歌/清空时取消
@@ -213,6 +215,18 @@ class MusicPlayerController @Inject constructor(
                 }
             }
         }
+        // 订阅 LyricManager 的歌词列表，加载完成后同步进 PlaybackState 并刷新进度
+        scope.launch {
+            lyricManager.lyrics.collect { lyrics ->
+                _playbackState.update { state ->
+                    if (state.lyrics === lyrics) state else state.copy(lyrics = lyrics)
+                }
+                if (lyrics.isNotEmpty()) {
+                    syncPositionAndLyric()
+                    if (player.isPlaying) startPositionTracking()
+                }
+            }
+        }
         // 恢复上次播放快照：队列/下标/当前曲设为 preview，不自动播放
         scope.launch {
             val snapshot = snapshotManager.restore() ?: return@launch
@@ -221,7 +235,7 @@ class MusicPlayerController @Inject constructor(
                     previewSong = snapshot.currentSong,
                     queue = snapshot.queue,
                     queueIndex = snapshot.queueIndex,
-                    currentLyricLine = formatFallbackLyric(snapshot.currentSong)
+                    currentLyricLine = lyricManager.fallbackLyric(snapshot.currentSong)
                 )
             }
         }
@@ -233,7 +247,7 @@ class MusicPlayerController @Inject constructor(
             state.copy(
                 previewSong = song,
                 queue = state.queue.ifEmpty { listOf(song) },
-                currentLyricLine = formatFallbackLyric(song)
+                currentLyricLine = lyricManager.fallbackLyric(song)
             )
         }
         favoriteManager.syncForSong(song.id)
@@ -248,7 +262,7 @@ class MusicPlayerController @Inject constructor(
         val queueIndex = resolvedQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
 
         positionJob?.cancel()
-        lyricJob?.cancel()
+        lyricManager.cancelLoading()
         urlJob?.cancel()
         prefetchJob?.cancel()
         prefetchedNextSongId = null
@@ -262,14 +276,14 @@ class MusicPlayerController @Inject constructor(
                 error = null,
                 playUrl = null,
                 lyrics = emptyList(),
-                currentLyricLine = formatFallbackLyric(song),
+                currentLyricLine = lyricManager.fallbackLyric(song),
                 activeLyricIndex = 0
             )
         }
         _playbackPosition.value = PlaybackPosition()
 
         ensurePlaybackService()
-        loadLyrics(song.id)
+        lyricManager.loadLyrics(song.id)
         favoriteManager.syncForSong(song.id)
 
         val requestSongId = song.id
@@ -434,7 +448,7 @@ class MusicPlayerController @Inject constructor(
     fun clearQueue() {
         playStatsRecorderManager.settleListenDuration()
         positionJob?.cancel()
-        lyricJob?.cancel()
+        lyricManager.cancelLoading()
         urlJob?.cancel()
         prefetchJob?.cancel()
         prefetchedNextSongId = null
@@ -453,27 +467,6 @@ class MusicPlayerController @Inject constructor(
             ?: _playbackState.value.previewSong?.id
             ?: return
         favoriteManager.toggleFavorite(songId)
-    }
-
-    // 异步加载歌词；仅当仍是同一首歌时写入状态，并按需启动进度跟踪
-    private fun loadLyrics(songId: Long) {
-        lyricJob?.cancel()
-        lyricJob = scope.launch {
-            runCatching {
-                getSongLyricsUseCase(songId)
-            }.onSuccess { lyrics ->
-                _playbackState.update { state ->
-                    if (state.currentSong?.id != songId) return@update state
-                    state.copy(lyrics = lyrics)
-                }
-                if (_playbackState.value.currentSong?.id == songId) {
-                    syncPositionAndLyric()
-                }
-                if (player.isPlaying) {
-                    startPositionTracking()
-                }
-            }
-        }
     }
 
     // 播放中轮询进度与歌词（约 200ms）；暂停时由 Listener 取消
@@ -498,16 +491,13 @@ class MusicPlayerController @Inject constructor(
         }
 
         val state = _playbackState.value
-        val lyricIndex = LyricMatcher.currentIndex(state.lyrics, positionMs)
-        val lyricLine = resolveLyricLine(
-            lyrics = state.lyrics,
-            lyricIndex = lyricIndex,
+        val display = lyricManager.resolveCurrentLyric(
             positionMs = positionMs,
             song = state.currentSong ?: state.previewSong
         )
-        if (state.activeLyricIndex != lyricIndex || state.currentLyricLine != lyricLine) {
+        if (state.activeLyricIndex != display.index || state.currentLyricLine != display.line) {
             _playbackState.update {
-                it.copy(activeLyricIndex = lyricIndex, currentLyricLine = lyricLine)
+                it.copy(activeLyricIndex = display.index, currentLyricLine = display.line)
             }
         }
         maybePrefetchNext(positionMs, durationMs)
@@ -572,13 +562,13 @@ class MusicPlayerController @Inject constructor(
                 error = null,
                 playUrl = player.currentMediaItem?.localConfiguration?.uri?.toString(),
                 lyrics = emptyList(),
-                currentLyricLine = formatFallbackLyric(song),
+                currentLyricLine = lyricManager.fallbackLyric(song),
                 activeLyricIndex = 0
             )
         }
         _playbackPosition.value = PlaybackPosition()
         playStatsRecorderManager.recordPlayStats(song)
-        loadLyrics(song.id)
+        lyricManager.loadLyrics(song.id)
         favoriteManager.syncForSong(song.id)
     }
 
@@ -590,24 +580,6 @@ class MusicPlayerController @Inject constructor(
         }
         prefetchedNextSongId = null
     }
-
-    // 有匹配歌词用原句；否则退回歌名；都没有则用默认文案（展示时统一加引号）
-    private fun resolveLyricLine(
-        lyrics: List<LyricLine>,
-        lyricIndex: Int,
-        positionMs: Long,
-        song: Song?
-    ): String {
-        // 进度尚未到达第一句时（下标停在 0）不展示歌词
-        val lyricText = lyrics.getOrNull(lyricIndex)?.takeIf { it.timeMs <= positionMs }?.text
-        return when {
-            lyricText != null -> "\"$lyricText\""
-            song != null -> formatFallbackLyric(song)
-            else -> "听点音乐吧"
-        }
-    }
-
-    private fun formatFallbackLyric(song: Song): String = "\"${song.name}\""
 
     // 将 Song + 可播 URL 转为 Media3 MediaItem；Metadata 供通知栏/锁屏，mediaId 用歌曲 id
     private fun buildMediaItem(song: Song, url: String): MediaItem {

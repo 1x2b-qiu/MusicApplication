@@ -1,4 +1,4 @@
-package com.leo.lune.controller
+package com.leo.lune.manager
 
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.PendingDownload

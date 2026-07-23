@@ -2,9 +2,9 @@ package com.leo.lune.ui.downloads
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.leo.lune.controller.ActiveDownloadTask
+import com.leo.lune.manager.ActiveDownloadTask
 import com.leo.lune.controller.MusicPlayerController
-import com.leo.lune.controller.SongDownloadManager
+import com.leo.lune.manager.SongDownloadManager
 import com.leo.lune.domain.model.DownloadedSong
 import com.leo.lune.domain.usecase.download.DeleteDownloadUseCase
 import com.leo.lune.domain.usecase.download.ObserveDownloadedSongsUseCase

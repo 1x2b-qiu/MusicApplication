@@ -1,5 +1,6 @@
-package com.leo.lune.controller
+package com.leo.lune.manager
 
+import com.leo.lune.controller.PlayerPlayMode
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.usecase.stats.ObservePlayStatsUseCase
 import com.leo.lune.domain.usecase.stats.UpdatePlayModeUseCase

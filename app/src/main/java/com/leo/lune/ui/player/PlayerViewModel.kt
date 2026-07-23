@@ -5,7 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.controller.PlaybackPosition
 import com.leo.lune.controller.PlayerPlayMode
-import com.leo.lune.controller.SongDownloadManager
+import com.leo.lune.manager.SongDownloadManager
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.Song

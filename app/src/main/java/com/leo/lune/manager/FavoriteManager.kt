@@ -1,9 +1,11 @@
-package com.leo.lune.controller
+package com.leo.lune.manager
 
 import com.leo.lune.domain.usecase.auth.ObserveLoginStateUseCase
 import com.leo.lune.domain.usecase.music.GetLikedSongIdsUseCase
 import com.leo.lune.domain.usecase.music.LikeSongUseCase
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,7 +28,7 @@ class FavoriteManager @Inject constructor(
     private val getLikedSongIdsUseCase: GetLikedSongIdsUseCase,
     private val observeLoginStateUseCase: ObserveLoginStateUseCase
 ) {
-    private val scope = CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main.immediate)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
 
     // 当前展示曲是否已收藏；UI 通过 PlaybackState.isFavorite 间接订阅
