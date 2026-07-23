@@ -91,6 +91,20 @@ class MusicPlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         mediaSession
 
+    // 用户从最近任务划掉 App 时触发：
+    // 正在播放 → 脱离前台但保持服务运行（通知栏继续展示媒体控件，播放不中断）
+    // 未在播放 → 交给父类默认行为（服务随任务一起移除）
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val player = playerController.player
+        if (player.isPlaying || player.playbackState != Player.STATE_IDLE) {
+            // 脱离前台：通知栏从「前台通知」降级为「媒体会话通知」继续驻留
+            // 服务不再受前台保护，但 MediaSession 仍持有，系统不会立即回收
+            stopForeground(STOP_FOREGROUND_DETACH)
+        } else {
+            super.onTaskRemoved(rootIntent)
+        }
+    }
+
     override fun onDestroy() {
         // 移除监听，避免泄漏
         playerController.player.removeListener(playbackLockListener)
