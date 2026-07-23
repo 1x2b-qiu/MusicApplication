@@ -18,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
@@ -37,55 +39,63 @@ import com.leo.lune.ui.radio.RadioScreen
 import com.leo.lune.ui.recent.RecentScreen
 import com.leo.lune.ui.search.SearchScreen
 import com.leo.lune.ui.settings.SettingsScreen
-import com.leo.lune.ui.splash.SplashScreen
+import com.leo.lune.ui.startup.SessionBootstrapViewModel
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
 @Composable
 fun MusicNavGraph(
     darkTheme: Boolean = true,
-    onToggleTheme: () -> Unit = {}
+    onToggleTheme: () -> Unit = {},
+    bootstrapViewModel: SessionBootstrapViewModel = hiltViewModel()
 ) {
-    // 创建并记住 NavController，负责页面跳转与返回栈管理
-    val navController = rememberNavController()
-    // 订阅当前导航栈顶页面，页面切换时会自动重组
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    // 从栈顶条目取出当前目的地，用于判断在哪个页面
-    val currentDestination = navBackStackEntry?.destination
-    // 根据当前路由，计算底部 Tab 栏应高亮哪一项
-    val selectedTab = when {
-        // 在首页 → 高亮「首页」
-        currentDestination?.hasRoute<MusicRoute.Home>() == true -> MainTab.Home
-        // 在电台页 → 高亮「电台」
-        currentDestination?.hasRoute<MusicRoute.Radio>() == true -> MainTab.Radio
-        // 在分类页 → 高亮「分类」
-        currentDestination?.hasRoute<MusicRoute.Category>() == true -> MainTab.Category
-        // 登录/播放器等非 Tab 页 → 默认高亮首页
-        else -> MainTab.Home
-    }
-    // 仅在 Home / Radio / Category 三个 Tab 页显示底部 Tab 栏
-    val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Category>() == true
-    // 搜索 / 喜欢 / 最近 / 本地下载：只显示迷你播放栏；Tab 页同时显示迷你播放栏与 Tab 栏
-    val showMiniPlayerBar = showBottomTabBar ||
-            currentDestination?.hasRoute<MusicRoute.Search>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Downloads>() == true
-
-    // 创建 Haze 模糊状态，供底部 Tab 栏 / 侧边栏做玻璃磨砂背景
-    val hazeState = rememberHazeState()
-    // 侧边栏开关（昵称 / 头像由 SidebarViewModel 自行订阅）
-    var sidebarOpen by remember { mutableStateOf(false) }
+    val startRoute by bootstrapViewModel.startRoute.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        // 模糊源铺满全屏（含状态栏与左右边缘），侧边栏顶部/左缘才能采到内容；
-        // 状态栏避让与左右边距下沉到 NavHost / 底部栏自身
+        // 会话恢复完成后再建 NavHost，保证 Cookie 已就绪且 startDestination 正确
+        val route = startRoute
+        if (route != null) {
+            MusicNavHost(
+                startRoute = route,
+                darkTheme = darkTheme,
+                onToggleTheme = onToggleTheme
+            )
+        }
+    }
+}
+
+@Composable
+private fun MusicNavHost(
+    startRoute: MusicRoute,
+    darkTheme: Boolean,
+    onToggleTheme: () -> Unit
+) {
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    val selectedTab = when {
+        currentDestination?.hasRoute<MusicRoute.Home>() == true -> MainTab.Home
+        currentDestination?.hasRoute<MusicRoute.Radio>() == true -> MainTab.Radio
+        currentDestination?.hasRoute<MusicRoute.Category>() == true -> MainTab.Category
+        else -> MainTab.Home
+    }
+    val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
+            currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
+            currentDestination?.hasRoute<MusicRoute.Category>() == true
+    val showMiniPlayerBar = showBottomTabBar ||
+            currentDestination?.hasRoute<MusicRoute.Search>() == true ||
+            currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
+            currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
+            currentDestination?.hasRoute<MusicRoute.Downloads>() == true
+
+    val hazeState = rememberHazeState()
+    var sidebarOpen by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -93,31 +103,12 @@ fun MusicNavGraph(
         ) {
             NavHost(
                 navController = navController,
-                startDestination = MusicRoute.Splash,
+                startDestination = startRoute,
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp)
             ) {
-                composable<MusicRoute.Splash> {
-                    SplashScreen(
-                        onSuccess = {
-                            // Splash / 登录成功后进入首页，并清空 auth 栈（含 Splash）
-                            navController.navigate(MusicRoute.Home) {
-                                popUpTo(navController.graph.startDestinationId) { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        },
-                        onFail = {
-                            // Splash 未登录时进入登录页，并移除 Splash，避免返回
-                            navController.navigate(MusicRoute.Login) {
-                                popUpTo<MusicRoute.Splash> { inclusive = true }
-                                launchSingleTop = true
-                            }
-                        }
-                    )
-                }
-
                 composable<MusicRoute.Login> {
                     LoginScreen(
                         onBack = {
@@ -126,7 +117,6 @@ fun MusicNavGraph(
                             }
                         },
                         onLoginSuccess = {
-                            // Splash / 登录成功后进入首页，并清空 auth 栈（含 Splash）
                             navController.navigate(MusicRoute.Home) {
                                 popUpTo(navController.graph.startDestinationId) { inclusive = true }
                                 launchSingleTop = true
@@ -270,7 +260,6 @@ fun MusicNavGraph(
             }
         }
 
-        // 侧边栏铺满全屏（不受内容区 16dp 边距约束）
         AppSidebar(
             open = sidebarOpen,
             onDismiss = { sidebarOpen = false },

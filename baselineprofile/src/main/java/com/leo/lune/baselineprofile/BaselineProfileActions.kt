@@ -7,13 +7,13 @@ import androidx.test.uiautomator.Until
 
 const val PACKAGE_NAME = "com.leo.lune"
 
-/** Splash → 首页/登录 → Tab 切换 → 搜索，覆盖冷启动与主要导航。 */
+/** 冷启动 → 首页/登录 → Tab 切换 → 搜索，覆盖主要导航。 */
 fun MacrobenchmarkScope.musicAppJourney(startActivity: Boolean = true) {
     if (startActivity) {
         startActivityAndWait()
     }
 
-    // Splash 有约 1s 固定等待，再等首页或登录页出现
+    // 会话恢复后直接进首页或登录页
     val ready = device.wait(Until.hasObject(By.text("首页")), 20_000) ||
         device.wait(Until.hasObject(By.text("登录并继续")), 5_000)
     if (!ready) return
