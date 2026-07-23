@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -145,19 +146,13 @@ fun MusicNavGraph(
                             }
                         },
                         onLikedClick = {
-                            navController.navigate(MusicRoute.Liked) {
-                                launchSingleTop = true
-                            }
+                            navController.navigateSingleTopTo(MusicRoute.Liked)
                         },
                         onRecentClick = {
-                            navController.navigate(MusicRoute.Recent) {
-                                launchSingleTop = true
-                            }
+                            navController.navigateSingleTopTo(MusicRoute.Recent)
                         },
                         onLoginClick = {
-                            navController.navigate(MusicRoute.Login) {
-                                launchSingleTop = true
-                            }
+                            navController.navigateSingleTopTo(MusicRoute.Login)
                         },
                         onOpenSidebar = { sidebarOpen = true },
                         darkTheme = darkTheme,
@@ -238,9 +233,7 @@ fun MusicNavGraph(
                     PlayerScreen(
                         onBack = { navController.popBackStack() },
                         onDownloadsClick = {
-                            navController.navigate(MusicRoute.Downloads) {
-                                launchSingleTop = true
-                            }
+                            navController.navigateSingleTopTo(MusicRoute.Downloads)
                         }
                     )
                 }
@@ -258,9 +251,7 @@ fun MusicNavGraph(
                 MiniPlayerBar(
                     hazeState = hazeState,
                     onPlayerClick = {
-                        navController.navigate(MusicRoute.Player) {
-                            launchSingleTop = true
-                        }
+                        navController.navigateSingleTopTo(MusicRoute.Player)
                     }
                 )
                 if (showBottomTabBar) {
@@ -286,14 +277,19 @@ fun MusicNavGraph(
             darkTheme = darkTheme,
             onMenuClick = { id ->
                 when (id) {
-                    "download" -> navController.navigate(MusicRoute.Downloads) {
-                        launchSingleTop = true
-                    }
-                    "settings" -> navController.navigate(MusicRoute.Settings) {
-                        launchSingleTop = true
-                    }
+                    "download" -> navController.navigateSingleTopTo(MusicRoute.Downloads)
+                    "settings" -> navController.navigateSingleTopTo(MusicRoute.Settings)
                 }
             }
         )
+    }
+}
+
+// 若目标已在返回栈中则 pop 到该页，否则再 navigate。
+// 避免 Player ↔ Downloads 等互相跳转时同页无限叠加。
+inline fun <reified T : Any> NavController.navigateSingleTopTo(route: T) {
+    if (popBackStack<T>(inclusive = false)) return
+    navigate(route) {
+        launchSingleTop = true
     }
 }

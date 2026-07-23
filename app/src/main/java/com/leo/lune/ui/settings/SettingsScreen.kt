@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.leo.lune.util.consumePointersUnlessResumed
 
 // 退出登录行的强调色（浅红，区别于普通设置项）
 private val LogoutTextColor = Color(0xFFEB958F)
@@ -58,6 +59,7 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
+            .consumePointersUnlessResumed()
     ) {
         Column(
             modifier = Modifier

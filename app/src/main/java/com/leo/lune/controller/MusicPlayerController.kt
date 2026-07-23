@@ -238,6 +238,8 @@ class MusicPlayerController @Inject constructor(
                     currentLyricLine = lyricManager.fallbackLyric(snapshot.currentSong)
                 )
             }
+            // 与 setPreviewSong / playSong 一致：登记当前曲，供红心列表到达后补同步
+            favoriteManager.syncForSong(snapshot.currentSong.id)
         }
     }
 

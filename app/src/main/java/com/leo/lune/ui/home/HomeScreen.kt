@@ -88,6 +88,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.leo.lune.R
 import com.leo.lune.domain.model.Song
+import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
@@ -191,6 +192,7 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .consumePointersUnlessResumed()
     ) {
         // 顶栏固定在 Column 顶部，不随列表滚动
         HomeLyricsHeader(

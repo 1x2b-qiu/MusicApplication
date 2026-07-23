@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leo.lune.R
+import com.leo.lune.util.consumePointersUnlessResumed
 import kotlinx.coroutines.delay
 
 // 启动闪屏：检查本地登录态后，通过回调进入首页或登录页
@@ -73,7 +74,8 @@ fun SplashScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(colorScheme.background),
+            .background(colorScheme.background)
+            .consumePointersUnlessResumed(),
         contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,6 +78,7 @@ import com.leo.lune.domain.model.Song
 import com.leo.lune.ui.component.download.DownloadQualityBottomSheet
 import com.leo.lune.ui.component.player.PlayerQueueBottomSheet
 import com.leo.lune.ui.home.formatSongDuration
+import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
@@ -115,7 +117,9 @@ fun PlayerScreen(
         return
     }
     Box(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .consumePointersUnlessResumed() 
     ) {
         // Haze 源：模糊封面作氛围底，避免歌词延伸到控制栏下当背景
         Box(
@@ -203,6 +207,7 @@ fun PlayerScreen(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
+                .navigationBarsPadding()
                 .padding(bottom = 14.dp)
         ) {
             PlayerControlsCard(

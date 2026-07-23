@@ -65,6 +65,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leo.lune.domain.model.Song
 import com.leo.lune.ui.home.HomeRecentItem
 import com.leo.lune.util.ClearFocusOnImeHidden
+import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.dismissKeyboardOnTap
 import com.leo.lune.util.rememberDismissKeyboard
 import dev.chrisbanes.haze.HazeState
@@ -111,6 +112,7 @@ fun SearchScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
+            .consumePointersUnlessResumed()
 //            .navigationBarsPadding()
             .imePadding()
     ) {

@@ -60,6 +60,7 @@ import com.leo.lune.R
 import com.leo.lune.manager.ActiveDownloadTask
 import com.leo.lune.domain.model.DownloadedSong
 import com.leo.lune.ui.home.formatSongDuration
+import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.formatFileSize
 import com.leo.lune.util.rememberCoverRequest
 
@@ -87,6 +88,7 @@ fun DownloadsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
+            .consumePointersUnlessResumed()
             .padding(bottom = miniPlayerBottomInset)
     ) {
         DownloadsTopBar(onBack = onBack)

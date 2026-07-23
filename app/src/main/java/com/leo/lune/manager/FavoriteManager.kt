@@ -42,6 +42,8 @@ class FavoriteManager @Inject constructor(
 
     // 本地缓存的红心歌单 id 集合，用于即时判断收藏态
     private var likedSongIds: Set<Long> = emptySet()
+    // 最近一次 sync 的歌曲 id；红心列表刷新后用来补同步 UI
+    private var currentSongId: Long? = null
     // 当前登录用户 id；null 表示未登录
     private var currentUserId: Long? = null
 
@@ -89,6 +91,7 @@ class FavoriteManager @Inject constructor(
     // 切歌 / 预览曲变化时调用：用本地缓存即时同步收藏态
     fun syncForSong(songId: Long?) {
         if (songId == null) return
+        currentSongId = songId
         val favorite = songId in likedSongIds
         if (_isFavorite.value != favorite) {
             _isFavorite.value = favorite
@@ -102,6 +105,8 @@ class FavoriteManager @Inject constructor(
                 getLikedSongIdsUseCase(userId)
             }.onSuccess { ids ->
                 likedSongIds = ids.toSet()
+                // 列表可能晚于快照恢复到达，补一次当前曲红心
+                syncForSong(currentSongId)
             }
         }
     }

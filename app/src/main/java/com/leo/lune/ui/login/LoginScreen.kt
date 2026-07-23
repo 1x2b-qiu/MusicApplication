@@ -52,6 +52,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leo.lune.R
 import com.leo.lune.ui.component.loading.Loading
+import com.leo.lune.util.consumePointersUnlessResumed
 import kotlinx.coroutines.delay
 
 // 登录页
@@ -89,6 +90,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
+            .consumePointersUnlessResumed()
     ) {
         Column(
             modifier = Modifier
