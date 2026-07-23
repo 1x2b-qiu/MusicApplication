@@ -1,7 +1,10 @@
 package com.example.musicapp.service
 
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
+import android.net.wifi.WifiManager
+import android.os.PowerManager
 import androidx.annotation.OptIn
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -26,10 +29,52 @@ class MusicPlaybackService : MediaSessionService() {
     // 系统媒体会话；通知栏与外部控制器通过它操作播放器
     private var mediaSession: MediaSession? = null
 
+    // WiFi 锁：在线流媒体播放期间持有，防止 Doze 模式下 WiFi 被挂起导致缓冲中断
+    private var wifiLock: WifiManager.WifiLock? = null
+
+    // CPU 唤醒锁：播放期间保持 CPU 活跃，防止锁屏后解码线程被挂起
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    // 监听播放状态变化，按需获取 / 释放 WiFi 锁与 CPU 唤醒锁
+    private val playbackLockListener = object : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                acquireWifiLock()
+                acquireWakeLock()
+            } else {
+                releaseWifiLock()
+                releaseWakeLock()
+            }
+        }
+    }
+
     @OptIn(UnstableApi::class)
     override fun onCreate() {
         super.onCreate()
         val player = playerController.player
+
+        // 初始化 WiFi 锁（懒获取，播放时才持有）
+        val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        wifiLock = wifiManager.createWifiLock(
+            WifiManager.WIFI_MODE_FULL_HIGH_PERF,
+            "MusicApp::PlaybackWifiLock"
+        ).apply { setReferenceCounted(false) }
+
+        // 初始化 CPU 唤醒锁（懒获取，播放时才持有）
+        // PARTIAL_WAKE_LOCK：仅保持 CPU 运行，不亮屏，适合纯音频后台播放
+        val powerManager = applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "MusicApp::PlaybackWakeLock"
+        ).apply { setReferenceCounted(false) }
+
+        // 若服务启动时播放器已在播放（如进程恢复），立即持锁
+        if (player.isPlaying) {
+            acquireWifiLock()
+            acquireWakeLock()
+        }
+        player.addListener(playbackLockListener)
+
         // 用 ForwardingPlayer 包装：系统「上一首/下一首」接到业务队列切歌
         val sessionPlayer = QueueAwarePlayer(
             player = player,
@@ -47,10 +92,36 @@ class MusicPlaybackService : MediaSessionService() {
         mediaSession
 
     override fun onDestroy() {
+        // 移除监听，避免泄漏
+        playerController.player.removeListener(playbackLockListener)
+        releaseWifiLock()
+        releaseWakeLock()
+        wifiLock = null
+        wakeLock = null
         // 释放 Session，避免泄漏；不 release ExoPlayer（由 Controller 单例持有）
         mediaSession?.release()
         mediaSession = null
         super.onDestroy()
+    }
+
+    // 获取 WiFi 锁：在线流媒体播放期间保持 WiFi 活跃，防止 Doze 切断网络
+    private fun acquireWifiLock() {
+        wifiLock?.let { if (!it.isHeld) it.acquire() }
+    }
+
+    // 释放 WiFi 锁：暂停 / 停止播放后交还，避免无谓耗电
+    private fun releaseWifiLock() {
+        wifiLock?.let { if (it.isHeld) it.release() }
+    }
+
+    // 获取 CPU 唤醒锁：播放期间保持 CPU 活跃，防止锁屏后解码线程休眠
+    private fun acquireWakeLock() {
+        wakeLock?.let { if (!it.isHeld) it.acquire() }
+    }
+
+    // 释放 CPU 唤醒锁：暂停 / 停止播放后交还，避免无谓耗电
+    private fun releaseWakeLock() {
+        wakeLock?.let { if (it.isHeld) it.release() }
     }
 
     // 通知点击：回到 MainActivity（SINGLE_TOP，避免重复堆栈）
