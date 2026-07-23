@@ -17,12 +17,9 @@ import com.leo.lune.domain.model.LyricMatcher
 import com.leo.lune.domain.model.PlaybackSnapshot
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.usecase.stats.AddListenDurationUseCase
-import com.leo.lune.domain.usecase.music.GetLikedSongIdsUseCase
 import com.leo.lune.domain.usecase.download.GetLocalSongPathUseCase
 import com.leo.lune.domain.usecase.music.GetSongLyricsUseCase
 import com.leo.lune.domain.usecase.music.GetSongUrlUseCase
-import com.leo.lune.domain.usecase.music.LikeSongUseCase
-import com.leo.lune.domain.usecase.auth.ObserveLoginStateUseCase
 import com.leo.lune.domain.usecase.history.RecordRecentPlayUseCase
 import com.leo.lune.domain.usecase.playback.ClearPlaybackSnapshotUseCase
 import com.leo.lune.domain.usecase.playback.GetPlaybackSnapshotUseCase
@@ -122,12 +119,8 @@ class MusicPlayerController @Inject constructor(
     private val observePlayStatsUseCase: ObservePlayStatsUseCase,
     // 持久化播放模式
     private val updatePlayModeUseCase: UpdatePlayModeUseCase,
-    // 红心收藏 / 取消收藏
-    private val likeSongUseCase: LikeSongUseCase,
-    // 拉取当前用户红心歌单 id 列表
-    private val getLikedSongIdsUseCase: GetLikedSongIdsUseCase,
-    // 观察登录态，用于预热收藏与鉴权提示
-    private val observeLoginStateUseCase: ObserveLoginStateUseCase,
+    // 红心收藏管理器（缓存 + 乐观更新 + 回滚）
+    val favoriteManager: FavoriteManager,
     // 保存播放快照（进程级恢复）
     private val savePlaybackSnapshotUseCase: SavePlaybackSnapshotUseCase,
     // 读取上次播放快照
@@ -214,9 +207,6 @@ class MusicPlayerController @Inject constructor(
     private var prefetchJob: Job? = null
     // 已追加进 Media3 播放列表的下一首歌曲 id；用于预取去重与自动切歌对账
     private var prefetchedNextSongId: Long? = null
-    // 本地缓存的红心歌单 id，用于即时判断收藏态
-    private var likedSongIds: Set<Long> = emptySet()
-    private var currentUserId: Long? = null
     // 本次连续播放段起点（elapsedRealtime）；null 表示当前未在计时
     private var listeningSinceElapsedRealtime: Long? = null
 
@@ -228,15 +218,22 @@ class MusicPlayerController @Inject constructor(
                 .getOrDefault(PlayerPlayMode.Loop)
             _playbackState.update { it.copy(playMode = mode) }
         }
-        // 启动时根据登录态预热红心列表，避免首屏收藏图标闪错
+        // 订阅 FavoriteManager 的收藏态，同步进 PlaybackState
         scope.launch {
-            val loginState = observeLoginStateUseCase().first()
-            currentUserId = loginState.userId?.takeIf { loginState.isLoggedIn }
-            if (currentUserId != null) {
-                refreshLikedSongIds(currentUserId!!)
-            } else {
-                likedSongIds = emptySet()
-                _playbackState.update { it.copy(isFavorite = false) }
+            favoriteManager.isFavorite.collect { fav ->
+                _playbackState.update { state ->
+                    if (state.isFavorite == fav) state else state.copy(isFavorite = fav)
+                }
+            }
+        }
+        // 订阅收藏操作结果，失败时写入 error 供 UI 提示
+        scope.launch {
+            favoriteManager.lastResult.collect { result ->
+                when (result) {
+                    is FavoriteResult.Failure ->
+                        _playbackState.update { it.copy(error = result.message) }
+                    else -> { /* Success / null 不清除其他来源的 error */ }
+                }
             }
         }
         // 恢复上次播放快照：队列/下标/当前曲设为 preview，不自动播放
@@ -262,7 +259,7 @@ class MusicPlayerController @Inject constructor(
                 currentLyricLine = formatFallbackLyric(song)
             )
         }
-        syncFavoriteForCurrentSong()
+        favoriteManager.syncForSong(song.id)
     }
 
     // 播放指定歌曲：结算上一曲时长 → 更新状态并拉歌词 → 启动服务 → 异步取 URL 后 prepare/play
@@ -296,7 +293,7 @@ class MusicPlayerController @Inject constructor(
 
         ensurePlaybackService()
         loadLyrics(song.id)
-        syncFavoriteForCurrentSong()
+        favoriteManager.syncForSong(song.id)
 
         val requestSongId = song.id
         urlJob = scope.launch {
@@ -518,65 +515,12 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 切换收藏（乐观更新）；未登录报错，请求失败则 revertFavoriteState 回滚
+    // 切换收藏：委托给 FavoriteManager（乐观更新 + 回滚）
     fun toggleFavorite() {
-        val state = _playbackState.value
-        val songId = state.currentSong?.id ?: state.previewSong?.id ?: return
-        if (currentUserId == null) {
-            _playbackState.update { it.copy(error = "请先登录后收藏") }
-            return
-        }
-
-        val targetFavorite = !state.isFavorite
-        _playbackState.update { it.copy(isFavorite = targetFavorite, error = null) }
-        likedSongIds = if (targetFavorite) likedSongIds + songId else likedSongIds - songId
-
-        scope.launch {
-            runCatching {
-                likeSongUseCase(songId, like = targetFavorite)
-            }.onSuccess { result ->
-                if (!result.success) {
-                    revertFavoriteState(songId, targetFavorite, "收藏操作失败")
-                }
-            }.onFailure { throwable ->
-                revertFavoriteState(
-                    songId = songId,
-                    attemptedFavorite = targetFavorite,
-                    message = throwable.message ?: "收藏操作失败"
-                )
-            }
-        }
-    }
-
-    // 从服务端刷新红心 id 集合，并同步当前曲收藏态
-    private fun refreshLikedSongIds(userId: Long) {
-        scope.launch {
-            runCatching {
-                getLikedSongIdsUseCase(userId)
-            }.onSuccess { ids ->
-                likedSongIds = ids.toSet()
-                syncFavoriteForCurrentSong()
-            }
-        }
-    }
-
-    // 用 likedSongIds 同步当前/预览曲的 isFavorite
-    private fun syncFavoriteForCurrentSong() {
         val songId = _playbackState.value.currentSong?.id
             ?: _playbackState.value.previewSong?.id
             ?: return
-        val isFavorite = songId in likedSongIds
-        _playbackState.update { state ->
-            if (state.isFavorite == isFavorite) state else state.copy(isFavorite = isFavorite)
-        }
-    }
-
-    // 收藏请求失败时回滚本地缓存与 UI 状态
-    private fun revertFavoriteState(songId: Long, attemptedFavorite: Boolean, message: String) {
-        likedSongIds = if (attemptedFavorite) likedSongIds - songId else likedSongIds + songId
-        _playbackState.update {
-            it.copy(isFavorite = !attemptedFavorite, error = message)
-        }
+        favoriteManager.toggleFavorite(songId)
     }
 
     // 记录最近播放与周播放次数（失败静默忽略）
@@ -729,7 +673,7 @@ class MusicPlayerController @Inject constructor(
         _playbackPosition.value = PlaybackPosition()
         recordPlayStats(song)
         loadLyrics(song.id)
-        syncFavoriteForCurrentSong()
+        favoriteManager.syncForSong(song.id)
     }
 
     // 从 Media3 播放列表移除预取的下一首（若存在），并清除预取标记
