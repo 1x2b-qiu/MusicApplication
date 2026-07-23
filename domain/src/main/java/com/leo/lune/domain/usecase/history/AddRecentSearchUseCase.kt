@@ -1,0 +1,13 @@
+package com.leo.lune.domain.usecase.history
+
+import com.leo.lune.domain.repository.SearchHistoryRepository
+import javax.inject.Inject
+
+// 将搜索词写入最近搜索历史
+class AddRecentSearchUseCase @Inject constructor(
+    private val searchHistoryRepository: SearchHistoryRepository
+) {
+    suspend operator fun invoke(term: String) {
+        searchHistoryRepository.addRecentSearch(term)
+    }
+}

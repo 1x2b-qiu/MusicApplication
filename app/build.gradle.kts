@@ -18,11 +18,11 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.musicapp"
+    namespace = "com.leo.lune"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.musicapp"
+        applicationId = "com.leo.lune"
         minSdk = 24
         targetSdk = 36
         versionCode = 1

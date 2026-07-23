@@ -17,17 +17,17 @@
 }
 -keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
 -keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
--keep class com.example.musicapp.data.remote.response.** { *; }
+-keep class com.leo.lune.data.remote.response.** { *; }
 
 # Kotlinx Serialization (Navigation typed routes)
 -keepattributes *Annotation*
 -dontnote kotlinx.serialization.AnnotationsKt
 -keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
--keepclasseswithmembers class com.example.musicapp.navigation.** {
+-keepclasseswithmembers class com.leo.lune.navigation.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
--keep,includedescriptorclasses class com.example.musicapp.navigation.**$$serializer { *; }
--keepclassmembers class com.example.musicapp.navigation.** {
+-keep,includedescriptorclasses class com.leo.lune.navigation.**$$serializer { *; }
+-keepclassmembers class com.leo.lune.navigation.** {
     *** Companion;
 }
 

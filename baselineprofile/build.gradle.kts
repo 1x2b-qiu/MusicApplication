@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.musicapp.baselineprofile"
+    namespace = "com.leo.lune.baselineprofile"
     compileSdk = 36
 
     defaultConfig {

@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.musicapp.data"
+    namespace = "com.leo.lune.data"
     compileSdk = 36
 
     defaultConfig {
