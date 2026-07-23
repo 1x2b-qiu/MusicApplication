@@ -37,6 +37,17 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- 媒体按钮接收器：蓝牙耳机 / 线控按键唤醒服务
+             使用 Media3 官方 MediaButtonReceiver，自动处理 Android 8+ 后台启动限制，
+             并转发 ACTION_MEDIA_BUTTON 到 MediaSessionService -->
+        <receiver
+            android:name="androidx.media3.session.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>
