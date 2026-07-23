@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.os.SystemClock
 import androidx.annotation.RequiresApi
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
@@ -16,16 +15,13 @@ import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.LyricMatcher
 import com.leo.lune.domain.model.PlaybackSnapshot
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.stats.AddListenDurationUseCase
 import com.leo.lune.domain.usecase.download.GetLocalSongPathUseCase
 import com.leo.lune.domain.usecase.music.GetSongLyricsUseCase
 import com.leo.lune.domain.usecase.music.GetSongUrlUseCase
-import com.leo.lune.domain.usecase.history.RecordRecentPlayUseCase
 import com.leo.lune.domain.usecase.playback.ClearPlaybackSnapshotUseCase
 import com.leo.lune.domain.usecase.playback.GetPlaybackSnapshotUseCase
 import com.leo.lune.domain.usecase.playback.SavePlaybackSnapshotUseCase
 import com.leo.lune.domain.usecase.stats.ObservePlayStatsUseCase
-import com.leo.lune.domain.usecase.stats.RecordWeekPlayUseCase
 import com.leo.lune.domain.usecase.stats.UpdatePlayModeUseCase
 import com.leo.lune.service.MusicPlaybackService
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -109,12 +105,8 @@ class MusicPlayerController @Inject constructor(
     private val getLocalSongPathUseCase: GetLocalSongPathUseCase,
     // 拉取并解析 LRC 歌词
     private val getSongLyricsUseCase: GetSongLyricsUseCase,
-    // 写入最近播放记录
-    private val recordRecentPlayUseCase: RecordRecentPlayUseCase,
-    // 累加本周播放次数
-    private val recordWeekPlayUseCase: RecordWeekPlayUseCase,
-    // 累加听歌时长（本地统计）
-    private val addListenDurationUseCase: AddListenDurationUseCase,
+    // 听歌统计记录器（最近播放 / 周次数 / 时长）
+    private val playStatsRecorderManager: PlayStatsRecorderManager,
     // 读取本地播放统计（含持久化的播放模式）
     private val observePlayStatsUseCase: ObservePlayStatsUseCase,
     // 持久化播放模式
@@ -147,11 +139,11 @@ class MusicPlayerController @Inject constructor(
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
                             _playbackState.update { it.copy(isPlaying = isPlaying) }
                             if (isPlaying) {
-                                markListeningStarted()
+                                playStatsRecorderManager.markListeningStarted()
                                 startPositionTracking()
                             } else {
                                 // 暂停/停止时结算听歌时长，并停掉进度轮询
-                                settleListenDuration()
+                                playStatsRecorderManager.settleListenDuration()
                                 syncPositionAndLyric()
                                 positionJob?.cancel()
                                 saveSnapshot()
@@ -207,8 +199,6 @@ class MusicPlayerController @Inject constructor(
     private var prefetchJob: Job? = null
     // 已追加进 Media3 播放列表的下一首歌曲 id；用于预取去重与自动切歌对账
     private var prefetchedNextSongId: Long? = null
-    // 本次连续播放段起点（elapsedRealtime）；null 表示当前未在计时
-    private var listeningSinceElapsedRealtime: Long? = null
 
     init {
         // 启动时恢复本地播放模式
@@ -266,7 +256,7 @@ class MusicPlayerController @Inject constructor(
     // 切歌会取消进行中的 URL/歌词任务，并用 songId 校验防止过期回调污染状态
     @RequiresApi(Build.VERSION_CODES.O)
     fun playSong(song: Song, queue: List<Song> = emptyList()) {
-        settleListenDuration()
+        playStatsRecorderManager.settleListenDuration()
         val resolvedQueue = queue.ifEmpty { listOf(song) }
         val queueIndex = resolvedQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
 
@@ -320,7 +310,7 @@ class MusicPlayerController @Inject constructor(
                     _playbackState.update {
                         it.copy(isLoading = false, playUrl = playUri, error = null)
                     }
-                    recordPlayStats(song)
+                    playStatsRecorderManager.recordPlayStats(song)
                     saveSnapshot()
                     player.setMediaItem(buildMediaItem(song, playUri))
                     player.prepare()
@@ -498,7 +488,7 @@ class MusicPlayerController @Inject constructor(
 
     // 清空播放队列并停止当前播放，保留播放模式
     fun clearQueue() {
-        settleListenDuration()
+        playStatsRecorderManager.settleListenDuration()
         positionJob?.cancel()
         lyricJob?.cancel()
         urlJob?.cancel()
@@ -521,32 +511,6 @@ class MusicPlayerController @Inject constructor(
             ?: _playbackState.value.previewSong?.id
             ?: return
         favoriteManager.toggleFavorite(songId)
-    }
-
-    // 记录最近播放与周播放次数（失败静默忽略）
-    private fun recordPlayStats(song: Song) {
-        scope.launch {
-            runCatching { recordRecentPlayUseCase(song) }
-            runCatching { recordWeekPlayUseCase() }
-        }
-    }
-
-    // 开始一段听歌计时；已在计时则不重置，避免短暂抖动重复开段
-    private fun markListeningStarted() {
-        if (listeningSinceElapsedRealtime == null) {
-            listeningSinceElapsedRealtime = SystemClock.elapsedRealtime()
-        }
-    }
-
-    // 结束当前听歌段并累加时长；切歌/暂停时调用
-    private fun settleListenDuration() {
-        val since = listeningSinceElapsedRealtime ?: return
-        listeningSinceElapsedRealtime = null
-        val elapsedMs = SystemClock.elapsedRealtime() - since
-        if (elapsedMs <= 0L) return
-        scope.launch {
-            runCatching { addListenDurationUseCase(elapsedMs) }
-        }
     }
 
     // 异步加载歌词；仅当仍是同一首歌时写入状态，并按需启动进度跟踪
@@ -649,9 +613,9 @@ class MusicPlayerController @Inject constructor(
     private fun onPrefetchedSongStarted(songId: Long) {
         val state = _playbackState.value
         val song = state.queue.firstOrNull { it.id == songId } ?: return
-        settleListenDuration()
+        playStatsRecorderManager.settleListenDuration()
         // 自动衔接期间 isPlaying 不变，onIsPlayingChanged 不会重开计时，需手动开段
-        markListeningStarted()
+        playStatsRecorderManager.markListeningStarted()
         prefetchedNextSongId = null
         // 移除已播完的旧项，播放列表始终保持「当前曲 + 预取的下一首」
         val currentIndex = player.currentMediaItemIndex
@@ -671,7 +635,7 @@ class MusicPlayerController @Inject constructor(
             )
         }
         _playbackPosition.value = PlaybackPosition()
-        recordPlayStats(song)
+        playStatsRecorderManager.recordPlayStats(song)
         loadLyrics(song.id)
         favoriteManager.syncForSong(song.id)
     }
