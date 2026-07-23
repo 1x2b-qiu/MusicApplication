@@ -1,5 +1,7 @@
 package com.leo.lune.ui.home
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
@@ -107,11 +109,13 @@ class HomeViewModel @Inject constructor(
     }
 
     // 播放指定歌曲，并传入当前列表作为播放队列
+    @RequiresApi(Build.VERSION_CODES.O)
     fun playSong(song: Song, queue: List<Song>) {
         playerController.playSong(song, queue)
     }
 
     // 播放/暂停切换，委托给全局播放器
+    @RequiresApi(Build.VERSION_CODES.O)
     fun togglePlayPause() {
         playerController.togglePlayPause()
     }
@@ -133,8 +137,6 @@ class HomeViewModel @Inject constructor(
                 }
                 liked
             }.onSuccess { liked ->
-                // 有收藏歌曲时，设置迷你栏预览为第一首
-                liked.firstOrNull()?.let(playerController::setPreviewSong)
                 _uiState.update {
                     it.copy(
                         likedSongs = liked,

@@ -5,6 +5,7 @@ import com.leo.lune.data.repository.impl.DownloadRepositoryImpl
 import com.leo.lune.data.repository.impl.MusicRepositoryImpl
 import com.leo.lune.data.repository.impl.PlayHistoryRepositoryImpl
 import com.leo.lune.data.repository.impl.PlayStatsRepositoryImpl
+import com.leo.lune.data.repository.impl.PlaybackSnapshotRepositoryImpl
 import com.leo.lune.data.repository.impl.SearchHistoryRepositoryImpl
 import com.leo.lune.data.repository.impl.ThemeRepositoryImpl
 import com.leo.lune.domain.repository.AuthRepository
@@ -12,6 +13,7 @@ import com.leo.lune.domain.repository.DownloadRepository
 import com.leo.lune.domain.repository.MusicRepository
 import com.leo.lune.domain.repository.PlayHistoryRepository
 import com.leo.lune.domain.repository.PlayStatsRepository
+import com.leo.lune.domain.repository.PlaybackSnapshotRepository
 import com.leo.lune.domain.repository.SearchHistoryRepository
 import com.leo.lune.domain.repository.ThemeRepository
 import dagger.Binds
@@ -73,4 +75,11 @@ abstract class RepositoryModule {
     abstract fun bindDownloadRepository(
         downloadRepositoryImpl: DownloadRepositoryImpl
     ): DownloadRepository
+
+    @Binds
+    @Singleton
+    // 播放快照仓储
+    abstract fun bindPlaybackSnapshotRepository(
+        playbackSnapshotRepositoryImpl: PlaybackSnapshotRepositoryImpl
+    ): PlaybackSnapshotRepository
 }

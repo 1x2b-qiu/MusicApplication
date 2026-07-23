@@ -6,6 +6,7 @@ import com.leo.lune.data.local.MusicDatabase
 import com.leo.lune.data.local.dao.DownloadedSongDao
 import com.leo.lune.data.local.dao.PendingDownloadDao
 import com.leo.lune.data.local.dao.PlayStatsDao
+import com.leo.lune.data.local.dao.PlaybackSnapshotDao
 import com.leo.lune.data.local.dao.RecentPlayDao
 import dagger.Module
 import dagger.Provides
@@ -57,5 +58,11 @@ object DatabaseModule {
     // 提供未完成下载任务 DAO
     fun providePendingDownloadDao(database: MusicDatabase): PendingDownloadDao {
         return database.pendingDownloadDao()
+    }
+
+    @Provides
+    // 提供播放快照 DAO
+    fun providePlaybackSnapshotDao(database: MusicDatabase): PlaybackSnapshotDao {
+        return database.playbackSnapshotDao()
     }
 }

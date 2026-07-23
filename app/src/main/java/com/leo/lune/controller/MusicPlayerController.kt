@@ -14,6 +14,7 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.LyricMatcher
+import com.leo.lune.domain.model.PlaybackSnapshot
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.usecase.stats.AddListenDurationUseCase
 import com.leo.lune.domain.usecase.music.GetLikedSongIdsUseCase
@@ -23,6 +24,9 @@ import com.leo.lune.domain.usecase.music.GetSongUrlUseCase
 import com.leo.lune.domain.usecase.music.LikeSongUseCase
 import com.leo.lune.domain.usecase.auth.ObserveLoginStateUseCase
 import com.leo.lune.domain.usecase.history.RecordRecentPlayUseCase
+import com.leo.lune.domain.usecase.playback.ClearPlaybackSnapshotUseCase
+import com.leo.lune.domain.usecase.playback.GetPlaybackSnapshotUseCase
+import com.leo.lune.domain.usecase.playback.SavePlaybackSnapshotUseCase
 import com.leo.lune.domain.usecase.stats.ObservePlayStatsUseCase
 import com.leo.lune.domain.usecase.stats.RecordWeekPlayUseCase
 import com.leo.lune.domain.usecase.stats.UpdatePlayModeUseCase
@@ -123,7 +127,13 @@ class MusicPlayerController @Inject constructor(
     // 拉取当前用户红心歌单 id 列表
     private val getLikedSongIdsUseCase: GetLikedSongIdsUseCase,
     // 观察登录态，用于预热收藏与鉴权提示
-    private val observeLoginStateUseCase: ObserveLoginStateUseCase
+    private val observeLoginStateUseCase: ObserveLoginStateUseCase,
+    // 保存播放快照（进程级恢复）
+    private val savePlaybackSnapshotUseCase: SavePlaybackSnapshotUseCase,
+    // 读取上次播放快照
+    private val getPlaybackSnapshotUseCase: GetPlaybackSnapshotUseCase,
+    // 清除播放快照
+    private val clearPlaybackSnapshotUseCase: ClearPlaybackSnapshotUseCase
 ) {
     // 底层播放器（懒加载）；音频焦点与「拔出耳机暂停」交给 Media3
     // 播放/暂停状态通过 Listener 回写 playbackState
@@ -151,6 +161,7 @@ class MusicPlayerController @Inject constructor(
                                 settleListenDuration()
                                 syncPositionAndLyric()
                                 positionJob?.cancel()
+                                saveSnapshot()
                             }
                         }
 
@@ -228,6 +239,18 @@ class MusicPlayerController @Inject constructor(
                 _playbackState.update { it.copy(isFavorite = false) }
             }
         }
+        // 恢复上次播放快照：队列/下标/当前曲设为 preview，不自动播放
+        scope.launch {
+            val snapshot = runCatching { getPlaybackSnapshotUseCase() }.getOrNull() ?: return@launch
+            _playbackState.update { state ->
+                state.copy(
+                    previewSong = snapshot.currentSong,
+                    queue = snapshot.queue,
+                    queueIndex = snapshot.queueIndex,
+                    currentLyricLine = formatFallbackLyric(snapshot.currentSong)
+                )
+            }
+        }
     }
 
     // 设置迷你栏预览曲；不触发真正播放。队列为空时用该曲填成单曲队列
@@ -301,6 +324,7 @@ class MusicPlayerController @Inject constructor(
                         it.copy(isLoading = false, playUrl = playUri, error = null)
                     }
                     recordPlayStats(song)
+                    saveSnapshot()
                     player.setMediaItem(buildMediaItem(song, playUri))
                     player.prepare()
                     player.playWhenReady = true
@@ -462,9 +486,11 @@ class MusicPlayerController @Inject constructor(
                 _playbackState.update {
                     it.copy(queue = newQueue, queueIndex = state.queueIndex - 1)
                 }
+                saveSnapshot()
             }
             index > state.queueIndex -> {
                 _playbackState.update { it.copy(queue = newQueue) }
+                saveSnapshot()
             }
             else -> {
                 val nextIndex = index.coerceAtMost(newQueue.lastIndex)
@@ -486,6 +512,9 @@ class MusicPlayerController @Inject constructor(
         _playbackPosition.value = PlaybackPosition()
         _playbackState.update { state ->
             PlaybackState(playMode = state.playMode)
+        }
+        scope.launch {
+            runCatching { clearPlaybackSnapshotUseCase() }
         }
     }
 
@@ -753,5 +782,24 @@ class MusicPlayerController @Inject constructor(
     private fun ensurePlaybackService() {
         val intent = Intent(context, MusicPlaybackService::class.java)
         context.startForegroundService(intent)
+    }
+
+    // 将当前播放状态快照持久化到 Room，供进程被杀后恢复
+    // 仅在有当前曲且队列非空时保存；无快照价值时静默跳过
+    private fun saveSnapshot() {
+        val state = _playbackState.value
+        val song = state.currentSong ?: return
+        if (state.queue.isEmpty()) return
+        scope.launch {
+            runCatching {
+                savePlaybackSnapshotUseCase(
+                    PlaybackSnapshot(
+                        currentSong = song,
+                        queue = state.queue,
+                        queueIndex = state.queueIndex
+                    )
+                )
+            }
+        }
     }
 }
