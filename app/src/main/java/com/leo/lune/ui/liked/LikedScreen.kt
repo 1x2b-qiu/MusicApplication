@@ -512,6 +512,7 @@ private fun LikedTrackRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
                 .clickable(onClick = onClick)
                 .padding(vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,

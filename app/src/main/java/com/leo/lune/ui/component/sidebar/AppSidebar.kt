@@ -301,11 +301,11 @@ private fun SidebarMenuRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(bottom = 4.dp)
+            .clip(IconBoxShape)
             .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
                 onClick = onClick
             )
+            .padding(horizontal = 8.dp)
             .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)

@@ -119,7 +119,7 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .consumePointersUnlessResumed() 
+            .consumePointersUnlessResumed()
     ) {
         // Haze 源：模糊封面作氛围底，避免歌词延伸到控制栏下当背景
         Box(
@@ -698,9 +698,6 @@ private fun PlayerControlsCard(
             }
 
             when {
-                uiState.isLoading -> {
-                }
-
                 uiState.error != null || uiState.downloadError != null -> {
                     Text(
                         text = uiState.error ?: uiState.downloadError.orEmpty(),
@@ -736,19 +733,23 @@ private fun PlayerControlsCard(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Filled.SkipPrevious,
-                    contentDescription = "上一首",
-                    tint = colorScheme.onBackground,
+                Box(
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
                             onClick = onSkipPrevious
-                        )
-                )
-
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipPrevious,
+                        contentDescription = "上一首",
+                        tint = colorScheme.onBackground,
+                        modifier = Modifier
+                            .size(30.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.size(36.dp))
 
                 Box(
@@ -774,19 +775,23 @@ private fun PlayerControlsCard(
                 }
 
                 Spacer(modifier = Modifier.size(36.dp))
-
-                Icon(
-                    imageVector = Icons.Filled.SkipNext,
-                    contentDescription = "下一首",
-                    tint = colorScheme.onBackground,
+                Box(
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(36.dp)
+                        .clip(CircleShape)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
                             onClick = onSkipNext
-                        )
-                )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.SkipNext,
+                        contentDescription = "下一首",
+                        tint = colorScheme.onBackground,
+                        modifier = Modifier
+                            .size(30.dp)
+                    )
+                }
             }
         }
     }

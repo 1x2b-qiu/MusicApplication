@@ -162,7 +162,8 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.Settings> {
                     SettingsScreen(
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        darkTheme = darkTheme
                     )
                 }
 

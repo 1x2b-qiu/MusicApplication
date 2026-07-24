@@ -143,7 +143,11 @@ fun MiniPlayerBar(
                 }
                 Box(
                     modifier = Modifier
-                        .size(36.dp),
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .clickable(
+                            onClick = viewModel::toggleFavorite
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     val isFavorite = uiState.isFavorite
@@ -155,11 +159,6 @@ fun MiniPlayerBar(
                         tint = if (isFavorite) Color.Unspecified else colorScheme.onBackground,
                         modifier = Modifier
                             .size(20.dp)
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null,
-                                onClick = viewModel::toggleFavorite
-                            ),
                     )
                 }
                 Box(
@@ -186,9 +185,8 @@ fun MiniPlayerBar(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
+                        .clip(CircleShape)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
                             onClick = viewModel::skipToNext
                         ),
                     contentAlignment = Alignment.Center
