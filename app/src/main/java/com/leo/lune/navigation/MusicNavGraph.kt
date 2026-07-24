@@ -40,6 +40,7 @@ import com.leo.lune.ui.player.PlayerScreen
 import com.leo.lune.ui.radio.RadioScreen
 import com.leo.lune.ui.recent.RecentScreen
 import com.leo.lune.ui.search.SearchScreen
+import com.leo.lune.ui.settings.DownloadSettingsScreen
 import com.leo.lune.ui.settings.SettingsScreen
 import com.leo.lune.ui.startup.SessionBootstrapViewModel
 import dev.chrisbanes.haze.hazeSource
@@ -162,6 +163,16 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.Settings> {
                     SettingsScreen(
+                        onBack = { navController.popBackStack() },
+                        onDownloadSettingsClick = {
+                            navController.navigateSingleTopTo(MusicRoute.DownloadSettings)
+                        },
+                        darkTheme = darkTheme
+                    )
+                }
+
+                composable<MusicRoute.DownloadSettings> {
+                    DownloadSettingsScreen(
                         onBack = { navController.popBackStack() },
                         darkTheme = darkTheme
                     )

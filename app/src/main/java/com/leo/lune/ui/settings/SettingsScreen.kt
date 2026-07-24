@@ -67,6 +67,7 @@ private val SettingsItems = listOf(
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onDownloadSettingsClick: () -> Unit,
     darkTheme: Boolean,
     @Suppress("UNUSED_PARAMETER")
     viewModel: SettingsViewModel = hiltViewModel()
@@ -89,7 +90,12 @@ fun SettingsScreen(
                     label = item.label,
                     icon = item.icon,
                     darkTheme = darkTheme,
-                    onClick = { }
+                    onClick = {
+                        when (item.id) {
+                            "download" -> onDownloadSettingsClick()
+                            else -> Unit
+                        }
+                    }
                 )
             }
         }
