@@ -15,6 +15,7 @@ import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.usecase.download.GetLocalSongPathUseCase
 import com.leo.lune.domain.usecase.music.GetSongUrlUseCase
+import com.leo.lune.manager.ArtworkLoader
 import com.leo.lune.manager.FavoriteManager
 import com.leo.lune.manager.FavoriteResult
 import com.leo.lune.manager.LyricManager
@@ -28,6 +29,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -108,7 +110,9 @@ class MusicPlayerController @Inject constructor(
     // 红心收藏管理器（缓存 + 乐观更新 + 回滚）
     val favoriteManager: FavoriteManager,
     // 播放快照持久化（进程级恢复）
-    private val snapshotManager: PlaybackSnapshotManager
+    private val snapshotManager: PlaybackSnapshotManager,
+    // 封面加载器：下载并压缩封面供系统通知栏内嵌显示
+    private val artworkLoader: ArtworkLoader
 ) {
     // 底层播放器（懒加载）；音频焦点与「拔出耳机暂停」交给 Media3
     // 播放/暂停状态通过 Listener 回写 playbackState
@@ -292,6 +296,9 @@ class MusicPlayerController @Inject constructor(
         val requestSongId = song.id
         urlJob = scope.launch {
             try {
+                // 封面下载与播放地址获取并行，互不阻塞
+                val artworkDeferred = async { artworkLoader.loadArtworkBytes(song.coverUrl) }
+
                 // 已下载优先播本地文件，否则拉在线流地址
                 val localPath = getLocalSongPathUseCase(requestSongId)
                 val playUri = if (localPath != null) {
@@ -316,7 +323,8 @@ class MusicPlayerController @Inject constructor(
                     }
                     playStatsRecorderManager.recordPlayStats(song)
                     saveSnapshot()
-                    player.setMediaItem(buildMediaItem(song, playUri))
+                    val artworkBytes = artworkDeferred.await()
+                    player.setMediaItem(buildMediaItem(song, playUri, artworkBytes))
                     player.prepare()
                     player.playWhenReady = true
                 }
@@ -522,6 +530,9 @@ class MusicPlayerController @Inject constructor(
         val nextSong = state.queue[queueManager.resolveNextIndex(state.queue, state.queueIndex)]
         prefetchJob = scope.launch {
             try {
+                // 封面与播放地址并行加载
+                val artworkDeferred = async { artworkLoader.loadArtworkBytes(nextSong.coverUrl) }
+
                 // 已下载优先用本地文件，否则拉在线流地址
                 val localPath = getLocalSongPathUseCase(nextSong.id)
                 val playUri = if (localPath != null) {
@@ -532,7 +543,8 @@ class MusicPlayerController @Inject constructor(
                 if (playUri.isNullOrBlank()) return@launch
                 if (_playbackState.value.currentSong?.id != originSongId) return@launch
                 if (prefetchedNextSongId != null) return@launch
-                player.addMediaItem(buildMediaItem(nextSong, playUri))
+                val artworkBytes = artworkDeferred.await()
+                player.addMediaItem(buildMediaItem(nextSong, playUri, artworkBytes))
                 prefetchedNextSongId = nextSong.id
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -585,17 +597,22 @@ class MusicPlayerController @Inject constructor(
     }
 
     // 将 Song + 可播 URL 转为 Media3 MediaItem；Metadata 供通知栏/锁屏，mediaId 用歌曲 id
-    private fun buildMediaItem(song: Song, url: String): MediaItem {
-        val metadata = MediaMetadata.Builder()
+    // 优先内嵌已下载的封面字节（artworkData），系统无需再远程拉取，通知栏封面稳定显示；
+    // 封面加载失败时回退到 artworkUri，由系统自行下载（可能失败）
+    private fun buildMediaItem(song: Song, url: String, artworkBytes: ByteArray? = null): MediaItem {
+        val metadataBuilder = MediaMetadata.Builder()
             .setTitle(song.name)
             .setArtist(song.artists)
             .setAlbumTitle(song.album)
-            .setArtworkUri(song.coverUrl?.takeIf { it.isNotBlank() }?.let(Uri::parse))
-            .build()
+        if (artworkBytes != null) {
+            metadataBuilder.setArtworkData(artworkBytes, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+        } else {
+            metadataBuilder.setArtworkUri(song.coverUrl?.takeIf { it.isNotBlank() }?.let(Uri::parse))
+        }
         return MediaItem.Builder()
             .setUri(Uri.parse(url))
             .setMediaId(song.id.toString())
-            .setMediaMetadata(metadata)
+            .setMediaMetadata(metadataBuilder.build())
             .build()
     }
 
