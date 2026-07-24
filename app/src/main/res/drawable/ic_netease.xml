@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 网易云音乐官方圆形标识：红底 + 白色音符线 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <!-- 圆形红底 -->
+    <path
+        android:fillColor="#E60026"
+        android:pathData="M32,4c15.464,0 28,12.536 28,28s-12.536,28 -28,28 -28,-12.536 -28,-28 12.536,-28 28,-28z" />
+    <!-- 官方白色音符螺旋线 -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M26.4,17c-9.88,4.573 -12.142,11.93 -11.071,19.728c2.371,17.272 17.971,15.272 21.469,14.772c3.912,-0.559 10.387,-3.517 11.956,-13.24c1.604,-9.937 -4.877,-13.869 -8.786,-14.731c-4.91,-1.083 -8.935,-0.399 -11.166,3.063c-2.07,3.212 -2.243,7.18 -0.936,9.845c1.193,2.432 2.302,3.522 4.149,3.563c6.367,0.143 7.229,-3.776 6.534,-7.501c-1.609,-7.929 -5.323,-10.176 -4.045,-16.303c1.307,-4.127 5.599,-3.552 8.496,-1.196"
+        android:strokeWidth="6"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

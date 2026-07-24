@@ -1,62 +1,73 @@
 package com.leo.lune.ui.login
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.MailOutline
+import androidx.compose.material.icons.outlined.PhoneIphone
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leo.lune.R
 import com.leo.lune.ui.component.loading.Loading
+import com.leo.lune.util.ClearFocusOnImeHidden
 import com.leo.lune.util.consumePointersUnlessResumed
-import kotlinx.coroutines.delay
+import com.leo.lune.util.dismissKeyboardOnTap
+import com.leo.lune.util.rememberDismissKeyboard
 
 // 登录页
-// 验证码登录，颜色跟随 App 深浅色主题（MaterialTheme.colorScheme）
+// UI 按设计稿重制：启动 logo + 验证码 / 密码登录
 // onBack：返回上一页（预留）；onLoginSuccess：登录成功后回调
 @Composable
 fun LoginScreen(
@@ -66,23 +77,13 @@ fun LoginScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val dismissKeyboard = rememberDismissKeyboard()
+    ClearFocusOnImeHidden()
 
-    // 网易云第三方登录占位提示
-    var showNeteaseMessage by remember { mutableStateOf(false) }
-
-    // 登录成功后通知导航层返回，并消费一次性事件
     LaunchedEffect(uiState.loginSuccess) {
         if (uiState.loginSuccess) {
             viewModel.consumeLoginSuccess()
             onLoginSuccess()
-        }
-    }
-
-    // Toast 自动消失
-    LaunchedEffect(showNeteaseMessage) {
-        if (showNeteaseMessage) {
-            delay(2_500)
-            showNeteaseMessage = false
         }
     }
 
@@ -95,165 +96,131 @@ fun LoginScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .navigationBarsPadding()
-                .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp)
+                .padding(bottom = 240.dp)
+                .dismissKeyboardOnTap()
         ) {
-            // 品牌标语区
-            LoginBrandHeader()
+            // 中间启动 logo（无边框）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_logo),
+                    contentDescription = "Lune",
+                    modifier = Modifier.size(240.dp),
+                    tint = colorScheme.onBackground
+                )
+            }
 
-            // 登录表单卡片
             LoginForm(
                 uiState = uiState,
                 onPhoneChange = viewModel::onPhoneChange,
                 onCaptchaChange = viewModel::onCaptchaChange,
+                onPasswordChange = viewModel::onPasswordChange,
+                onToggleShowPassword = viewModel::toggleShowPassword,
+                onSwitchMode = viewModel::switchCredentialMode,
                 onSendCaptcha = viewModel::sendCaptcha,
-                onLogin = viewModel::login,
-                modifier = Modifier.padding(top = 32.dp)
-            )
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // 第三方登录入口（当前为占位，未接入 OAuth）
-            LoginThirdPartySection(
-                onNeteaseClick = { showNeteaseMessage = true }
+                onLogin = {
+                    dismissKeyboard()
+                    viewModel.login()
+                },
+                onDismissKeyboard = dismissKeyboard,
+                modifier = Modifier
+                    .fillMaxWidth(0.8f)
+                    .align(Alignment.CenterHorizontally)
             )
         }
 
-        // 底部 Toast
-        LoginNeteaseToast(
-            visible = showNeteaseMessage,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(bottom = 36.dp)
-        )
-
-        Loading(isVisible = uiState.isLoading)
-    }
-}
-
-// 登录页品牌标语区
-@Composable
-private fun LoginBrandHeader(modifier: Modifier = Modifier) {
-    val colorScheme = MaterialTheme.colorScheme
-
-    Column(modifier = modifier) {
-        Text(
-            text = "MUSIC, FOR YOU",
+        LoginAgreement(
+            agreed = uiState.agreed,
+            onAgreedChange = viewModel::onAgreedChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 8.dp),
-            textAlign = TextAlign.Center,
-            color = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            letterSpacing = 2.sp
+                .navigationBarsPadding()
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 90.dp)
         )
-
-        Spacer(modifier = Modifier.height(52.dp))
-
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            HorizontalDivider(
-                modifier = Modifier.width(32.dp),
-                color = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                thickness = 1.dp
-            )
-            Text(
-                text = "PRIVATE FREQUENCY",
-                modifier = Modifier.padding(horizontal = 12.dp),
-                color = colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 2.sp
-            )
-        }
-
-        Text(
-            text = "听见你，\n未曾说出的部分。",
-            modifier = Modifier.padding(top = 20.dp),
-            color = colorScheme.onBackground,
-            fontSize = 35.sp,
-            fontWeight = FontWeight.SemiBold,
-            lineHeight = 43.sp,
-            letterSpacing = (-0.5).sp
-        )
-
-        Text(
-            text = "一段只属于你的声音旅程。",
-            modifier = Modifier.padding(top = 16.dp),
-            color = colorScheme.onSurfaceVariant,
-            fontSize = 15.sp,
-            letterSpacing = 0.3.sp
+        LoginThirdPartySection(
+            onNeteaseClick = { },
+            onQqMusicClick = { },
+            onSpotifyClick = { },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(bottom = 28.dp)
         )
     }
 }
 
-// 登录表单卡片：手机号、验证码、提交按钮
+// 登录表单：手机号 + 验证码/密码 + 提交
 @Composable
 private fun LoginForm(
     uiState: LoginUiState,
     onPhoneChange: (String) -> Unit,
     onCaptchaChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onToggleShowPassword: () -> Unit,
+    onSwitchMode: () -> Unit,
     onSendCaptcha: () -> Unit,
     onLogin: () -> Unit,
+    onDismissKeyboard: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val isButtonEnabled = uiState.phone.isNotBlank() && uiState.captcha.isNotBlank()
+    val credentialFilled = when (uiState.credentialMode) {
+        LoginCredentialMode.Captcha -> uiState.captcha.isNotBlank()
+        LoginCredentialMode.Password -> uiState.password.isNotBlank()
+    }
+    val isButtonEnabled = uiState.agreed &&
+        uiState.phone.isNotBlank() &&
+        credentialFilled &&
+        !uiState.isLoading
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(colorScheme.surfaceContainerHigh)
-            .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(28.dp))
-            .padding(20.dp)
-    ) {
-        // 手机号输入
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         LoginPhoneField(
             phone = uiState.phone,
             onPhoneChange = onPhoneChange
         )
 
-        // 验证码输入 + 获取验证码
-        LoginCaptchaField(
+        LoginCredentialField(
+            mode = uiState.credentialMode,
             captcha = uiState.captcha,
             captchaCountdown = uiState.captchaCountdown,
             isSendingCaptcha = uiState.isSendingCaptcha,
+            password = uiState.password,
+            showPassword = uiState.showPassword,
             onCaptchaChange = onCaptchaChange,
+            onPasswordChange = onPasswordChange,
+            onToggleShowPassword = onToggleShowPassword,
+            onSwitchMode = onSwitchMode,
             onSendCaptcha = onSendCaptcha,
-            modifier = Modifier.padding(top = 16.dp)
+            onDismissKeyboard = onDismissKeyboard
         )
-
-        // 提交登录
-        LoginSubmitButton(
-            enabled = isButtonEnabled && !uiState.isLoading,
-            onClick = onLogin,
-            modifier = Modifier.padding(top = 20.dp)
-        )
-
-        // 错误信息优先于验证码发送提示
         val notice = uiState.error ?: uiState.captchaHint.orEmpty()
-        Text(
-            text = notice,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
-            textAlign = TextAlign.Center,
-            color = if (uiState.error != null) {
-                colorScheme.error
-            } else {
-                colorScheme.onSurfaceVariant
-            },
-            fontSize = 12.sp,
-            minLines = 1
+        if (notice.isNotEmpty()) {
+            Text(
+                text = notice,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
+                color = if (uiState.error != null) {
+                    colorScheme.error
+                } else {
+                    colorScheme.onSurfaceVariant
+                },
+                fontSize = 12.sp
+            )
+        }
+        LoginSubmitButton(
+            enabled = isButtonEnabled,
+            onClick = onLogin,
+            modifier = Modifier.padding(top = 8.dp)
         )
     }
 }
 
-// 手机号输入框
 @Composable
 private fun LoginPhoneField(
     phone: String,
@@ -261,141 +228,219 @@ private fun LoginPhoneField(
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val textStyle = LoginFieldTextStyle(color = colorScheme.onSurface)
+    val placeholderStyle = LoginFieldTextStyle(color = colorScheme.onSurface.copy(alpha = 0.35f))
 
-    Column(modifier = modifier) {
-        Text(
-            text = "手机号",
-            color = colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+    LoginInputRow(modifier = modifier) {
+        LoginFieldLeadingIcon(icon = Icons.Outlined.PhoneIphone)
+        BasicTextField(
+            value = phone,
+            onValueChange = onPhoneChange,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            textStyle = textStyle,
+            cursorBrush = SolidColor(colorScheme.onSurface),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Phone,
+                imeAction = ImeAction.Next
+            ),
+            singleLine = true,
+            decorationBox = { innerTextField ->
+                LoginFieldDecorationBox(
+                    showPlaceholder = phone.isEmpty(),
+                    placeholder = "手机号",
+                    placeholderStyle = placeholderStyle,
+                    innerTextField = innerTextField
+                )
+            }
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        LoginInputRow {
-            Text(
-                text = "+86",
-                color = colorScheme.onSurface,
-                fontSize = 15.sp,
-                modifier = Modifier.padding(end = 12.dp)
-            )
-            Box(
-                modifier = Modifier
-                    .width(1.dp)
-                    .height(18.dp)
-                    .background(colorScheme.outlineVariant)
-            )
-            BasicTextField(
-                value = phone,
-                onValueChange = onPhoneChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp),
-                textStyle = TextStyle(
-                    color = colorScheme.onSurface,
-                    fontSize = 16.sp
-                ),
-                cursorBrush = SolidColor(colorScheme.primary),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                singleLine = true,
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (phone.isEmpty()) {
-                            Text(
-                                text = "请输入手机号码",
-                                color = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                fontSize = 16.sp
-                            )
-                        }
-                        innerTextField()
-                    }
-                }
-            )
-        }
     }
 }
 
-// 验证码输入框 + 获取验证码按钮
 @Composable
-private fun LoginCaptchaField(
+private fun LoginCredentialField(
+    mode: LoginCredentialMode,
     captcha: String,
     captchaCountdown: Int,
     isSendingCaptcha: Boolean,
+    password: String,
+    showPassword: Boolean,
     onCaptchaChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onToggleShowPassword: () -> Unit,
+    onSwitchMode: () -> Unit,
     onSendCaptcha: () -> Unit,
+    onDismissKeyboard: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val canSendCaptcha = captchaCountdown == 0 && !isSendingCaptcha
-    val actionColor = colorScheme.onSurface.copy(alpha = if (canSendCaptcha) 0.85f else 0.45f)
 
-    Column(modifier = modifier) {
-        Text(
-            text = "验证码",
-            color = colorScheme.onSurfaceVariant,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium
+    LoginInputRow(modifier = modifier) {
+        LoginFieldLeadingIcon(
+            icon = if (mode == LoginCredentialMode.Captcha) {
+                Icons.Outlined.MailOutline
+            } else {
+                Icons.Outlined.Lock
+            },
+            contentDescription = if (mode == LoginCredentialMode.Captcha) {
+                "切换至密码登录"
+            } else {
+                "切换至验证码登录"
+            },
+            onClick = onSwitchMode
         )
-        Spacer(modifier = Modifier.height(8.dp))
-        LoginInputRow {
-            BasicTextField(
-                value = captcha,
-                onValueChange = onCaptchaChange,
-                modifier = Modifier.weight(1f),
-                textStyle = TextStyle(
-                    color = colorScheme.onSurface,
-                    fontSize = 16.sp
-                ),
-                cursorBrush = SolidColor(colorScheme.primary),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                decorationBox = { innerTextField ->
-                    Box {
-                        if (captcha.isEmpty()) {
-                            Text(
-                                text = "输入验证码",
-                                color = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-                                fontSize = 16.sp
-                            )
-                        }
-                        innerTextField()
-                    }
+        BasicTextField(
+            value = if (mode == LoginCredentialMode.Captcha) captcha else password,
+            onValueChange = {
+                if (mode == LoginCredentialMode.Captcha) {
+                    onCaptchaChange(it)
+                } else {
+                    onPasswordChange(it)
                 }
-            )
+            },
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight(),
+            textStyle = LoginFieldTextStyle(color = colorScheme.onSurface),
+            cursorBrush = SolidColor(colorScheme.onSurface),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = if (mode == LoginCredentialMode.Captcha) {
+                    KeyboardType.Number
+                } else {
+                    KeyboardType.Password
+                },
+                imeAction = ImeAction.Done
+            ),
+            keyboardActions = KeyboardActions(
+                onDone = { onDismissKeyboard() }
+            ),
+            visualTransformation = if (mode == LoginCredentialMode.Password && !showPassword) {
+                PasswordVisualTransformation()
+            } else {
+                VisualTransformation.None
+            },
+            singleLine = true,
+            decorationBox = { innerTextField ->
+                LoginFieldDecorationBox(
+                    showPlaceholder = if (mode == LoginCredentialMode.Captcha) {
+                        captcha.isEmpty()
+                    } else {
+                        password.isEmpty()
+                    },
+                    placeholder = if (mode == LoginCredentialMode.Captcha) "验证码" else "密码",
+                    placeholderStyle = LoginFieldTextStyle(
+                        color = colorScheme.onSurface.copy(alpha = 0.35f)
+                    ),
+                    innerTextField = innerTextField
+                )
+            }
+        )
+
+        if (mode == LoginCredentialMode.Password) {
             Box(
                 modifier = Modifier
-                    .padding(start = 12.dp)
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable(
-                        enabled = canSendCaptcha,
                         indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) { onSendCaptcha() },
+                        interactionSource = remember { MutableInteractionSource() },
+                        onClick = onToggleShowPassword
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                when {
-                    isSendingCaptcha -> {
-                    }
-                    captchaCountdown > 0 -> {
-                        Text(
-                            text = "${captchaCountdown}s 后重试",
-                            color = actionColor,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    else -> {
-                        Text(
-                            text = "获取验证码",
-                            color = actionColor,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = if (showPassword) {
+                        Icons.Outlined.VisibilityOff
+                    } else {
+                        Icons.Outlined.Visibility
+                    },
+                    contentDescription = if (showPassword) "隐藏密码" else "显示密码",
+                    modifier = Modifier.size(17.dp),
+                    tint = colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                )
             }
+        } else {
+            Text(
+                text = when {
+                    captchaCountdown > 0 -> "${captchaCountdown}s"
+                    else -> "获取验证码"
+                },
+                modifier = Modifier
+                    .clickable(
+                        enabled = captchaCountdown == 0 && !isSendingCaptcha,
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { onSendCaptcha() }
+                    .padding(horizontal = 4.dp),
+                color = if (captchaCountdown == 0 && !isSendingCaptcha) {
+                    colorScheme.onSurface
+                } else {
+                    colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                },
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
 
-// 登录提交按钮
+// 与手机号行同一套左侧图标布局：18.dp 图标 + 12.dp 间距
+@Composable
+private fun RowScope.LoginFieldLeadingIcon(
+    icon: ImageVector,
+    contentDescription: String? = null,
+    onClick: (() -> Unit)? = null
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Icon(
+        imageVector = icon,
+        contentDescription = contentDescription,
+        modifier = Modifier
+            .size(18.dp)
+            .then(
+                if (onClick != null) {
+                    Modifier.pointerInput(onClick) {
+                        detectTapGestures { onClick() }
+                    }
+                } else {
+                    Modifier
+                }
+            ),
+        tint = colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+    )
+    Spacer(modifier = Modifier.width(12.dp))
+}
+
+@Composable
+private fun LoginFieldDecorationBox(
+    showPlaceholder: Boolean,
+    placeholder: String,
+    placeholderStyle: TextStyle,
+    innerTextField: @Composable () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        if (showPlaceholder) {
+            Text(
+                text = placeholder,
+                style = placeholderStyle
+            )
+        }
+        innerTextField()
+    }
+}
+
+private fun LoginFieldTextStyle(color: Color): TextStyle {
+    return TextStyle(
+        color = color,
+        fontSize = 14.sp,
+        lineHeight = 20.sp
+    )
+}
+
 @Composable
 private fun LoginSubmitButton(
     enabled: Boolean,
@@ -407,11 +452,9 @@ private fun LoginSubmitButton(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(54.dp)
+            .height(56.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                if (enabled) colorScheme.primary else colorScheme.primary.copy(alpha = 0.5f)
-            )
+            .background(colorScheme.primary)
             .clickable(
                 enabled = enabled,
                 indication = null,
@@ -420,16 +463,82 @@ private fun LoginSubmitButton(
         contentAlignment = Alignment.Center
     ) {
         Text(
-            text = "登录并继续",
+            text = "登录",
             color = colorScheme.onPrimary,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.sp
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
         )
     }
 }
 
-// 登录表单统一输入行样式
+@Composable
+private fun LoginAgreement(
+    agreed: Boolean,
+    onAgreedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.Top
+    ) {
+        Box(
+            modifier = Modifier
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onAgreedChange(!agreed) }
+                .padding(top = 3.dp)
+                .size(14.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                    if (agreed) colorScheme.onBackground else Color.Transparent
+                )
+                .border(
+                    width = 1.dp,
+                    color = if (agreed) {
+                        colorScheme.onBackground
+                    } else {
+                        colorScheme.onSurface.copy(alpha = 0.35f)
+                    },
+                    shape = RoundedCornerShape(4.dp)
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (agreed) {
+                Text(
+                    text = "✓",
+                    color = colorScheme.background,
+                    fontSize = 9.sp,
+                    fontWeight = FontWeight.Bold,
+                    lineHeight = 10.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(color = colorScheme.onBackground)) {
+                    append("我已阅读并同意")
+                }
+                append("《服务条款》")
+                withStyle(SpanStyle(color = colorScheme.onBackground)) {
+                    append("、")
+                }
+                append("《隐私政策》")
+            },
+            color = colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+            fontSize = 11.sp,
+            lineHeight = 18.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 @Composable
 private fun LoginInputRow(
     modifier: Modifier = Modifier,
@@ -440,11 +549,11 @@ private fun LoginInputRow(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(55.dp)
+            .height(56.dp)
             .clip(RoundedCornerShape(16.dp))
-            .background(colorScheme.surfaceVariant)
-            .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(16.dp))
-            .padding(horizontal = 16.dp),
+            .background(colorScheme.surface.copy(alpha = 0.22f))
+            .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.65f), RoundedCornerShape(16.dp))
+            .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content
     )
@@ -454,80 +563,58 @@ private fun LoginInputRow(
 @Composable
 private fun LoginThirdPartySection(
     onNeteaseClick: () -> Unit,
+    onQqMusicClick: () -> Unit,
+    onSpotifyClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colorScheme = MaterialTheme.colorScheme
-
-    Column(
+    Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 28.dp, bottom = 26.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            HorizontalDivider(
-                modifier = Modifier.weight(1f),
-                color = colorScheme.outlineVariant
-            )
-            Text(
-                text = "其他方式",
-                modifier = Modifier.padding(horizontal = 12.dp),
-                color = colorScheme.onSurfaceVariant.copy(alpha = 0.65f),
-                fontSize = 11.sp,
-                letterSpacing = 1.sp
-            )
-            HorizontalDivider(
-                modifier = Modifier.weight(1f),
-                color = colorScheme.outlineVariant
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .padding(bottom = 26.dp)
-                .size(44.dp)
-                .clip(RoundedCornerShape(50))
-                .background(colorScheme.surfaceVariant)
-                .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(50))
-                .clickable(onClick = onNeteaseClick),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = painterResource(id = R.drawable.ic_netease),
-                contentDescription = "使用网易云验证登录",
-                modifier = Modifier.size(23.dp),
-                tint = Color.Unspecified
-            )
-        }
+        LoginThirdPartyIcon(
+            iconRes = R.drawable.ic_netease,
+            contentDescription = "使用网易云登录",
+            onClick = onNeteaseClick
+        )
+        Spacer(modifier = Modifier.width(40.dp))
+        LoginThirdPartyIcon(
+            iconRes = R.drawable.ic_qq_music,
+            contentDescription = "使用 QQ 音乐登录",
+            onClick = onQqMusicClick
+        )
+        Spacer(modifier = Modifier.width(40.dp))
+        LoginThirdPartyIcon(
+            iconRes = R.drawable.ic_spotify,
+            contentDescription = "使用 Spotify 登录",
+            onClick = onSpotifyClick
+        )
     }
 }
 
-// 网易云第三方登录占位 Toast
 @Composable
-private fun LoginNeteaseToast(
-    visible: Boolean,
+private fun LoginThirdPartyIcon(
+    iconRes: Int,
+    contentDescription: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
 
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(),
-        exit = fadeOut(),
+    Box(
         modifier = modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .background(colorScheme.surface.copy(alpha = 0.2f))
+            .border(1.dp, colorScheme.outlineVariant.copy(alpha = 0.7f), CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "正在跳转网易云验证…",
-            modifier = Modifier
-                .clip(RoundedCornerShape(50))
-                .background(colorScheme.surfaceContainerHighest)
-                .border(1.dp, colorScheme.outlineVariant, RoundedCornerShape(50))
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            color = colorScheme.onSurface,
-            fontSize = 14.sp
+        Icon(
+            painter = painterResource(id = iconRes),
+            contentDescription = contentDescription,
+            modifier = Modifier.size(25.dp),
+            tint = Color.Unspecified
         )
     }
 }

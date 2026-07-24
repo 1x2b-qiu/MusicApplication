@@ -66,6 +66,22 @@ class AuthRepositoryImpl @Inject constructor(
         }
     }
 
+    // 使用手机号 + 密码登录
+    override suspend fun loginWithPassword(phone: String, password: String): LoginResult {
+        return runCatching {
+            val response = neteaseApi.loginCellphoneWithPassword(
+                phone = phone,
+                password = password
+            )
+            handleLoginResponse(response)
+        }.getOrElse { throwable ->
+            LoginResult(
+                success = false,
+                message = throwable.message ?: "登录失败，请检查网络和 API 服务"
+            )
+        }
+    }
+
     // 调用服务端登出并清除本地 Cookie 与用户信息
     override suspend fun logout() {
         runCatching { neteaseApi.logout() }

@@ -92,6 +92,15 @@ interface NeteaseApi {
         @Field("countrycode") countryCode: String = "86"
     ): LoginResponse
 
+    // 手机号 + 密码登录
+    @FormUrlEncoded
+    @POST("login/cellphone")
+    suspend fun loginCellphoneWithPassword(
+        @Field("phone") phone: String,
+        @Field("password") password: String,
+        @Field("countrycode") countryCode: String = "86"
+    ): LoginResponse
+
     // 查询当前登录状态
     @GET("login/status")
     suspend fun loginStatus(): LoginStatusResponse

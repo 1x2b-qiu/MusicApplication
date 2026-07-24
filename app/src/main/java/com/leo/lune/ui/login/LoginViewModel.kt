@@ -3,6 +3,7 @@ package com.leo.lune.ui.login
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.domain.usecase.auth.LoginWithCaptchaUseCase
+import com.leo.lune.domain.usecase.auth.LoginWithPasswordUseCase
 import com.leo.lune.domain.usecase.auth.SendCaptchaUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -14,12 +15,26 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+// 登录凭证模式：验证码 / 密码
+enum class LoginCredentialMode {
+    Captcha,
+    Password
+}
+
 // 登录页 UI 状态
 data class LoginUiState(
     // 手机号（仅数字，最多 11 位）
     val phone: String = "",
     // 短信验证码（仅数字，最多 4 位）
     val captcha: String = "",
+    // 登录密码
+    val password: String = "",
+    // 当前凭证输入模式
+    val credentialMode: LoginCredentialMode = LoginCredentialMode.Captcha,
+    // 密码是否明文显示
+    val showPassword: Boolean = false,
+    // 是否已勾选服务协议
+    val agreed: Boolean = false,
     // 是否正在提交登录请求
     val isLoading: Boolean = false,
     // 是否正在发送验证码
@@ -35,13 +50,15 @@ data class LoginUiState(
 )
 
 // 登录页 ViewModel
-// 负责验证码发送、验证码登录，以及 60 秒倒计时
+// 负责验证码发送、验证码 / 密码登录，以及 60 秒倒计时
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     // 向手机号发送登录验证码
     private val sendCaptchaUseCase: SendCaptchaUseCase,
     // 使用手机号 + 验证码完成登录
-    private val loginWithCaptchaUseCase: LoginWithCaptchaUseCase
+    private val loginWithCaptchaUseCase: LoginWithCaptchaUseCase,
+    // 使用手机号 + 密码完成登录
+    private val loginWithPasswordUseCase: LoginWithPasswordUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -60,6 +77,38 @@ class LoginViewModel @Inject constructor(
     fun onCaptchaChange(captcha: String) {
         _uiState.update {
             it.copy(captcha = captcha.filter(Char::isDigit).take(4), error = null)
+        }
+    }
+
+    fun onPasswordChange(password: String) {
+        _uiState.update {
+            it.copy(password = password.take(64), error = null)
+        }
+    }
+
+    fun toggleShowPassword() {
+        _uiState.update { it.copy(showPassword = !it.showPassword) }
+    }
+
+    fun onAgreedChange(agreed: Boolean) {
+        _uiState.update { it.copy(agreed = agreed, error = null) }
+    }
+
+    // 在验证码 / 密码模式间切换，并清空另一侧凭证相关临时状态
+    fun switchCredentialMode() {
+        _uiState.update { state ->
+            val nextMode = if (state.credentialMode == LoginCredentialMode.Captcha) {
+                LoginCredentialMode.Password
+            } else {
+                LoginCredentialMode.Captcha
+            }
+            state.copy(
+                credentialMode = nextMode,
+                password = "",
+                showPassword = false,
+                captchaHint = null,
+                error = null
+            )
         }
     }
 
@@ -98,29 +147,41 @@ class LoginViewModel @Inject constructor(
         }
     }
 
-    // 提交验证码登录
+    // 按当前模式提交登录（验证码或密码）
     fun login() {
         val state = _uiState.value
         if (state.isLoading) return
 
-        if (state.phone.isBlank() || state.captcha.isBlank()) {
-            _uiState.update { it.copy(error = "请填写手机号和验证码") }
+        if (!state.agreed) {
+            _uiState.update { it.copy(error = "请先同意服务条款与隐私政策") }
+            return
+        }
+        if (state.phone.isBlank()) {
+            _uiState.update { it.copy(error = "请填写手机号") }
             return
         }
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            val result = loginWithCaptchaUseCase(state.phone, state.captcha)
-            if (result.success) {
-                _uiState.update {
-                    it.copy(isLoading = false, loginSuccess = true)
+        when (state.credentialMode) {
+            LoginCredentialMode.Captcha -> {
+                if (state.captcha.isBlank()) {
+                    _uiState.update { it.copy(error = "请填写验证码") }
+                    return
                 }
-            } else {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        error = result.message ?: "登录失败"
-                    )
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isLoading = true, error = null) }
+                    val result = loginWithCaptchaUseCase(state.phone, state.captcha)
+                    applyLoginResult(result.success, result.message)
+                }
+            }
+            LoginCredentialMode.Password -> {
+                if (state.password.isBlank()) {
+                    _uiState.update { it.copy(error = "请填写密码") }
+                    return
+                }
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isLoading = true, error = null) }
+                    val result = loginWithPasswordUseCase(state.phone, state.password)
+                    applyLoginResult(result.success, result.message)
                 }
             }
         }
@@ -129,6 +190,21 @@ class LoginViewModel @Inject constructor(
     // 登录成功事件已被 UI 处理后调用，防止重复触发导航
     fun consumeLoginSuccess() {
         _uiState.update { it.copy(loginSuccess = false) }
+    }
+
+    private fun applyLoginResult(success: Boolean, message: String?) {
+        if (success) {
+            _uiState.update {
+                it.copy(isLoading = false, loginSuccess = true)
+            }
+        } else {
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    error = message ?: "登录失败"
+                )
+            }
+        }
     }
 
     // 启动 60 秒验证码倒计时

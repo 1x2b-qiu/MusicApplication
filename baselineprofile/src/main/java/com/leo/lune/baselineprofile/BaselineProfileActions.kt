@@ -15,7 +15,7 @@ fun MacrobenchmarkScope.musicAppJourney(startActivity: Boolean = true) {
 
     // 会话恢复后直接进首页或登录页
     val ready = device.wait(Until.hasObject(By.text("首页")), 20_000) ||
-        device.wait(Until.hasObject(By.text("登录并继续")), 5_000)
+        device.wait(Until.hasObject(By.text("登录")), 5_000)
     if (!ready) return
 
     if (device.findObject(By.text("首页")) != null) {
