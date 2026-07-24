@@ -6,10 +6,10 @@ import com.leo.lune.domain.usecase.music.LikeSongUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,15 +48,19 @@ class FavoriteManager @Inject constructor(
     private var currentUserId: Long? = null
 
     init {
-        // 启动时根据登录态预热红心列表，避免首屏收藏图标闪错
+        // 持续观察登录态：登录（含会话恢复）后预热红心列表，登出后清空缓存
         scope.launch {
-            val loginState = observeLoginStateUseCase().first()
-            currentUserId = loginState.userId?.takeIf { loginState.isLoggedIn }
-            if (currentUserId != null) {
-                refreshFromServer(currentUserId!!)
-            } else {
-                likedSongIds = emptySet()
-                _isFavorite.value = false
+            observeLoginStateUseCase().collect { loginState ->
+                val userId = loginState.userId?.takeIf { loginState.isLoggedIn }
+                if (userId != currentUserId) {
+                    currentUserId = userId
+                    if (userId != null) {
+                        refreshFromServer(userId)
+                    } else {
+                        likedSongIds = emptySet()
+                        _isFavorite.value = false
+                    }
+                }
             }
         }
     }
@@ -99,14 +103,21 @@ class FavoriteManager @Inject constructor(
     }
 
     // 从服务端刷新红心 id 集合，并同步当前曲收藏态
+    // 失败时延迟重试：服务先于 Activity 重建时 Cookie 尚未恢复，首次请求可能失败
     fun refreshFromServer(userId: Long) {
         scope.launch {
-            runCatching {
-                getLikedSongIdsUseCase(userId)
-            }.onSuccess { ids ->
-                likedSongIds = ids.toSet()
-                // 列表可能晚于快照恢复到达，补一次当前曲红心
-                syncForSong(currentSongId)
+            repeat(REFRESH_ATTEMPTS) { attempt ->
+                // 用户已切换 / 登出，放弃本次（过期的）刷新
+                if (currentUserId != userId) return@launch
+                val succeeded = runCatching { getLikedSongIdsUseCase(userId) }
+                    .onSuccess { ids ->
+                        likedSongIds = ids.toSet()
+                        // 列表可能晚于快照恢复到达，补一次当前曲红心
+                        syncForSong(currentSongId)
+                    }
+                    .isSuccess
+                if (succeeded) return@launch
+                if (attempt < REFRESH_ATTEMPTS - 1) delay(REFRESH_RETRY_DELAY_MS)
             }
         }
     }
@@ -129,5 +140,12 @@ class FavoriteManager @Inject constructor(
         likedSongIds = if (attemptedFavorite) likedSongIds - songId else likedSongIds + songId
         _isFavorite.value = !attemptedFavorite
         _lastResult.value = FavoriteResult.Failure(message)
+    }
+
+    private companion object {
+        // 红心列表刷新总尝试次数
+        const val REFRESH_ATTEMPTS = 4
+        // 相邻两次刷新之间的间隔；覆盖「划掉后台→重新进入」的会话恢复窗口
+        const val REFRESH_RETRY_DELAY_MS = 2_000L
     }
 }

@@ -16,7 +16,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -66,11 +65,12 @@ class HomeViewModel @Inject constructor(
     private var loadJob: Job? = null
 
     init {
-        // 进页时只取一次登录态，再加载「我喜欢的」
+        // 持续观察登录态：会话恢复 / 登录 / 登出后自动刷新「我喜欢的」
         viewModelScope.launch {
-            val loginState = observeLoginStateUseCase().first()
-            _uiState.update { it.copy(loginState = loginState) }
-            loadHomeContent()
+            observeLoginStateUseCase().collect { loginState ->
+                _uiState.update { it.copy(loginState = loginState) }
+                loadHomeContent()
+            }
         }
         // 只取本页需要的播放字段，过滤无关更新（含顶栏歌词）
         viewModelScope.launch {

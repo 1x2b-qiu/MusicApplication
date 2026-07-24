@@ -275,6 +275,7 @@ class MusicPlayerController @Inject constructor(
                 queue = resolvedQueue,
                 queueIndex = queueIndex,
                 isLoading = true,
+                isPlaying = false,
                 error = null,
                 playUrl = null,
                 lyrics = emptyList(),

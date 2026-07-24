@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -46,7 +45,7 @@ data class LikedUiState(
 class LikedViewModel @Inject constructor(
     // 拉取网易云「我喜欢的音乐」歌单全部歌曲
     private val getLikedMusicPlaylistSongsUseCase: GetLikedMusicPlaylistSongsUseCase,
-    // 进页时读取一次当前 userId
+    // 持续观察登录态变化
     private val observeLoginStateUseCase: ObserveLoginStateUseCase,
     // 全局播放控制器，本页不直接持有 ExoPlayer
     private val playerController: MusicPlayerController
@@ -58,14 +57,16 @@ class LikedViewModel @Inject constructor(
 
     // 当前进行中的歌单加载任务，重试时可取消旧任务
     private var loadJob: Job? = null
-    // 进页时读到的 userId，供失败重试使用
+    // 当前登录用户 id，随登录态持续更新
     private var cachedUserId: Long? = null
 
     init {
-        // 进页时只取一次 userId，再拉取全量喜欢歌曲（本页进入时已登录）
+        // 持续观察登录态：userId 变化（会话恢复 / 登录 / 登出）后重新拉取喜欢歌单
         viewModelScope.launch {
-            cachedUserId = observeLoginStateUseCase().first().userId
-            loadLikedSongs()
+            observeLoginStateUseCase().collect { loginState ->
+                cachedUserId = loginState.userId
+                loadLikedSongs()
+            }
         }
         // 只取本页需要的播放字段，过滤无关更新
         viewModelScope.launch {
