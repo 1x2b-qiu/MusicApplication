@@ -1,5 +1,9 @@
 package com.leo.lune.ui.settings
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,10 +17,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
@@ -30,11 +32,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.documentfile.provider.DocumentFile
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leo.lune.domain.model.DownloadQuality
@@ -53,7 +57,7 @@ private fun DownloadQuality.sizeHint(): String = when (this) {
     DownloadQuality.Lossless -> "约 10 MB / 分钟"
 }
 
-// 下载设置页：默认音质单选 + 存储位置入口（仅 UI）
+// 下载设置页：默认音质单选 + SAF 存储目录选择
 @Composable
 fun DownloadSettingsScreen(
     onBack: () -> Unit,
@@ -62,6 +66,23 @@ fun DownloadSettingsScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
+
+    val openTreeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
+            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        runCatching {
+            contentResolver.takePersistableUriPermission(uri, flags)
+        }
+        val displayName = DocumentFile.fromTreeUri(context, uri)?.name
+            ?.takeIf { it.isNotBlank() }
+            ?: "已选择文件夹"
+        viewModel.setStorageLocation(uri.toString(), displayName)
+    }
 
     Column(
         modifier = Modifier
@@ -96,8 +117,9 @@ fun DownloadSettingsScreen(
             Spacer(modifier = Modifier.height(12.dp))
             StorageLocationRow(
                 title = "内部存储",
-                pathHint = "我的音乐 / Downloads",
-                darkTheme = darkTheme
+                pathHint = uiState.storagePathHint,
+                darkTheme = darkTheme,
+                onClick = { openTreeLauncher.launch(null) }
             )
         }
     }
@@ -234,7 +256,8 @@ private fun QualityOptionRow(
 private fun StorageLocationRow(
     title: String,
     pathHint: String,
-    darkTheme: Boolean
+    darkTheme: Boolean,
+    onClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val iconBg = if (darkTheme) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.055f)
@@ -245,6 +268,7 @@ private fun StorageLocationRow(
             .clip(CardShape)
             .background(colorScheme.surfaceVariant)
             .border(0.67.dp, colorScheme.outlineVariant, CardShape)
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -278,7 +302,8 @@ private fun StorageLocationRow(
                 color = colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 2.dp),
-                maxLines = 1,
+                // 完整路径可能较长，允许多行展示
+                maxLines = 4,
                 overflow = TextOverflow.Ellipsis
             )
         }

@@ -309,7 +309,7 @@ class MusicPlayerController @Inject constructor(
                 // 已下载优先播本地文件（可指定音质），否则拉在线流地址
                 val localPath = getLocalSongPathUseCase(requestSongId, requestQuality)
                 val playUri = if (localPath != null) {
-                    Uri.fromFile(File(localPath)).toString()
+                    localPathToPlayUri(localPath)
                 } else {
                     val songUrl = getSongUrlUseCase(requestSongId)
                     songUrl.url
@@ -543,7 +543,7 @@ class MusicPlayerController @Inject constructor(
                 // 已下载优先用本地文件，否则拉在线流地址
                 val localPath = getLocalSongPathUseCase(nextSong.id)
                 val playUri = if (localPath != null) {
-                    Uri.fromFile(File(localPath)).toString()
+                    localPathToPlayUri(localPath)
                 } else {
                     getSongUrlUseCase(nextSong.id).url
                 }
@@ -631,6 +631,15 @@ class MusicPlayerController @Inject constructor(
     private fun ensurePlaybackService() {
         val intent = Intent(context, MusicPlaybackService::class.java)
         context.startForegroundService(intent)
+    }
+
+    // 本地路径转播放 URI：SAF content URI 原样使用，私有文件路径转 file://
+    private fun localPathToPlayUri(localPath: String): String {
+        return if (localPath.startsWith("content:", ignoreCase = true)) {
+            localPath
+        } else {
+            Uri.fromFile(File(localPath)).toString()
+        }
     }
 
     // 将当前播放状态快照持久化到 Room，供进程被杀后恢复

@@ -19,13 +19,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 // 本地下载仓储实现
-// 拉流地址 → 写入应用私有目录 → Room 存元数据；同曲可按音质多档并存
-// 播放侧取最高音质本地路径
+// 拉流 → 私有临时文件 → 提交到 SAF 目录或私有目录 → Room 存元数据
 @Singleton
 class DownloadRepositoryImpl @Inject constructor(
     private val neteaseApi: NeteaseApi,
@@ -43,7 +41,7 @@ class DownloadRepositoryImpl @Inject constructor(
         isCancelled: () -> Boolean
     ): DownloadedSong = withContext(Dispatchers.IO) {
         val existing = downloadedSongDao.getById(song.id, quality.bitrate)
-        if (existing != null && File(existing.localPath).isFile) {
+        if (existing != null && audioFileStore.exists(existing.localPath)) {
             onProgress?.invoke(existing.fileSizeBytes, existing.fileSizeBytes)
             return@withContext existing.toDownloadedSong()
         }
@@ -61,19 +59,18 @@ class DownloadRepositoryImpl @Inject constructor(
 
         val extension = songDownloader.guessExtension(url, contentType = null)
         val tempFile = audioFileStore.tempFile(song.id, quality.bitrate)
-        val targetFile = audioFileStore.targetFile(song.id, quality.bitrate, extension)
 
         try {
             // 保留已有临时文件，供 SongDownloader 通过 Range 断点续传
             val size = songDownloader.download(url, tempFile, onProgress, isCancelled)
-            if (targetFile.exists()) targetFile.delete()
-            // rename 失败时退化为 copy，保证跨存储场景也能落盘
-            if (!tempFile.renameTo(targetFile)) {
-                tempFile.copyTo(targetFile, overwrite = true)
-                tempFile.delete()
-            }
+            val localPath = audioFileStore.commitDownload(
+                songId = song.id,
+                bitrate = quality.bitrate,
+                extension = extension,
+                tempFile = tempFile
+            )
             val entity = song.toDownloadedSongEntity(
-                localPath = targetFile.absolutePath,
+                localPath = localPath,
                 quality = quality,
                 fileSizeBytes = size
             )
@@ -91,17 +88,17 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
-    // 返回本地绝对路径；指定 quality 则取该档，否则取最高音质；文件缺失则视为无
+    // 返回本地路径/URI；指定 quality 则取该档，否则取最高音质；文件缺失则视为无
     override suspend fun getLocalPath(
         songId: Long,
         quality: DownloadQuality?
     ): String? = withContext(Dispatchers.IO) {
         if (quality != null) {
             val entity = downloadedSongDao.getById(songId, quality.bitrate) ?: return@withContext null
-            return@withContext entity.localPath.takeIf { File(it).isFile }
+            return@withContext entity.localPath.takeIf { audioFileStore.exists(it) }
         }
         downloadedSongDao.getAllBySongId(songId)
-            .firstOrNull { File(it.localPath).isFile }
+            .firstOrNull { audioFileStore.exists(it.localPath) }
             ?.localPath
     }
 
@@ -128,10 +125,11 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
-    // 删除指定音质的私有目录文件与 Room 记录
+    // 删除指定音质的本地文件与 Room 记录
     override suspend fun deleteDownload(songId: Long, quality: DownloadQuality) =
         withContext(Dispatchers.IO) {
-            audioFileStore.deleteForSong(songId, quality.bitrate)
+            val existing = downloadedSongDao.getById(songId, quality.bitrate)
+            audioFileStore.deleteForSong(songId, quality.bitrate, existing?.localPath)
             downloadedSongDao.deleteById(songId, quality.bitrate)
             pendingDownloadDao.deleteById(songId, quality.bitrate)
         }

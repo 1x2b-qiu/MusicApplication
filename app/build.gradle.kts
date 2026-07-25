@@ -105,6 +105,7 @@ dependencies {
 
     implementation(libs.haze)
 
+    implementation(libs.androidx.documentfile)
     implementation(libs.androidx.profileinstaller)
     baselineProfile(project(":baselineprofile"))
 
