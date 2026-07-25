@@ -13,7 +13,7 @@ enum class DownloadQuality(
     Lossless(999_000, "无损", "FLAC");
 
     companion object {
-        val Default: DownloadQuality = High
+        val Default: DownloadQuality = Standard
 
         // 按码率还原档位；未知码率回退默认
         fun fromBitrate(bitrate: Int): DownloadQuality {
