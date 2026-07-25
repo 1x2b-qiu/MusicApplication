@@ -11,6 +11,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.usecase.download.GetLocalSongPathUseCase
@@ -261,8 +262,13 @@ class MusicPlayerController @Inject constructor(
 
     // 播放指定歌曲：结算上一曲时长 → 更新状态并拉歌词 → 启动服务 → 异步取 URL 后 prepare/play
     // 切歌会取消进行中的 URL/歌词任务，并用 songId 校验防止过期回调污染状态
+    // localQuality：本地下载列表点选某档时传入，仅本次播放用该档；其它入口不传则优先最高音质
     @RequiresApi(Build.VERSION_CODES.O)
-    fun playSong(song: Song, queue: List<Song> = emptyList()) {
+    fun playSong(
+        song: Song,
+        queue: List<Song> = emptyList(),
+        localQuality: DownloadQuality? = null
+    ) {
         playStatsRecorderManager.settleListenDuration()
         val resolvedQueue = queue.ifEmpty { listOf(song) }
         val queueIndex = resolvedQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
@@ -294,13 +300,14 @@ class MusicPlayerController @Inject constructor(
         favoriteManager.syncForSong(song.id)
 
         val requestSongId = song.id
+        val requestQuality = localQuality
         urlJob = scope.launch {
             try {
                 // 封面下载与播放地址获取并行，互不阻塞
                 val artworkDeferred = async { artworkLoader.loadArtworkBytes(song.coverUrl) }
 
-                // 已下载优先播本地文件，否则拉在线流地址
-                val localPath = getLocalSongPathUseCase(requestSongId)
+                // 已下载优先播本地文件（可指定音质），否则拉在线流地址
+                val localPath = getLocalSongPathUseCase(requestSongId, requestQuality)
                 val playUri = if (localPath != null) {
                     Uri.fromFile(File(localPath)).toString()
                 } else {

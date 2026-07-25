@@ -141,7 +141,8 @@ fun PlayerScreen(
                     downloadProgress = uiState.downloadProgress,
                     onDownloadClick = {
                         when {
-                            uiState.isDownloaded || uiState.isDownloading -> onDownloadsClick()
+                            // 下载中或三档齐全：去本地下载页；否则打开音质弹层补下其它档
+                            uiState.isDownloading || uiState.isDownloaded -> onDownloadsClick()
                             else -> downloadSheetOpen = true
                         }
                     },

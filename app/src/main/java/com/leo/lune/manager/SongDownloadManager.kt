@@ -26,8 +26,10 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 // 进行中的下载任务快照（本地下载页「正在下载」、播放页下载按钮共用）
+// 同曲不同音质各占一条任务
 data class ActiveDownloadTask(
     val songId: Long,
+    val quality: DownloadQuality,
     val title: String,
     val artist: String,
     val coverUrl: String?,
@@ -42,6 +44,7 @@ data class ActiveDownloadTask(
 
 // 全局下载任务管理（Hilt 单例）
 // 统一入队 / 进度 / 暂停 / 取消；Room 持久化进行中任务，启动后恢复为暂停态
+// 任务键为 songId + quality，支持同曲多档并行
 @Singleton
 class SongDownloadManager @Inject constructor(
     private val downloadSongUseCase: DownloadSongUseCase,
@@ -59,31 +62,33 @@ class SongDownloadManager @Inject constructor(
 
     // SupervisorJob：单个任务失败不影响同 scope 里其他下载
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    // songId → 协程 Job，用于判断是否在下、以及 cancel / pause
-    private val jobs = mutableMapOf<Long, Job>()
+    // taskKey → 协程 Job
+    private val jobs = mutableMapOf<String, Job>()
     // 暂停后继续需要原 Song / 音质，故单独缓存请求参数
-    private val requests = mutableMapOf<Long, DownloadRequest>()
-    // 已把真实总长写入 Room 的 songId，避免每次进度回调都打 IO
-    private val persistedTotalBytesSongIds = mutableSetOf<Long>()
+    private val requests = mutableMapOf<String, DownloadRequest>()
+    // 已把真实总长写入 Room 的 taskKey，避免每次进度回调都打 IO
+    private val persistedTotalBytesKeys = mutableSetOf<String>()
 
     init {
         // 进程重启后从 Room 恢复列表；一律暂停，等用户手动继续
         restorePendingTasks()
     }
 
-    // 入队下载；同曲已在列表（含暂停）则忽略或恢复，避免重复请求
+    // 入队下载；同曲同音质已在列表（含暂停）则忽略或恢复，避免重复请求
     fun enqueue(song: Song, quality: DownloadQuality = DownloadQuality.Default) {
-        val existing = _tasks.value.find { it.songId == song.id }
+        val key = taskKey(song.id, quality)
+        val existing = _tasks.value.find { it.songId == song.id && it.quality == quality }
         if (existing != null && existing.error == null) {
-            if (existing.paused) resume(song.id)
+            if (existing.paused) resume(song.id, quality)
             return
         }
-        if (jobs[song.id]?.isActive == true) return
+        if (jobs[key]?.isActive == true) return
 
-        requests[song.id] = DownloadRequest(song, quality)
+        requests[key] = DownloadRequest(song, quality)
         upsertTask(
             ActiveDownloadTask(
                 songId = song.id,
+                quality = quality,
                 title = song.name,
                 artist = song.artists,
                 coverUrl = song.coverUrl,
@@ -98,42 +103,47 @@ class SongDownloadManager @Inject constructor(
     }
 
     // 暂停：停协程但保留任务、进度与临时文件，供断点续传
-    fun pause(songId: Long) {
-        val task = _tasks.value.find { it.songId == songId } ?: return
+    fun pause(songId: Long, quality: DownloadQuality) {
+        val key = taskKey(songId, quality)
+        val task = _tasks.value.find { it.songId == songId && it.quality == quality } ?: return
         if (task.paused || task.error != null) return
         _tasks.update { list ->
-            list.map { if (it.songId == songId) it.copy(paused = true) else it }
+            list.map {
+                if (it.songId == songId && it.quality == quality) it.copy(paused = true) else it
+            }
         }
-        persistPaused(songId, paused = true)
-        jobs.remove(songId)?.cancel()
+        persistPaused(songId, quality, paused = true)
+        jobs.remove(key)?.cancel()
     }
 
     // 继续：保留当前进度，底层对已有临时文件发 Range 续传
-    fun resume(songId: Long) {
-        val request = requests[songId] ?: return
-        val task = _tasks.value.find { it.songId == songId } ?: return
+    fun resume(songId: Long, quality: DownloadQuality) {
+        val key = taskKey(songId, quality)
+        val request = requests[key] ?: return
+        val task = _tasks.value.find { it.songId == songId && it.quality == quality } ?: return
         if (!task.paused) return
-        if (jobs[songId]?.isActive == true) return
+        if (jobs[key]?.isActive == true) return
 
         upsertTask(task.copy(paused = false, error = null))
-        persistPaused(songId, paused = false)
+        persistPaused(songId, quality, paused = false)
         startJob(request.song, request.quality)
     }
 
-    fun togglePause(songId: Long) {
-        val task = _tasks.value.find { it.songId == songId } ?: return
-        if (task.paused) resume(songId) else pause(songId)
+    fun togglePause(songId: Long, quality: DownloadQuality) {
+        val task = _tasks.value.find { it.songId == songId && it.quality == quality } ?: return
+        if (task.paused) resume(songId, quality) else pause(songId, quality)
     }
 
-    // 取消指定歌曲下载：先停协程，再清理临时文件、Room 记录与 UI 列表
-    fun cancel(songId: Long) {
-        val job = jobs.remove(songId)
-        requests.remove(songId)
-        persistedTotalBytesSongIds.remove(songId)
-        removeTask(songId)
+    // 取消指定歌曲+音质下载：先停协程，再清理临时文件、Room 记录与 UI 列表
+    fun cancel(songId: Long, quality: DownloadQuality) {
+        val key = taskKey(songId, quality)
+        val job = jobs.remove(key)
+        requests.remove(key)
+        persistedTotalBytesKeys.remove(key)
+        removeTask(songId, quality)
         if (job == null || !job.isActive) {
             // 已暂停或无活跃 Job：此处直接清临时文件与 pending
-            discardPartial(songId)
+            discardPartial(songId, quality)
         }
         // 仍在下载：等协程取消回调里再清，避免与写盘竞态
         job?.cancel()
@@ -149,8 +159,11 @@ class SongDownloadManager @Inject constructor(
             for (pending in pendingList) {
                 val song = pending.song
                 val quality = pending.quality
+                val key = taskKey(song.id, quality)
                 // 已下字节用临时文件；总长优先 Room 里的真实值，没有再估算
-                val bytes = runCatching { getPartialDownloadBytesUseCase(song.id) }.getOrDefault(0L)
+                val bytes = runCatching {
+                    getPartialDownloadBytesUseCase(song.id, quality)
+                }.getOrDefault(0L)
                 val progress = progressFromPartialBytes(
                     bytes = bytes,
                     durationMs = song.durationMs,
@@ -158,13 +171,14 @@ class SongDownloadManager @Inject constructor(
                     knownTotalBytes = pending.totalBytes
                 )
                 if (pending.totalBytes > 0L) {
-                    persistedTotalBytesSongIds.add(song.id)
+                    persistedTotalBytesKeys.add(key)
                 }
 
                 // 续传需要 Song / 音质，先缓存到 requests
-                requests[song.id] = DownloadRequest(song, quality)
+                requests[key] = DownloadRequest(song, quality)
                 restored += ActiveDownloadTask(
                     songId = song.id,
+                    quality = quality,
                     title = song.name,
                     artist = song.artists,
                     coverUrl = song.coverUrl,
@@ -175,13 +189,16 @@ class SongDownloadManager @Inject constructor(
                     error = null
                 )
                 // 与 UI 一致，把 paused=true 写回 Room
-                runCatching { updatePendingDownloadPausedUseCase(song.id, paused = true) }
+                runCatching {
+                    updatePendingDownloadPausedUseCase(song.id, quality, paused = true)
+                }
             }
             _tasks.value = restored
         }
     }
 
     private fun startJob(song: Song, quality: DownloadQuality) {
+        val key = taskKey(song.id, quality)
         val job = scope.launch {
             runCatching {
                 downloadSongUseCase(
@@ -191,44 +208,46 @@ class SongDownloadManager @Inject constructor(
                         // 总长未知时无法算百分比，跳过本次回调
                         if (totalBytes <= 0L) return@downloadSongUseCase
                         // 首次拿到真实总长时写入 Room，供杀进程后恢复进度
-                        persistTotalBytesOnce(song.id, totalBytes)
+                        persistTotalBytesOnce(song.id, quality, totalBytes)
                         val fraction = (bytesRead.toFloat() / totalBytes).coerceIn(0f, 1f)
-                        updateProgress(song.id, fraction)
+                        updateProgress(song.id, quality, fraction)
                     },
                     // 与协程取消联动：Job.cancel 后底层 OkHttp 循环会中断
                     isCancelled = { !isActive }
                 )
             }.onSuccess {
                 // 落盘成功后由 ObserveDownloadedSongs 刷新「已下载」，此处只清进行中项
-                requests.remove(song.id)
-                persistedTotalBytesSongIds.remove(song.id)
-                removeTask(song.id)
+                requests.remove(key)
+                persistedTotalBytesKeys.remove(key)
+                removeTask(song.id, quality)
                 // downloadSong 成功路径已删 pending；此处再删一次保证兜底
-                clearPending(song.id)
+                clearPending(song.id, quality)
             }.onFailure { error ->
                 if (error is CancellationException) {
                     // pause 会先标 paused 再 cancel，需保留任务与临时文件
                     // 仅当列表里已没有该任务（cancel 已 remove）或不存在暂停标记时，才当取消清理
-                    val task = _tasks.value.find { it.songId == song.id }
+                    val task = _tasks.value.find {
+                        it.songId == song.id && it.quality == quality
+                    }
                     if (task == null) {
-                        requests.remove(song.id)
-                        persistedTotalBytesSongIds.remove(song.id)
-                        discardPartial(song.id)
+                        requests.remove(key)
+                        persistedTotalBytesKeys.remove(key)
+                        discardPartial(song.id, quality)
                     } else if (!task.paused) {
-                        requests.remove(song.id)
-                        persistedTotalBytesSongIds.remove(song.id)
-                        removeTask(song.id)
-                        discardPartial(song.id)
+                        requests.remove(key)
+                        persistedTotalBytesKeys.remove(key)
+                        removeTask(song.id, quality)
+                        discardPartial(song.id, quality)
                     }
                 } else {
                     // 失败保留一条带 error 的任务，供播放页展示文案；写回暂停便于杀进程后恢复
-                    updateError(song.id, error.message ?: "下载失败")
-                    persistPaused(song.id, paused = true)
+                    updateError(song.id, quality, error.message ?: "下载失败")
+                    persistPaused(song.id, quality, paused = true)
                 }
             }
-            jobs.remove(song.id)
+            jobs.remove(key)
         }
-        jobs[song.id] = job
+        jobs[key] = job
     }
 
     private fun persistPending(song: Song, quality: DownloadQuality, paused: Boolean) {
@@ -246,39 +265,43 @@ class SongDownloadManager @Inject constructor(
         }
     }
 
-    private fun persistPaused(songId: Long, paused: Boolean) {
+    private fun persistPaused(songId: Long, quality: DownloadQuality, paused: Boolean) {
         scope.launch(Dispatchers.IO) {
-            runCatching { updatePendingDownloadPausedUseCase(songId, paused) }
+            runCatching { updatePendingDownloadPausedUseCase(songId, quality, paused) }
         }
     }
 
     // 每个任务只写一次真实总长，避免进度回调打爆 Room
-    private fun persistTotalBytesOnce(songId: Long, totalBytes: Long) {
+    private fun persistTotalBytesOnce(songId: Long, quality: DownloadQuality, totalBytes: Long) {
         if (totalBytes <= 0L) return
-        if (!persistedTotalBytesSongIds.add(songId)) return
+        val key = taskKey(songId, quality)
+        if (!persistedTotalBytesKeys.add(key)) return
         scope.launch(Dispatchers.IO) {
-            runCatching { updatePendingDownloadTotalBytesUseCase(songId, totalBytes) }
-                .onFailure { persistedTotalBytesSongIds.remove(songId) }
+            runCatching {
+                updatePendingDownloadTotalBytesUseCase(songId, quality, totalBytes)
+            }.onFailure { persistedTotalBytesKeys.remove(key) }
         }
     }
 
-    private fun clearPending(songId: Long) {
+    private fun clearPending(songId: Long, quality: DownloadQuality) {
         scope.launch(Dispatchers.IO) {
-            runCatching { deletePendingDownloadUseCase(songId) }
+            runCatching { deletePendingDownloadUseCase(songId, quality) }
         }
     }
 
-    private fun discardPartial(songId: Long) {
+    private fun discardPartial(songId: Long, quality: DownloadQuality) {
         scope.launch(Dispatchers.IO) {
-            runCatching { discardPartialDownloadUseCase(songId) }
-            runCatching { deletePendingDownloadUseCase(songId) }
+            runCatching { discardPartialDownloadUseCase(songId, quality) }
+            runCatching { deletePendingDownloadUseCase(songId, quality) }
         }
     }
 
     // 有则原地替换（保持队列位置）、无则追加
     private fun upsertTask(task: ActiveDownloadTask) {
         _tasks.update { list ->
-            val index = list.indexOfFirst { it.songId == task.songId }
+            val index = list.indexOfFirst {
+                it.songId == task.songId && it.quality == task.quality
+            }
             if (index < 0) {
                 list + task
             } else {
@@ -288,10 +311,10 @@ class SongDownloadManager @Inject constructor(
     }
 
     // 仅更新进度；不改 paused，避免暂停后迟到的进度回调把标记清掉，进而被当成取消清理
-    private fun updateProgress(songId: Long, progress: Float) {
+    private fun updateProgress(songId: Long, quality: DownloadQuality, progress: Float) {
         _tasks.update { list ->
             list.map { task ->
-                if (task.songId == songId) {
+                if (task.songId == songId && task.quality == quality) {
                     if (task.paused) {
                         // 已暂停：忽略迟到进度，保留暂停态与当前进度
                         task
@@ -305,16 +328,22 @@ class SongDownloadManager @Inject constructor(
         }
     }
 
-    private fun updateError(songId: Long, message: String) {
+    private fun updateError(songId: Long, quality: DownloadQuality, message: String) {
         _tasks.update { list ->
             list.map { task ->
-                if (task.songId == songId) task.copy(error = message, paused = false) else task
+                if (task.songId == songId && task.quality == quality) {
+                    task.copy(error = message, paused = false)
+                } else {
+                    task
+                }
             }
         }
     }
 
-    private fun removeTask(songId: Long) {
-        _tasks.update { list -> list.filterNot { it.songId == songId } }
+    private fun removeTask(songId: Long, quality: DownloadQuality) {
+        _tasks.update { list ->
+            list.filterNot { it.songId == songId && it.quality == quality }
+        }
     }
 
     private data class DownloadRequest(
@@ -323,6 +352,9 @@ class SongDownloadManager @Inject constructor(
     )
 
     companion object {
+        fun taskKey(songId: Long, quality: DownloadQuality): String =
+            "${songId}_${quality.bitrate}"
+
         // 用临时文件已下字节 / 真实或估算总长，得到恢复时的进度
         fun progressFromPartialBytes(
             bytes: Long,

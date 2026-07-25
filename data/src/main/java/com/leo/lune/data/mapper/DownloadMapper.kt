@@ -22,18 +22,18 @@ fun DownloadedSongEntity.toDownloadedSong(): DownloadedSong = DownloadedSong(
 
 fun Song.toDownloadedSongEntity(
     localPath: String,
-    bitrate: Int,
+    quality: DownloadQuality,
     fileSizeBytes: Long,
     downloadedAt: Long = System.currentTimeMillis()
 ): DownloadedSongEntity = DownloadedSongEntity(
     songId = id,
+    bitrate = quality.bitrate,
     name = name,
     artists = artists,
     album = album,
     coverUrl = coverUrl,
     durationMs = durationMs,
     localPath = localPath,
-    bitrate = bitrate,
     fileSizeBytes = fileSizeBytes,
     downloadedAt = downloadedAt
 )
@@ -54,12 +54,12 @@ fun PendingDownloadEntity.toPendingDownload(): PendingDownload = PendingDownload
 
 fun PendingDownload.toEntity(): PendingDownloadEntity = PendingDownloadEntity(
     songId = song.id,
+    bitrate = quality.bitrate,
     name = song.name,
     artists = song.artists,
     album = song.album,
     coverUrl = song.coverUrl,
     durationMs = song.durationMs,
-    bitrate = quality.bitrate,
     paused = paused,
     totalBytes = totalBytes
 )

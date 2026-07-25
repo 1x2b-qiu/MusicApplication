@@ -9,7 +9,7 @@ import com.leo.lune.manager.SongDownloadManager
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.download.ObserveSongDownloadedUseCase
+import com.leo.lune.domain.usecase.download.ObserveDownloadedQualitiesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -44,11 +44,13 @@ data class PlayerUiState(
     val playMode: PlayerPlayMode = PlayerPlayMode.Shuffle,
     // 歌曲总时长（毫秒），来自 Song 元数据；播放器实际时长见 positionState
     val durationMs: Long = 0L,
-    // 本地下载：是否已落盘 / 是否进行中 / 字节进度 / 失败文案
+    // 本地下载：三档是否全部落盘 / 是否进行中 / 字节进度 / 失败文案
     val isDownloaded: Boolean = false,
     val isDownloading: Boolean = false,
     val downloadProgress: Float = 0f,
-    val downloadError: String? = null
+    val downloadError: String? = null,
+    // 已落盘的音质；用于拦截重复下载同档
+    val downloadedQualities: Set<DownloadQuality> = emptySet()
 )
 
 // 全屏播放页 ViewModel
@@ -58,13 +60,13 @@ data class PlayerUiState(
 class PlayerViewModel @Inject constructor(
     private val playerController: MusicPlayerController,
     private val downloadManager: SongDownloadManager,
-    private val observeSongDownloadedUseCase: ObserveSongDownloadedUseCase
+    private val observeDownloadedQualitiesUseCase: ObserveDownloadedQualitiesUseCase
 ) : ViewModel() {
 
     // 高频播放进度（约 200ms）；不进 uiState，由进度条等局部控件就近订阅
     val positionState: StateFlow<PlaybackPosition> = playerController.playbackPosition
 
-    // 合并三路：全局播放态 + 当前曲是否已下载 + 全局下载任务
+    // 合并三路：全局播放态 + 当前曲已下载音质 + 全局下载任务
     val uiState: StateFlow<PlayerUiState> = combine(
         playerController.playbackState,
         // 切歌后切换观察目标，避免一直订阅上一首的下载标记
@@ -72,14 +74,14 @@ class PlayerViewModel @Inject constructor(
             .map { it.displaySong?.id ?: 0L }
             .distinctUntilChanged()
             .flatMapLatest { songId ->
-                if (songId == 0L) flowOf(false)
-                else observeSongDownloadedUseCase(songId)
+                if (songId == 0L) flowOf(emptySet())
+                else observeDownloadedQualitiesUseCase(songId)
             },
         downloadManager.tasks
-    ) { state, isDownloaded, tasks ->
+    ) { state, downloadedQualities, tasks ->
         val song = state.displaySong
         val songId = song?.id ?: 0L
-        val activeTask = tasks.firstOrNull { it.songId == songId }
+        val activeTask = tasks.firstOrNull { it.songId == songId && it.error == null }
         PlayerUiState(
             songId = songId,
             songName = song?.name.orEmpty(),
@@ -97,10 +99,12 @@ class PlayerViewModel @Inject constructor(
             activeLyricIndex = state.activeLyricIndex,
             playMode = state.playMode,
             durationMs = song?.durationMs ?: 0L,
-            isDownloaded = isDownloaded,
-            isDownloading = activeTask != null && activeTask.error == null,
+            // 三档都齐才算「已下载」完成态，否则仍可打开弹层补下其它档
+            isDownloaded = downloadedQualities.size >= DownloadQuality.entries.size,
+            isDownloading = activeTask != null,
             downloadProgress = activeTask?.progress ?: 0f,
-            downloadError = activeTask?.error
+            downloadError = tasks.firstOrNull { it.songId == songId }?.error,
+            downloadedQualities = downloadedQualities
         )
     }
         .distinctUntilChanged()
@@ -139,10 +143,15 @@ class PlayerViewModel @Inject constructor(
     // 切换播放模式，逻辑在 Controller
     fun cyclePlayMode() = playerController.cyclePlayMode()
 
-    // 下载当前展示曲到应用私有目录；已下载或下载中则忽略重复点击
+    // 下载当前展示曲指定音质；该档已下载或正在下同档则忽略
     fun downloadCurrentSong(quality: DownloadQuality = DownloadQuality.Default) {
         val song = playerController.playbackState.value.displaySong ?: return
-        if (uiState.value.isDownloaded || uiState.value.isDownloading) return
+        val state = uiState.value
+        if (quality in state.downloadedQualities) return
+        val alreadyQueued = downloadManager.tasks.value.any {
+            it.songId == song.id && it.quality == quality && it.error == null
+        }
+        if (alreadyQueued) return
         downloadManager.enqueue(song, quality)
     }
 }

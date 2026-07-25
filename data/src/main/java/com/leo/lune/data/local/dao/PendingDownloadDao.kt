@@ -15,19 +15,26 @@ interface PendingDownloadDao {
     @Query("SELECT * FROM pending_downloads")
     suspend fun getAll(): List<PendingDownloadEntity>
 
-    @Query("UPDATE pending_downloads SET paused = :paused WHERE songId = :songId")
-    suspend fun updatePaused(songId: Long, paused: Boolean)
+    @Query(
+        """
+        UPDATE pending_downloads
+        SET paused = :paused
+        WHERE songId = :songId AND bitrate = :bitrate
+        """
+    )
+    suspend fun updatePaused(songId: Long, bitrate: Int, paused: Boolean)
 
     // 仅写入真实总长；已有有效值则不覆盖，避免重复写库
     @Query(
         """
         UPDATE pending_downloads
         SET totalBytes = :totalBytes
-        WHERE songId = :songId AND totalBytes <= 0 AND :totalBytes > 0
+        WHERE songId = :songId AND bitrate = :bitrate
+          AND totalBytes <= 0 AND :totalBytes > 0
         """
     )
-    suspend fun updateTotalBytesIfAbsent(songId: Long, totalBytes: Long)
+    suspend fun updateTotalBytesIfAbsent(songId: Long, bitrate: Int, totalBytes: Long)
 
-    @Query("DELETE FROM pending_downloads WHERE songId = :songId")
-    suspend fun deleteById(songId: Long)
+    @Query("DELETE FROM pending_downloads WHERE songId = :songId AND bitrate = :bitrate")
+    suspend fun deleteById(songId: Long, bitrate: Int)
 }

@@ -58,6 +58,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.leo.lune.R
 import com.leo.lune.manager.ActiveDownloadTask
+import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.DownloadedSong
 import com.leo.lune.ui.home.formatSongDuration
 import com.leo.lune.util.consumePointersUnlessResumed
@@ -118,8 +119,12 @@ fun DownloadsScreen(
                         uiState.activeTasks.forEach { task ->
                             ActiveDownloadRow(
                                 task = task,
-                                onTogglePause = { viewModel.togglePauseDownload(task.songId) },
-                                onCancel = { viewModel.cancelDownload(task.songId) }
+                                onTogglePause = {
+                                    viewModel.togglePauseDownload(task.songId, task.quality)
+                                },
+                                onCancel = {
+                                    viewModel.cancelDownload(task.songId, task.quality)
+                                }
                             )
                         }
                     }
@@ -140,7 +145,7 @@ fun DownloadsScreen(
                             DownloadedSongRow(
                                 song = song,
                                 onClick = { viewModel.playSong(song) },
-                                onDelete = { viewModel.deleteDownload(song.songId) }
+                                onDelete = { viewModel.deleteDownload(song) }
                             )
                         }
                     }
@@ -338,6 +343,13 @@ private fun ActiveDownloadRow(
                     }
                 }
             }
+            Text(
+                text = task.quality.label,
+                color = colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                maxLines = 1,
+                softWrap = false
+            )
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -498,6 +510,13 @@ private fun DownloadedSongRow(
                     }
                 }
             }
+            Text(
+                text = DownloadQuality.fromBitrate(song.bitrate).label,
+                color = colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                maxLines = 1,
+                softWrap = false
+            )
             Box(
                 modifier = Modifier
                     .size(32.dp)

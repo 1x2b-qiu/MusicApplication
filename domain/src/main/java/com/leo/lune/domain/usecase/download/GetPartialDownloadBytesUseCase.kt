@@ -1,5 +1,6 @@
 package com.leo.lune.domain.usecase.download
 
+import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.repository.DownloadRepository
 import javax.inject.Inject
 
@@ -7,7 +8,7 @@ import javax.inject.Inject
 class GetPartialDownloadBytesUseCase @Inject constructor(
     private val downloadRepository: DownloadRepository
 ) {
-    suspend operator fun invoke(songId: Long): Long {
-        return downloadRepository.getPartialDownloadBytes(songId)
+    suspend operator fun invoke(songId: Long, quality: DownloadQuality): Long {
+        return downloadRepository.getPartialDownloadBytes(songId, quality)
     }
 }

@@ -1,5 +1,6 @@
 package com.leo.lune.domain.usecase.download
 
+import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.repository.DownloadRepository
 import javax.inject.Inject
 
@@ -7,7 +8,7 @@ import javax.inject.Inject
 class UpdatePendingDownloadTotalBytesUseCase @Inject constructor(
     private val downloadRepository: DownloadRepository
 ) {
-    suspend operator fun invoke(songId: Long, totalBytes: Long) {
-        downloadRepository.updatePendingTotalBytes(songId, totalBytes)
+    suspend operator fun invoke(songId: Long, quality: DownloadQuality, totalBytes: Long) {
+        downloadRepository.updatePendingTotalBytes(songId, quality, totalBytes)
     }
 }

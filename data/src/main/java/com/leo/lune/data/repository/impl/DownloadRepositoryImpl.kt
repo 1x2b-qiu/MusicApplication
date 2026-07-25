@@ -24,7 +24,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 // 本地下载仓储实现
-// 拉流地址 → 写入应用私有目录 → Room 存元数据；播放侧用路径判断是否已下载
+// 拉流地址 → 写入应用私有目录 → Room 存元数据；同曲可按音质多档并存
+// 播放侧取最高音质本地路径
 @Singleton
 class DownloadRepositoryImpl @Inject constructor(
     private val neteaseApi: NeteaseApi,
@@ -34,14 +35,14 @@ class DownloadRepositoryImpl @Inject constructor(
     private val songDownloader: SongDownloader
 ) : DownloadRepository {
 
-    // 下载歌曲：库里已有且文件仍在则直接返回；否则先下到临时文件再落盘，避免半成品被当成成功
+    // 下载指定音质：该档已有且文件仍在则直接返回；否则先下到临时文件再落盘
     override suspend fun downloadSong(
         song: Song,
         quality: DownloadQuality,
         onProgress: ((bytesRead: Long, totalBytes: Long) -> Unit)?,
         isCancelled: () -> Boolean
     ): DownloadedSong = withContext(Dispatchers.IO) {
-        val existing = downloadedSongDao.getById(song.id)
+        val existing = downloadedSongDao.getById(song.id, quality.bitrate)
         if (existing != null && File(existing.localPath).isFile) {
             onProgress?.invoke(existing.fileSizeBytes, existing.fileSizeBytes)
             return@withContext existing.toDownloadedSong()
@@ -59,8 +60,8 @@ class DownloadRepositoryImpl @Inject constructor(
         }
 
         val extension = songDownloader.guessExtension(url, contentType = null)
-        val tempFile = audioFileStore.tempFile(song.id)
-        val targetFile = audioFileStore.targetFile(song.id, extension)
+        val tempFile = audioFileStore.tempFile(song.id, quality.bitrate)
+        val targetFile = audioFileStore.targetFile(song.id, quality.bitrate, extension)
 
         try {
             // 保留已有临时文件，供 SongDownloader 通过 Range 断点续传
@@ -73,12 +74,12 @@ class DownloadRepositoryImpl @Inject constructor(
             }
             val entity = song.toDownloadedSongEntity(
                 localPath = targetFile.absolutePath,
-                bitrate = item.br,
+                quality = quality,
                 fileSizeBytes = size
             )
             downloadedSongDao.upsert(entity)
             // 成功落盘后清掉进行中记录
-            pendingDownloadDao.deleteById(song.id)
+            pendingDownloadDao.deleteById(song.id, quality.bitrate)
             entity.toDownloadedSong()
         } catch (error: CancellationException) {
             // 暂停会取消协程：保留临时文件以便继续下载；用户取消由 discardPartialDownload 清理
@@ -90,40 +91,55 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
-    // 返回可用的本地绝对路径；记录存在但文件被删则视为未下载
-    override suspend fun getLocalPath(songId: Long): String? = withContext(Dispatchers.IO) {
-        val entity = downloadedSongDao.getById(songId) ?: return@withContext null
-        if (File(entity.localPath).isFile) entity.localPath else null
+    // 返回本地绝对路径；指定 quality 则取该档，否则取最高音质；文件缺失则视为无
+    override suspend fun getLocalPath(
+        songId: Long,
+        quality: DownloadQuality?
+    ): String? = withContext(Dispatchers.IO) {
+        if (quality != null) {
+            val entity = downloadedSongDao.getById(songId, quality.bitrate) ?: return@withContext null
+            return@withContext entity.localPath.takeIf { File(it).isFile }
+        }
+        downloadedSongDao.getAllBySongId(songId)
+            .firstOrNull { File(it.localPath).isFile }
+            ?.localPath
     }
 
-    // 是否已下载且本地文件仍存在
+    // 是否至少有一档已下载且本地文件仍存在
     override suspend fun isDownloaded(songId: Long): Boolean {
         return getLocalPath(songId) != null
     }
 
-    // 观察某首歌是否在下载表中（用于播放页按钮状态）
+    // 观察某首歌是否至少有一档在下载表中（用于播放页按钮状态）
     override fun observeIsDownloaded(songId: Long): Flow<Boolean> {
         return downloadedSongDao.observeIsDownloaded(songId)
     }
 
-    // 观察全部已下载列表，按下载时间倒序
+    override fun observeDownloadedQualities(songId: Long): Flow<Set<DownloadQuality>> {
+        return downloadedSongDao.observeDownloadedBitrates(songId).map { bitrates ->
+            bitrates.map { DownloadQuality.fromBitrate(it) }.toSet()
+        }
+    }
+
+    // 观察全部已下载列表，按下载时间倒序（同曲多档各占一行）
     override fun observeDownloadedSongs(): Flow<List<DownloadedSong>> {
         return downloadedSongDao.observeAll().map { list ->
             list.map { it.toDownloadedSong() }
         }
     }
 
-    // 删除私有目录文件与 Room 记录
-    override suspend fun deleteDownload(songId: Long) = withContext(Dispatchers.IO) {
-        audioFileStore.deleteForSong(songId)
-        downloadedSongDao.deleteById(songId)
-        pendingDownloadDao.deleteById(songId)
-    }
+    // 删除指定音质的私有目录文件与 Room 记录
+    override suspend fun deleteDownload(songId: Long, quality: DownloadQuality) =
+        withContext(Dispatchers.IO) {
+            audioFileStore.deleteForSong(songId, quality.bitrate)
+            downloadedSongDao.deleteById(songId, quality.bitrate)
+            pendingDownloadDao.deleteById(songId, quality.bitrate)
+        }
 
     // 仅删除未完成的临时文件
-    override suspend fun discardPartialDownload(songId: Long) {
+    override suspend fun discardPartialDownload(songId: Long, quality: DownloadQuality) {
         withContext(Dispatchers.IO) {
-            audioFileStore.tempFile(songId).delete()
+            audioFileStore.tempFile(songId, quality.bitrate).delete()
         }
     }
 
@@ -133,22 +149,30 @@ class DownloadRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun updatePendingPaused(songId: Long, paused: Boolean) {
+    override suspend fun updatePendingPaused(
+        songId: Long,
+        quality: DownloadQuality,
+        paused: Boolean
+    ) {
         withContext(Dispatchers.IO) {
-            pendingDownloadDao.updatePaused(songId, paused)
+            pendingDownloadDao.updatePaused(songId, quality.bitrate, paused)
         }
     }
 
-    override suspend fun updatePendingTotalBytes(songId: Long, totalBytes: Long) {
+    override suspend fun updatePendingTotalBytes(
+        songId: Long,
+        quality: DownloadQuality,
+        totalBytes: Long
+    ) {
         if (totalBytes <= 0L) return
         withContext(Dispatchers.IO) {
-            pendingDownloadDao.updateTotalBytesIfAbsent(songId, totalBytes)
+            pendingDownloadDao.updateTotalBytesIfAbsent(songId, quality.bitrate, totalBytes)
         }
     }
 
-    override suspend fun deletePendingDownload(songId: Long) {
+    override suspend fun deletePendingDownload(songId: Long, quality: DownloadQuality) {
         withContext(Dispatchers.IO) {
-            pendingDownloadDao.deleteById(songId)
+            pendingDownloadDao.deleteById(songId, quality.bitrate)
         }
     }
 
@@ -156,8 +180,11 @@ class DownloadRepositoryImpl @Inject constructor(
         pendingDownloadDao.getAll().map { it.toPendingDownload() }
     }
 
-    override suspend fun getPartialDownloadBytes(songId: Long): Long = withContext(Dispatchers.IO) {
-        val file = audioFileStore.tempFile(songId)
+    override suspend fun getPartialDownloadBytes(
+        songId: Long,
+        quality: DownloadQuality
+    ): Long = withContext(Dispatchers.IO) {
+        val file = audioFileStore.tempFile(songId, quality.bitrate)
         if (file.isFile) file.length() else 0L
     }
 }

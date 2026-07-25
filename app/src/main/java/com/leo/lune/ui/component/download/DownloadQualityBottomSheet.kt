@@ -14,7 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -27,6 +30,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -47,8 +51,8 @@ private val OptionShape = RoundedCornerShape(16.dp)
 private val ConfirmShape = RoundedCornerShape(16.dp)
 
 /**
- * 下载音质选择底部弹层（对齐设计稿）：
- * 歌曲信息 + 三档音质单选 + 确认下载
+ * 下载音质选择底部弹层：
+ * 歌曲信息 + 三档音质（已下载显示对号且不可再选）+ 确认下载
  * 体积优先展示 song/url 返回的真实 size，失败再回退估算
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,12 +65,24 @@ fun DownloadQualityBottomSheet(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var selectedQuality by remember { mutableStateOf(DownloadQuality.Default) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var selectedQuality by remember { mutableStateOf(DownloadQuality.Default) }
 
     LaunchedEffect(song.id) {
-        viewModel.loadSizes(song.id)
+        viewModel.load(song.id)
     }
+
+    // 已下载档位变化时，自动选中第一个尚未下载的档位
+    LaunchedEffect(uiState.downloadedQualities) {
+        if (selectedQuality in uiState.downloadedQualities) {
+            selectedQuality = DownloadQuality.entries
+                .firstOrNull { it !in uiState.downloadedQualities }
+                ?: selectedQuality
+        }
+    }
+
+    val canConfirm = selectedQuality !in uiState.downloadedQualities &&
+        uiState.downloadedQualities.size < DownloadQuality.entries.size
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -121,16 +137,20 @@ fun DownloadQualityBottomSheet(
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 DownloadQuality.entries.forEach { quality ->
+                    val downloaded = quality in uiState.downloadedQualities
                     val realBytes = uiState.sizeByQuality[quality] ?: 0L
                     QualityOptionRow(
                         quality = quality,
-                        selected = quality == selectedQuality,
+                        selected = !downloaded && quality == selectedQuality,
+                        downloaded = downloaded,
                         sizeHint = sizeLabel(
                             durationMs = song.durationMs,
                             quality = quality,
                             realBytes = realBytes
                         ),
-                        onClick = { selectedQuality = quality }
+                        onClick = {
+                            if (!downloaded) selectedQuality = quality
+                        }
                     )
                 }
             }
@@ -142,7 +162,8 @@ fun DownloadQualityBottomSheet(
                     .fillMaxWidth()
                     .clip(ConfirmShape)
                     .background(colorScheme.primary)
-                    .clickable {
+                    .alpha(1f)
+                    .clickable(enabled = canConfirm) {
                         onConfirm(selectedQuality)
                     }
                     .padding(vertical = 14.dp),
@@ -163,6 +184,7 @@ fun DownloadQualityBottomSheet(
 private fun QualityOptionRow(
     quality: DownloadQuality,
     selected: Boolean,
+    downloaded: Boolean,
     sizeHint: String,
     onClick: () -> Unit
 ) {
@@ -179,7 +201,7 @@ private fun QualityOptionRow(
                     Modifier
                 }
             )
-            .clickable(onClick = onClick)
+            .clickable(enabled = !downloaded, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -200,12 +222,14 @@ private fun QualityOptionRow(
                 .size(17.dp)
                 .border(
                     width = 1.dp,
-                    color = if (selected) colorScheme.primary
-                    else colorScheme.outlineVariant,
+                    color = when {
+                        downloaded || selected -> colorScheme.primary
+                        else -> colorScheme.outlineVariant
+                    },
                     shape = CircleShape
                 )
                 .then(
-                    if (selected) {
+                    if (downloaded || selected) {
                         Modifier.background(colorScheme.primary, CircleShape)
                     } else {
                         Modifier
@@ -213,12 +237,22 @@ private fun QualityOptionRow(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            if (selected) {
-                Box(
-                    modifier = Modifier
-                        .size(6.dp)
-                        .background(colorScheme.onPrimary, CircleShape)
-                )
+            when {
+                downloaded -> {
+                    Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = null,
+                        tint = colorScheme.onPrimary,
+                        modifier = Modifier.size(11.dp)
+                    )
+                }
+                selected -> {
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .background(colorScheme.onPrimary, CircleShape)
+                    )
+                }
             }
         }
     }

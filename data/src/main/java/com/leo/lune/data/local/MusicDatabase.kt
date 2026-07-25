@@ -22,7 +22,7 @@ import com.leo.lune.data.local.entity.RecentPlayEntity
         PendingDownloadEntity::class,
         PlaybackSnapshotEntity::class
     ],
-    version = 7,
+    version = 9,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
