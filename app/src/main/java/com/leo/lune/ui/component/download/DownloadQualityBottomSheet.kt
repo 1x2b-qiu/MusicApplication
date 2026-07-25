@@ -73,22 +73,29 @@ fun DownloadQualityBottomSheet(
         selectedQuality = null
     }
 
+    // stateIn 可能短暂回放上一首歌的状态；仅当 songId 对齐时才采信已下载集合
+    val downloadedQualities = if (uiState.songId == song.id) {
+        uiState.downloadedQualities
+    } else {
+        emptySet()
+    }
+
     // 预选：优先默认音质（若未下载）；否则第一个未下载档；用户手动点选后以 selectedQuality 为准
     val effectiveSelected: DownloadQuality = selectedQuality
-        ?.takeUnless { it in uiState.downloadedQualities }
-        ?: uiState.defaultQuality.takeUnless { it in uiState.downloadedQualities }
-        ?: DownloadQuality.entries.firstOrNull { it !in uiState.downloadedQualities }
+        ?.takeUnless { it in downloadedQualities }
+        ?: uiState.defaultQuality.takeUnless { it in downloadedQualities }
+        ?: DownloadQuality.entries.firstOrNull { it !in downloadedQualities }
         ?: uiState.defaultQuality
 
     // 当前选中档若已下完，清掉手动选择以便回落到下一个可用档
-    LaunchedEffect(uiState.downloadedQualities, effectiveSelected) {
-        if (selectedQuality != null && selectedQuality in uiState.downloadedQualities) {
+    LaunchedEffect(downloadedQualities, effectiveSelected) {
+        if (selectedQuality != null && selectedQuality in downloadedQualities) {
             selectedQuality = null
         }
     }
 
-    val canConfirm = effectiveSelected !in uiState.downloadedQualities &&
-        uiState.downloadedQualities.size < DownloadQuality.entries.size
+    val canConfirm = effectiveSelected !in downloadedQualities &&
+        downloadedQualities.size < DownloadQuality.entries.size
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -143,7 +150,7 @@ fun DownloadQualityBottomSheet(
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 DownloadQuality.entries.forEach { quality ->
-                    val downloaded = quality in uiState.downloadedQualities
+                    val downloaded = quality in downloadedQualities
                     val realBytes = uiState.sizeByQuality[quality] ?: 0L
                     QualityOptionRow(
                         quality = quality,

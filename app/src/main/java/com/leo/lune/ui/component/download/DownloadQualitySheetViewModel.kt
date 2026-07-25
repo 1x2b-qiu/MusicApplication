@@ -19,6 +19,8 @@ import javax.inject.Inject
 
 // 下载音质弹窗 UI 状态
 data class DownloadQualitySheetUiState(
+    // 当前状态所属歌曲；与弹层 song.id 不一致时 UI 应忽略已下载集合
+    val songId: Long = 0L,
     val sizeByQuality: Map<DownloadQuality, Long> = emptyMap(),
     // 该曲已落盘的音质档位
     val downloadedQualities: Set<DownloadQuality> = emptySet(),
@@ -56,23 +58,31 @@ class DownloadQualitySheetViewModel @Inject constructor(
     // 打开弹窗或切歌时调用；订阅已下载档位，并按需拉取各音质 size
     fun load(songId: Long) {
         observeJob?.cancel()
+        loadJob?.cancel()
+        // 立刻绑定到新歌并清空上一首状态，避免 stateIn 回放旧值导致按钮误灰
+        _uiState.update {
+            it.copy(
+                songId = songId,
+                downloadedQualities = emptySet(),
+                sizeByQuality = emptyMap(),
+                loadedSongId = null
+            )
+        }
         observeJob = viewModelScope.launch {
             observeDownloadedQualitiesUseCase(songId).collect { qualities ->
-                _uiState.update { it.copy(downloadedQualities = qualities) }
+                _uiState.update { state ->
+                    // 过期协程回调：已切到别的歌则丢弃
+                    if (state.songId != songId) state
+                    else state.copy(downloadedQualities = qualities)
+                }
             }
-        }
-
-        val current = _uiState.value
-        if (songId == current.loadedSongId && current.sizeByQuality.isNotEmpty()) return
-        loadJob?.cancel()
-        _uiState.update {
-            it.copy(sizeByQuality = emptyMap(), loadedSongId = null)
         }
         loadJob = viewModelScope.launch {
             val sizes = runCatching { getDownloadQualitySizesUseCase(songId) }
                 .getOrDefault(emptyMap())
-            _uiState.update {
-                it.copy(
+            _uiState.update { state ->
+                if (state.songId != songId) state
+                else state.copy(
                     sizeByQuality = sizes,
                     loadedSongId = songId.takeIf { sizes.isNotEmpty() }
                 )

@@ -95,9 +95,9 @@ fun DownloadSettingsScreen(
             SectionLabel(title = "下载歌曲存储位置")
             Spacer(modifier = Modifier.height(12.dp))
             StorageLocationRow(
-                location = uiState.storageLocation,
-                darkTheme = darkTheme,
-                onClick = { viewModel.toggleStorageLocation() }
+                title = "内部存储",
+                pathHint = "我的音乐 / Downloads",
+                darkTheme = darkTheme
             )
         }
     }
@@ -232,9 +232,9 @@ private fun QualityOptionRow(
 
 @Composable
 private fun StorageLocationRow(
-    location: DownloadStorageLocation,
-    darkTheme: Boolean,
-    onClick: () -> Unit
+    title: String,
+    pathHint: String,
+    darkTheme: Boolean
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val iconBg = if (darkTheme) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.055f)
@@ -245,7 +245,6 @@ private fun StorageLocationRow(
             .clip(CardShape)
             .background(colorScheme.surfaceVariant)
             .border(0.67.dp, colorScheme.outlineVariant, CardShape)
-            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -267,7 +266,7 @@ private fun StorageLocationRow(
 
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = location.label,
+                text = title,
                 color = colorScheme.onBackground,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
@@ -275,7 +274,7 @@ private fun StorageLocationRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = location.pathHint,
+                text = pathHint,
                 color = colorScheme.onSurfaceVariant,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 2.dp),
