@@ -2,6 +2,7 @@ package com.leo.lune.di
 
 import com.leo.lune.data.repository.impl.AuthRepositoryImpl
 import com.leo.lune.data.repository.impl.DownloadRepositoryImpl
+import com.leo.lune.data.repository.impl.IdentifyRepositoryImpl
 import com.leo.lune.data.repository.impl.MusicRepositoryImpl
 import com.leo.lune.data.repository.impl.PlayHistoryRepositoryImpl
 import com.leo.lune.data.repository.impl.PlayStatsRepositoryImpl
@@ -11,6 +12,7 @@ import com.leo.lune.data.repository.impl.SettingsRepositoryImpl
 import com.leo.lune.data.repository.impl.ThemeRepositoryImpl
 import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.DownloadRepository
+import com.leo.lune.domain.repository.IdentifyRepository
 import com.leo.lune.domain.repository.MusicRepository
 import com.leo.lune.domain.repository.PlayHistoryRepository
 import com.leo.lune.domain.repository.PlayStatsRepository
@@ -35,6 +37,13 @@ abstract class RepositoryModule {
     abstract fun bindMusicRepository(
         musicRepositoryImpl: MusicRepositoryImpl
     ): MusicRepository
+
+    @Binds
+    @Singleton
+    // 听歌识曲仓储（AudD）
+    abstract fun bindIdentifyRepository(
+        identifyRepositoryImpl: IdentifyRepositoryImpl
+    ): IdentifyRepository
 
     @Binds
     @Singleton

@@ -1,9 +1,20 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
 }
+
+// AudD Token：从根目录 local.properties 读取，勿提交到 Git
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        file.inputStream().use { load(it) }
+    }
+}
+val auddApiToken = localProperties.getProperty("AUDD_API_TOKEN").orEmpty()
 
 android {
     namespace = "com.leo.lune.data"
@@ -15,6 +26,8 @@ android {
         buildConfigField("String", "NETEASE_BASE_URL", "\"http://81.71.51.73:3000/\"")
         // USB 调试：adb reverse tcp:3000 tcp:3000 后用 127.0.0.1（不依赖局域网/防火墙）
 //        buildConfigField("String", "NETEASE_BASE_URL", "\"http://127.0.0.1:3000/\"")
+        buildConfigField("String", "AUDD_API_TOKEN", "\"$auddApiToken\"")
+        buildConfigField("String", "AUDD_BASE_URL", "\"https://api.audd.io/\"")
     }
 
     compileOptions {

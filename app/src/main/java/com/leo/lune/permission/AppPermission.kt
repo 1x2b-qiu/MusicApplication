@@ -18,4 +18,10 @@ enum class AppPermission(
         minSdk = Build.VERSION_CODES.TIRAMISU,
         requestOnStartup = true,
     ),
+    // 听歌识曲麦克风；仅在识曲页按需申请，不在启动时强要
+    RecordAudio(
+        manifest = Manifest.permission.RECORD_AUDIO,
+        minSdk = Build.VERSION_CODES.BASE,
+        requestOnStartup = false,
+    ),
 }
