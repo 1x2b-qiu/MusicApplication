@@ -5,11 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.usecase.download.GetDownloadQualitySizesUseCase
 import com.leo.lune.domain.usecase.download.ObserveDownloadedQualitiesUseCase
+import com.leo.lune.domain.usecase.settings.ObserveDefaultDownloadQualityUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -19,19 +22,33 @@ data class DownloadQualitySheetUiState(
     val sizeByQuality: Map<DownloadQuality, Long> = emptyMap(),
     // 该曲已落盘的音质档位
     val downloadedQualities: Set<DownloadQuality> = emptySet(),
+    // 设置页配置的默认音质（打开弹层时预选）
+    val defaultQuality: DownloadQuality = DownloadQuality.Default,
     // 已成功拉取 size 的歌；同 id 再次打开复用
     val loadedSongId: Long? = null
 )
 
-// 下载音质弹窗：按歌拉取各档真实体积，并观察已下载档位
+// 下载音质弹窗：按歌拉取各档真实体积，观察已下载档位与默认音质
 @HiltViewModel
 class DownloadQualitySheetViewModel @Inject constructor(
     private val getDownloadQualitySizesUseCase: GetDownloadQualitySizesUseCase,
-    private val observeDownloadedQualitiesUseCase: ObserveDownloadedQualitiesUseCase
+    private val observeDownloadedQualitiesUseCase: ObserveDownloadedQualitiesUseCase,
+    observeDefaultDownloadQualityUseCase: ObserveDefaultDownloadQualityUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DownloadQualitySheetUiState())
-    val uiState: StateFlow<DownloadQualitySheetUiState> = _uiState.asStateFlow()
+
+    // 默认音质来自设置表，与本地 UIState 合并对外暴露
+    val uiState: StateFlow<DownloadQualitySheetUiState> = combine(
+        _uiState,
+        observeDefaultDownloadQualityUseCase()
+    ) { state, defaultQuality ->
+        state.copy(defaultQuality = defaultQuality)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = DownloadQualitySheetUiState()
+    )
 
     private var loadJob: Job? = null
     private var observeJob: Job? = null

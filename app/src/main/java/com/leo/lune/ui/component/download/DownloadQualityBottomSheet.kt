@@ -66,22 +66,28 @@ fun DownloadQualityBottomSheet(
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var selectedQuality by remember { mutableStateOf(DownloadQuality.Default) }
+    var selectedQuality by remember(song.id) { mutableStateOf<DownloadQuality?>(null) }
 
     LaunchedEffect(song.id) {
         viewModel.load(song.id)
+        selectedQuality = null
     }
 
-    // 已下载档位变化时，自动选中第一个尚未下载的档位
-    LaunchedEffect(uiState.downloadedQualities) {
-        if (selectedQuality in uiState.downloadedQualities) {
-            selectedQuality = DownloadQuality.entries
-                .firstOrNull { it !in uiState.downloadedQualities }
-                ?: selectedQuality
+    // 预选：优先默认音质（若未下载）；否则第一个未下载档；用户手动点选后以 selectedQuality 为准
+    val effectiveSelected: DownloadQuality = selectedQuality
+        ?.takeUnless { it in uiState.downloadedQualities }
+        ?: uiState.defaultQuality.takeUnless { it in uiState.downloadedQualities }
+        ?: DownloadQuality.entries.firstOrNull { it !in uiState.downloadedQualities }
+        ?: uiState.defaultQuality
+
+    // 当前选中档若已下完，清掉手动选择以便回落到下一个可用档
+    LaunchedEffect(uiState.downloadedQualities, effectiveSelected) {
+        if (selectedQuality != null && selectedQuality in uiState.downloadedQualities) {
+            selectedQuality = null
         }
     }
 
-    val canConfirm = selectedQuality !in uiState.downloadedQualities &&
+    val canConfirm = effectiveSelected !in uiState.downloadedQualities &&
         uiState.downloadedQualities.size < DownloadQuality.entries.size
 
     ModalBottomSheet(
@@ -141,7 +147,7 @@ fun DownloadQualityBottomSheet(
                     val realBytes = uiState.sizeByQuality[quality] ?: 0L
                     QualityOptionRow(
                         quality = quality,
-                        selected = !downloaded && quality == selectedQuality,
+                        selected = !downloaded && quality == effectiveSelected,
                         downloaded = downloaded,
                         sizeHint = sizeLabel(
                             durationMs = song.durationMs,
@@ -162,9 +168,9 @@ fun DownloadQualityBottomSheet(
                     .fillMaxWidth()
                     .clip(ConfirmShape)
                     .background(colorScheme.primary)
-                    .alpha(1f)
+                    .alpha(if (canConfirm) 1f else 0.4f)
                     .clickable(enabled = canConfirm) {
-                        onConfirm(selectedQuality)
+                        onConfirm(effectiveSelected)
                     }
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center

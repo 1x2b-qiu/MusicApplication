@@ -7,6 +7,7 @@ import com.leo.lune.data.repository.impl.PlayHistoryRepositoryImpl
 import com.leo.lune.data.repository.impl.PlayStatsRepositoryImpl
 import com.leo.lune.data.repository.impl.PlaybackSnapshotRepositoryImpl
 import com.leo.lune.data.repository.impl.SearchHistoryRepositoryImpl
+import com.leo.lune.data.repository.impl.SettingsRepositoryImpl
 import com.leo.lune.data.repository.impl.ThemeRepositoryImpl
 import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.DownloadRepository
@@ -15,6 +16,7 @@ import com.leo.lune.domain.repository.PlayHistoryRepository
 import com.leo.lune.domain.repository.PlayStatsRepository
 import com.leo.lune.domain.repository.PlaybackSnapshotRepository
 import com.leo.lune.domain.repository.SearchHistoryRepository
+import com.leo.lune.domain.repository.SettingsRepository
 import com.leo.lune.domain.repository.ThemeRepository
 import dagger.Binds
 import dagger.Module
@@ -82,4 +84,11 @@ abstract class RepositoryModule {
     abstract fun bindPlaybackSnapshotRepository(
         playbackSnapshotRepositoryImpl: PlaybackSnapshotRepositoryImpl
     ): PlaybackSnapshotRepository
+
+    @Binds
+    @Singleton
+    // 通用设置仓储（Room key-value）
+    abstract fun bindSettingsRepository(
+        settingsRepositoryImpl: SettingsRepositoryImpl
+    ): SettingsRepository
 }

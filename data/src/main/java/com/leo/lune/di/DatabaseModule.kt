@@ -3,6 +3,7 @@ package com.leo.lune.di
 import android.content.Context
 import androidx.room.Room
 import com.leo.lune.data.local.MusicDatabase
+import com.leo.lune.data.local.dao.AppSettingDao
 import com.leo.lune.data.local.dao.DownloadedSongDao
 import com.leo.lune.data.local.dao.PendingDownloadDao
 import com.leo.lune.data.local.dao.PlayStatsDao
@@ -64,5 +65,11 @@ object DatabaseModule {
     // 提供播放快照 DAO
     fun providePlaybackSnapshotDao(database: MusicDatabase): PlaybackSnapshotDao {
         return database.playbackSnapshotDao()
+    }
+
+    @Provides
+    // 提供通用设置 DAO
+    fun provideAppSettingDao(database: MusicDatabase): AppSettingDao {
+        return database.appSettingDao()
     }
 }

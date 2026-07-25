@@ -1,12 +1,18 @@
 package com.leo.lune.ui.settings
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.leo.lune.domain.model.DownloadQuality
+import com.leo.lune.domain.usecase.settings.ObserveDefaultDownloadQualityUseCase
+import com.leo.lune.domain.usecase.settings.SetDefaultDownloadQualityUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 // 存储位置选项（仅 UI 占位，后续再接真实路径）
@@ -24,25 +30,42 @@ data class DownloadSettingsUiState(
     val storageLocation: DownloadStorageLocation = DownloadStorageLocation.Internal
 )
 
-// 下载设置：仅维护 UI 选中态，持久化与读写逻辑后续再接
+// 下载设置：默认音质读写 Room；存储位置仍仅 UI 占位
 @HiltViewModel
-class DownloadSettingsViewModel @Inject constructor() : ViewModel() {
+class DownloadSettingsViewModel @Inject constructor(
+    observeDefaultDownloadQualityUseCase: ObserveDefaultDownloadQualityUseCase,
+    private val setDefaultDownloadQualityUseCase: SetDefaultDownloadQualityUseCase
+) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(DownloadSettingsUiState())
-    val uiState: StateFlow<DownloadSettingsUiState> = _uiState.asStateFlow()
+    private val storageLocation = MutableStateFlow(DownloadStorageLocation.Internal)
+
+    val uiState: StateFlow<DownloadSettingsUiState> = combine(
+        observeDefaultDownloadQualityUseCase(),
+        storageLocation
+    ) { quality, location ->
+        DownloadSettingsUiState(
+            selectedQuality = quality,
+            storageLocation = location
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = DownloadSettingsUiState()
+    )
 
     fun selectQuality(quality: DownloadQuality) {
-        _uiState.update { it.copy(selectedQuality = quality) }
+        viewModelScope.launch {
+            setDefaultDownloadQualityUseCase(quality)
+        }
     }
 
-    // 设计稿交互：点击在内部存储 / SD 卡之间切换
+    // 设计稿交互：点击在内部存储 / SD 卡之间切换（暂不持久化）
     fun toggleStorageLocation() {
-        _uiState.update { state ->
-            val next = when (state.storageLocation) {
+        storageLocation.update { current ->
+            when (current) {
                 DownloadStorageLocation.Internal -> DownloadStorageLocation.SdCard
                 DownloadStorageLocation.SdCard -> DownloadStorageLocation.Internal
             }
-            state.copy(storageLocation = next)
         }
     }
 }
