@@ -1,5 +1,7 @@
 package com.leo.lune.ui.search
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
@@ -129,6 +131,7 @@ class SearchViewModel @Inject constructor(
     }
 
     // 点击搜索结果歌曲：以当前列表为队列播放，并同步迷你播放栏预览
+    @RequiresApi(Build.VERSION_CODES.O)
     fun onSongClick(song: Song) {
         val queue = _uiState.value.songs
         playerController.playSong(song, queue)
