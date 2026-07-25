@@ -33,6 +33,9 @@ sealed interface MusicRoute {
     data object Downloads : MusicRoute
 
     @Serializable
+    data object Identify : MusicRoute
+
+    @Serializable
     data object Login : MusicRoute
 
     @Serializable

@@ -110,7 +110,7 @@ fun LoginScreen(
                     painter = painterResource(id = R.drawable.ic_logo),
                     contentDescription = "Lune",
                     modifier = Modifier.size(240.dp),
-                    tint = colorScheme.onBackground
+                    tint = Color.Unspecified
                 )
             }
 

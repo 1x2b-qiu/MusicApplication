@@ -33,7 +33,9 @@ import com.leo.lune.ui.component.minplayer.MiniPlayerBar
 import com.leo.lune.ui.component.sidebar.AppSidebar
 import com.leo.lune.ui.category.CategoryScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
+import com.leo.lune.permission.PermissionCoordinator
 import com.leo.lune.ui.home.HomeScreen
+import com.leo.lune.ui.identify.IdentifyScreen
 import com.leo.lune.ui.liked.LikedScreen
 import com.leo.lune.ui.login.LoginScreen
 import com.leo.lune.ui.player.PlayerScreen
@@ -50,6 +52,7 @@ import dev.chrisbanes.haze.rememberHazeState
 fun MusicNavGraph(
     darkTheme: Boolean = true,
     onToggleTheme: () -> Unit = {},
+    permissions: PermissionCoordinator,
     bootstrapViewModel: SessionBootstrapViewModel = hiltViewModel()
 ) {
     val startRoute by bootstrapViewModel.startRoute.collectAsStateWithLifecycle()
@@ -65,7 +68,8 @@ fun MusicNavGraph(
             MusicNavHost(
                 startRoute = route,
                 darkTheme = darkTheme,
-                onToggleTheme = onToggleTheme
+                onToggleTheme = onToggleTheme,
+                permissions = permissions
             )
         }
     }
@@ -75,7 +79,8 @@ fun MusicNavGraph(
 private fun MusicNavHost(
     startRoute: MusicRoute,
     darkTheme: Boolean,
-    onToggleTheme: () -> Unit
+    onToggleTheme: () -> Unit,
+    permissions: PermissionCoordinator,
 ) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -184,6 +189,14 @@ private fun MusicNavHost(
                     )
                 }
 
+                composable<MusicRoute.Identify> {
+                    IdentifyScreen(
+                        onBack = { navController.popBackStack() },
+                        darkTheme = darkTheme,
+                        permissions = permissions
+                    )
+                }
+
                 composable<MusicRoute.Search> {
                     SearchScreen(
                         onBack = { navController.popBackStack() },
@@ -287,6 +300,7 @@ private fun MusicNavHost(
                 when (id) {
                     "download" -> navController.navigateSingleTopTo(MusicRoute.Downloads)
                     "settings" -> navController.navigateSingleTopTo(MusicRoute.Settings)
+                    "identify" -> navController.navigateSingleTopTo(MusicRoute.Identify)
                 }
             }
         )

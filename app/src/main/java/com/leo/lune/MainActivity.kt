@@ -37,7 +37,8 @@ class MainActivity : ComponentActivity() {
             MusicApplicationTheme(darkTheme = darkTheme) {
                 MusicNavGraph(
                     darkTheme = darkTheme,
-                    onToggleTheme = { themeViewModel.setUserTheme(!darkTheme) }
+                    onToggleTheme = { themeViewModel.setUserTheme(!darkTheme) },
+                    permissions = permissions
                 )
             }
         }
