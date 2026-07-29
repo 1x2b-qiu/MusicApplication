@@ -14,9 +14,9 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.download.GetLocalSongPathUseCase
-import com.leo.lune.domain.usecase.music.GetSongUrlUseCase
-import com.leo.lune.manager.ArtworkLoader
+import com.leo.lune.domain.repository.DownloadRepository
+import com.leo.lune.domain.repository.MusicRepository
+import com.leo.lune.audio.ArtworkLoader
 import com.leo.lune.manager.FavoriteManager
 import com.leo.lune.manager.FavoriteResult
 import com.leo.lune.manager.LyricManager
@@ -99,9 +99,9 @@ class MusicPlayerController @Inject constructor(
     // Application Context：创建 ExoPlayer、启动 MusicPlaybackService
     @ApplicationContext private val context: Context,
     // 按歌曲 id 拉取可播流媒体 URL
-    private val getSongUrlUseCase: GetSongUrlUseCase,
+    private val musicRepository: MusicRepository,
     // 已下载时返回本地文件路径
-    private val getLocalSongPathUseCase: GetLocalSongPathUseCase,
+    private val downloadRepository: DownloadRepository,
     // 歌词管理器（加载 / 匹配 / 展示文案）
     private val lyricManager: LyricManager,
     // 听歌统计记录器（最近播放 / 周次数 / 时长）
@@ -307,11 +307,11 @@ class MusicPlayerController @Inject constructor(
                 val artworkDeferred = async { artworkLoader.loadArtworkBytes(song.coverUrl) }
 
                 // 已下载优先播本地文件（可指定音质），否则拉在线流地址
-                val localPath = getLocalSongPathUseCase(requestSongId, requestQuality)
+                val localPath = downloadRepository.getLocalPath(requestSongId, requestQuality)
                 val playUri = if (localPath != null) {
                     localPathToPlayUri(localPath)
                 } else {
-                    val songUrl = getSongUrlUseCase(requestSongId)
+                    val songUrl = musicRepository.getSongUrl(requestSongId)
                     songUrl.url
                 }
                 // 用户已切到别的歌：丢弃本次结果
@@ -541,11 +541,11 @@ class MusicPlayerController @Inject constructor(
                 val artworkDeferred = async { artworkLoader.loadArtworkBytes(nextSong.coverUrl) }
 
                 // 已下载优先用本地文件，否则拉在线流地址
-                val localPath = getLocalSongPathUseCase(nextSong.id)
+                val localPath = downloadRepository.getLocalPath(nextSong.id)
                 val playUri = if (localPath != null) {
                     localPathToPlayUri(localPath)
                 } else {
-                    getSongUrlUseCase(nextSong.id).url
+                    musicRepository.getSongUrl(nextSong.id).url
                 }
                 if (playUri.isNullOrBlank()) return@launch
                 if (_playbackState.value.currentSong?.id != originSongId) return@launch

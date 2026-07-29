@@ -3,14 +3,7 @@ package com.leo.lune.manager
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.PendingDownload
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.download.DeletePendingDownloadUseCase
-import com.leo.lune.domain.usecase.download.DiscardPartialDownloadUseCase
-import com.leo.lune.domain.usecase.download.DownloadSongUseCase
-import com.leo.lune.domain.usecase.download.GetPartialDownloadBytesUseCase
-import com.leo.lune.domain.usecase.download.GetPendingDownloadsUseCase
-import com.leo.lune.domain.usecase.download.UpdatePendingDownloadPausedUseCase
-import com.leo.lune.domain.usecase.download.UpdatePendingDownloadTotalBytesUseCase
-import com.leo.lune.domain.usecase.download.UpsertPendingDownloadUseCase
+import com.leo.lune.domain.repository.DownloadRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,14 +40,7 @@ data class ActiveDownloadTask(
 // 任务键为 songId + quality，支持同曲多档并行
 @Singleton
 class SongDownloadManager @Inject constructor(
-    private val downloadSongUseCase: DownloadSongUseCase,
-    private val discardPartialDownloadUseCase: DiscardPartialDownloadUseCase,
-    private val upsertPendingDownloadUseCase: UpsertPendingDownloadUseCase,
-    private val updatePendingDownloadPausedUseCase: UpdatePendingDownloadPausedUseCase,
-    private val updatePendingDownloadTotalBytesUseCase: UpdatePendingDownloadTotalBytesUseCase,
-    private val deletePendingDownloadUseCase: DeletePendingDownloadUseCase,
-    private val getPendingDownloadsUseCase: GetPendingDownloadsUseCase,
-    private val getPartialDownloadBytesUseCase: GetPartialDownloadBytesUseCase
+    private val downloadRepository: DownloadRepository
 ) {
     // 对外只读；UI 通过 collect 订阅进行中任务
     private val _tasks = MutableStateFlow<List<ActiveDownloadTask>>(emptyList())
@@ -152,7 +138,7 @@ class SongDownloadManager @Inject constructor(
     // 冷启动：从 Room 拉未完成任务灌回内存列表；不自动开下，等用户点继续
     private fun restorePendingTasks() {
         scope.launch {
-            val pendingList = runCatching { getPendingDownloadsUseCase() }.getOrElse { emptyList() }
+            val pendingList = runCatching { downloadRepository.getPendingDownloads() }.getOrElse { emptyList() }
             if (pendingList.isEmpty()) return@launch
 
             val restored = mutableListOf<ActiveDownloadTask>()
@@ -162,7 +148,7 @@ class SongDownloadManager @Inject constructor(
                 val key = taskKey(song.id, quality)
                 // 已下字节用临时文件；总长优先 Room 里的真实值，没有再估算
                 val bytes = runCatching {
-                    getPartialDownloadBytesUseCase(song.id, quality)
+                    downloadRepository.getPartialDownloadBytes(song.id, quality)
                 }.getOrDefault(0L)
                 val progress = progressFromPartialBytes(
                     bytes = bytes,
@@ -190,7 +176,7 @@ class SongDownloadManager @Inject constructor(
                 )
                 // 与 UI 一致，把 paused=true 写回 Room
                 runCatching {
-                    updatePendingDownloadPausedUseCase(song.id, quality, paused = true)
+                    downloadRepository.updatePendingPaused(song.id, quality, paused = true)
                 }
             }
             _tasks.value = restored
@@ -201,12 +187,12 @@ class SongDownloadManager @Inject constructor(
         val key = taskKey(song.id, quality)
         val job = scope.launch {
             runCatching {
-                downloadSongUseCase(
+                downloadRepository.downloadSong(
                     song = song,
                     quality = quality,
                     onProgress = { bytesRead, totalBytes ->
                         // 总长未知时无法算百分比，跳过本次回调
-                        if (totalBytes <= 0L) return@downloadSongUseCase
+                        if (totalBytes <= 0L) return@downloadSong
                         // 首次拿到真实总长时写入 Room，供杀进程后恢复进度
                         persistTotalBytesOnce(song.id, quality, totalBytes)
                         val fraction = (bytesRead.toFloat() / totalBytes).coerceIn(0f, 1f)
@@ -253,7 +239,7 @@ class SongDownloadManager @Inject constructor(
     private fun persistPending(song: Song, quality: DownloadQuality, paused: Boolean) {
         scope.launch(Dispatchers.IO) {
             runCatching {
-                upsertPendingDownloadUseCase(
+                downloadRepository.upsertPendingDownload(
                     PendingDownload(
                         song = song,
                         quality = quality,
@@ -267,7 +253,7 @@ class SongDownloadManager @Inject constructor(
 
     private fun persistPaused(songId: Long, quality: DownloadQuality, paused: Boolean) {
         scope.launch(Dispatchers.IO) {
-            runCatching { updatePendingDownloadPausedUseCase(songId, quality, paused) }
+            runCatching { downloadRepository.updatePendingPaused(songId, quality, paused) }
         }
     }
 
@@ -278,21 +264,21 @@ class SongDownloadManager @Inject constructor(
         if (!persistedTotalBytesKeys.add(key)) return
         scope.launch(Dispatchers.IO) {
             runCatching {
-                updatePendingDownloadTotalBytesUseCase(songId, quality, totalBytes)
+                downloadRepository.updatePendingTotalBytes(songId, quality, totalBytes)
             }.onFailure { persistedTotalBytesKeys.remove(key) }
         }
     }
 
     private fun clearPending(songId: Long, quality: DownloadQuality) {
         scope.launch(Dispatchers.IO) {
-            runCatching { deletePendingDownloadUseCase(songId, quality) }
+            runCatching { downloadRepository.deletePendingDownload(songId, quality) }
         }
     }
 
     private fun discardPartial(songId: Long, quality: DownloadQuality) {
         scope.launch(Dispatchers.IO) {
-            runCatching { discardPartialDownloadUseCase(songId, quality) }
-            runCatching { deletePendingDownloadUseCase(songId, quality) }
+            runCatching { downloadRepository.discardPartialDownload(songId, quality) }
+            runCatching { downloadRepository.deletePendingDownload(songId, quality) }
         }
     }
 

@@ -1,5 +1,7 @@
 package com.leo.lune.navigation
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -8,6 +10,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -29,6 +32,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.leo.lune.ui.component.bottombar.BottomTabBar
+import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeader
 import com.leo.lune.ui.component.minplayer.MiniPlayerBar
 import com.leo.lune.ui.component.sidebar.AppSidebar
 import com.leo.lune.ui.category.CategoryScreen
@@ -75,6 +79,7 @@ fun MusicNavGraph(
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 private fun MusicNavHost(
     startRoute: MusicRoute,
@@ -109,14 +114,34 @@ private fun MusicNavHost(
                 .fillMaxSize()
                 .hazeSource(state = hazeState)
         ) {
-            NavHost(
-                navController = navController,
-                startDestination = startRoute,
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp)
             ) {
+                if (showBottomTabBar) {
+                    HomeLyricsHeader(
+                        darkTheme = darkTheme,
+                        onSearchClick = {
+                            navController.navigate(MusicRoute.Search) {
+                                popUpTo(MusicRoute.Home) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        onToggleTheme = onToggleTheme,
+                        onOpenSidebar = { sidebarOpen = true }
+                    )
+                }
+
+                NavHost(
+                    navController = navController,
+                    startDestination = startRoute,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                ) {
                 composable<MusicRoute.Login> {
                     LoginScreen(
                         onBack = {
@@ -136,25 +161,13 @@ private fun MusicNavHost(
                 composable<MusicRoute.Home> {
                     HomeScreen(
                         hazeState = hazeState,
-                        onSearchClick = {
-                            navController.navigate(MusicRoute.Search) {
-                                popUpTo(MusicRoute.Home) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
                         onLikedClick = {
                             navController.navigateSingleTopTo(MusicRoute.Liked)
                         },
                         onRecentClick = {
                             navController.navigateSingleTopTo(MusicRoute.Recent)
                         },
-                        onLoginClick = {
-                            navController.navigateSingleTopTo(MusicRoute.Login)
-                        },
-                        onOpenSidebar = { sidebarOpen = true },
-                        darkTheme = darkTheme,
-                        onToggleTheme = onToggleTheme
+                        darkTheme = darkTheme
                     )
                 }
 
@@ -163,7 +176,9 @@ private fun MusicNavHost(
                 }
 
                 composable<MusicRoute.Category> {
-                    CategoryScreen()
+                    CategoryScreen(
+                        darkTheme = darkTheme
+                    )
                 }
 
                 composable<MusicRoute.Settings> {
@@ -253,6 +268,7 @@ private fun MusicNavHost(
                             navController.navigateSingleTopTo(MusicRoute.Downloads)
                         }
                     )
+                }
                 }
             }
         }

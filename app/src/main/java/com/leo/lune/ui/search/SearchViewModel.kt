@@ -6,11 +6,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.history.AddRecentSearchUseCase
-import com.leo.lune.domain.usecase.history.ClearRecentSearchesUseCase
-import com.leo.lune.domain.usecase.history.ObserveRecentSearchesUseCase
-import com.leo.lune.domain.usecase.history.RemoveRecentSearchUseCase
-import com.leo.lune.domain.usecase.music.SearchSongsUseCase
+import com.leo.lune.domain.repository.MusicRepository
+import com.leo.lune.domain.repository.SearchHistoryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,11 +37,8 @@ data class SearchUiState(
 // 负责手动触发搜索、最近搜索持久化，以及点击歌曲后驱动全局播放器
 @HiltViewModel
 class SearchViewModel @Inject constructor(
-    private val searchSongsUseCase: SearchSongsUseCase,
-    private val observeRecentSearchesUseCase: ObserveRecentSearchesUseCase,
-    private val addRecentSearchUseCase: AddRecentSearchUseCase,
-    private val removeRecentSearchUseCase: RemoveRecentSearchUseCase,
-    private val clearRecentSearchesUseCase: ClearRecentSearchesUseCase,
+    private val musicRepository: MusicRepository,
+    private val searchHistoryRepository: SearchHistoryRepository,
     private val playerController: MusicPlayerController
 ) : ViewModel() {
 
@@ -58,7 +52,7 @@ class SearchViewModel @Inject constructor(
     init {
         // 订阅本地最近搜索词
         viewModelScope.launch {
-            observeRecentSearchesUseCase().collect { recentSearches ->
+            searchHistoryRepository.observeRecentSearches().collect { recentSearches ->
                 _uiState.update { it.copy(recentSearches = recentSearches) }
             }
         }
@@ -97,7 +91,7 @@ class SearchViewModel @Inject constructor(
         if (term.isEmpty()) return
 
         viewModelScope.launch {
-            addRecentSearchUseCase(term)
+            searchHistoryRepository.addRecentSearch(term)
         }
 
         searchJob?.cancel()
@@ -119,14 +113,14 @@ class SearchViewModel @Inject constructor(
     // 删除单条最近搜索
     fun removeRecentSearch(term: String) {
         viewModelScope.launch {
-            removeRecentSearchUseCase(term)
+            searchHistoryRepository.removeRecentSearch(term)
         }
     }
 
     // 清空全部最近搜索
     fun clearRecentSearches() {
         viewModelScope.launch {
-            clearRecentSearchesUseCase()
+            searchHistoryRepository.clearRecentSearches()
         }
     }
 
@@ -141,7 +135,7 @@ class SearchViewModel @Inject constructor(
     private suspend fun performSearch(query: String) {
         _uiState.update { it.copy(isLoading = true, error = null) }
         runCatching {
-            searchSongsUseCase(query)
+            musicRepository.searchSongs(query)
         }.onSuccess { songs ->
             _uiState.update { it.copy(songs = songs, isLoading = false) }
         }.onFailure { throwable ->

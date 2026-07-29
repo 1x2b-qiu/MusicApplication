@@ -2,9 +2,7 @@ package com.leo.lune.manager
 
 import com.leo.lune.domain.model.PlaybackSnapshot
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.playback.ClearPlaybackSnapshotUseCase
-import com.leo.lune.domain.usecase.playback.GetPlaybackSnapshotUseCase
-import com.leo.lune.domain.usecase.playback.SavePlaybackSnapshotUseCase
+import com.leo.lune.domain.repository.PlaybackSnapshotRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,9 +14,7 @@ import javax.inject.Singleton
 // 职责：将队列/当前曲/下标写入 Room，供进程被杀后恢复；失败静默忽略
 @Singleton
 class PlaybackSnapshotManager @Inject constructor(
-    private val savePlaybackSnapshotUseCase: SavePlaybackSnapshotUseCase,
-    private val getPlaybackSnapshotUseCase: GetPlaybackSnapshotUseCase,
-    private val clearPlaybackSnapshotUseCase: ClearPlaybackSnapshotUseCase
+    private val playbackSnapshotRepository: PlaybackSnapshotRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -27,7 +23,7 @@ class PlaybackSnapshotManager @Inject constructor(
         if (currentSong == null || queue.isEmpty()) return
         scope.launch {
             runCatching {
-                savePlaybackSnapshotUseCase(
+                playbackSnapshotRepository.save(
                     PlaybackSnapshot(
                         currentSong = currentSong,
                         queue = queue,
@@ -40,13 +36,13 @@ class PlaybackSnapshotManager @Inject constructor(
 
     // 挂起读取上次快照；失败或无数据返回 null
     suspend fun restore(): PlaybackSnapshot? {
-        return runCatching { getPlaybackSnapshotUseCase() }.getOrNull()
+        return runCatching { playbackSnapshotRepository.get() }.getOrNull()
     }
 
     // 异步清除快照（清空队列时调用）
     fun clear() {
         scope.launch {
-            runCatching { clearPlaybackSnapshotUseCase() }
+            runCatching { playbackSnapshotRepository.clear() }
         }
     }
 }

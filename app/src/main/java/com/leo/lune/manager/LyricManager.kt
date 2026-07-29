@@ -3,7 +3,7 @@ package com.leo.lune.manager
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.LyricMatcher
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.music.GetSongLyricsUseCase
+import com.leo.lune.domain.repository.MusicRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -25,7 +25,7 @@ data class LyricDisplay(
 // 职责：异步加载 LRC 歌词、根据播放进度匹配当前行、生成展示文案
 @Singleton
 class LyricManager @Inject constructor(
-    private val getSongLyricsUseCase: GetSongLyricsUseCase
+    private val musicRepository: MusicRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var lyricJob: Job? = null
@@ -42,7 +42,7 @@ class LyricManager @Inject constructor(
         targetSongId = songId
         _lyrics.value = emptyList()
         lyricJob = scope.launch {
-            runCatching { getSongLyricsUseCase(songId) }
+            runCatching { musicRepository.getSongLyrics(songId) }
                 .onSuccess { result ->
                     if (targetSongId == songId) {
                         _lyrics.value = result

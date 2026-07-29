@@ -2,9 +2,7 @@ package com.leo.lune.ui.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.leo.lune.domain.usecase.auth.LoginWithCaptchaUseCase
-import com.leo.lune.domain.usecase.auth.LoginWithPasswordUseCase
-import com.leo.lune.domain.usecase.auth.SendCaptchaUseCase
+import com.leo.lune.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -53,12 +51,7 @@ data class LoginUiState(
 // 负责验证码发送、验证码 / 密码登录，以及 60 秒倒计时
 @HiltViewModel
 class LoginViewModel @Inject constructor(
-    // 向手机号发送登录验证码
-    private val sendCaptchaUseCase: SendCaptchaUseCase,
-    // 使用手机号 + 验证码完成登录
-    private val loginWithCaptchaUseCase: LoginWithCaptchaUseCase,
-    // 使用手机号 + 密码完成登录
-    private val loginWithPasswordUseCase: LoginWithPasswordUseCase
+    private val authRepository: AuthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LoginUiState())
@@ -127,7 +120,7 @@ class LoginViewModel @Inject constructor(
             _uiState.update {
                 it.copy(isSendingCaptcha = true, error = null, captchaHint = null)
             }
-            val result = sendCaptchaUseCase(state.phone)
+            val result = authRepository.sendCaptcha(state.phone)
             if (result.success) {
                 _uiState.update {
                     it.copy(
@@ -169,7 +162,7 @@ class LoginViewModel @Inject constructor(
                 }
                 viewModelScope.launch {
                     _uiState.update { it.copy(isLoading = true, error = null) }
-                    val result = loginWithCaptchaUseCase(state.phone, state.captcha)
+                    val result = authRepository.loginWithCaptcha(state.phone, state.captcha)
                     applyLoginResult(result.success, result.message)
                 }
             }
@@ -180,7 +173,7 @@ class LoginViewModel @Inject constructor(
                 }
                 viewModelScope.launch {
                     _uiState.update { it.copy(isLoading = true, error = null) }
-                    val result = loginWithPasswordUseCase(state.phone, state.password)
+                    val result = authRepository.loginWithPassword(state.phone, state.password)
                     applyLoginResult(result.success, result.message)
                 }
             }

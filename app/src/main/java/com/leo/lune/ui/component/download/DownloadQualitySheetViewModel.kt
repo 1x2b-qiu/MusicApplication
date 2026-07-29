@@ -3,8 +3,8 @@ package com.leo.lune.ui.component.download
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.domain.model.DownloadQuality
+import com.leo.lune.domain.repository.DownloadRepository
 import com.leo.lune.domain.usecase.download.GetDownloadQualitySizesUseCase
-import com.leo.lune.domain.usecase.download.ObserveDownloadedQualitiesUseCase
 import com.leo.lune.domain.usecase.settings.ObserveDefaultDownloadQualityUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -34,7 +34,7 @@ data class DownloadQualitySheetUiState(
 @HiltViewModel
 class DownloadQualitySheetViewModel @Inject constructor(
     private val getDownloadQualitySizesUseCase: GetDownloadQualitySizesUseCase,
-    private val observeDownloadedQualitiesUseCase: ObserveDownloadedQualitiesUseCase,
+    private val downloadRepository: DownloadRepository,
     observeDefaultDownloadQualityUseCase: ObserveDefaultDownloadQualityUseCase
 ) : ViewModel() {
 
@@ -69,7 +69,7 @@ class DownloadQualitySheetViewModel @Inject constructor(
             )
         }
         observeJob = viewModelScope.launch {
-            observeDownloadedQualitiesUseCase(songId).collect { qualities ->
+            downloadRepository.observeDownloadedQualities(songId).collect { qualities ->
                 _uiState.update { state ->
                     // 过期协程回调：已切到别的歌则丢弃
                     if (state.songId != songId) state

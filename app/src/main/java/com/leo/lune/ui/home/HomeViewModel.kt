@@ -7,9 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.domain.model.LoginState
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.music.GetLikedMusicPlaylistSongsUseCase
-import com.leo.lune.domain.usecase.auth.ObserveLoginStateUseCase
-import com.leo.lune.domain.usecase.history.ObserveRecentPlayedSongsUseCase
+import com.leo.lune.domain.model.UserPlaylist
+import com.leo.lune.domain.repository.AuthRepository
+import com.leo.lune.domain.repository.MusicRepository
+import com.leo.lune.domain.repository.PlayHistoryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,10 @@ data class HomeUiState(
     val likedSongs: List<Song> = emptyList(),
     // 最近播放歌曲列表（来自 Room 本地记录）
     val recentSongs: List<Song> = emptyList(),
+    // 自己创建的歌单（含「我喜欢的音乐」、年度歌单等）
+    val createdPlaylists: List<UserPlaylist> = emptyList(),
+    // 收藏的他人歌单
+    val subscribedPlaylists: List<UserPlaylist> = emptyList(),
     // 是否正在加载「我喜欢的」等内容
     val isLoading: Boolean = false,
     // 加载失败时的错误信息
@@ -44,15 +49,12 @@ data class HomeUiState(
 )
 
 // 首页 ViewModel
-// 负责加载「我喜欢的」、订阅本地最近播放与播放状态；登录信息进页时读一次
+// 负责加载「我喜欢的」、用户歌单、订阅本地最近播放与播放状态；登录信息进页时读一次
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    // 拉取网易云「我喜欢的音乐」歌单
-    private val getLikedMusicPlaylistSongsUseCase: GetLikedMusicPlaylistSongsUseCase,
-    // 观察 Room 中的最近播放记录
-    private val observeRecentPlayedSongsUseCase: ObserveRecentPlayedSongsUseCase,
-    // 进页时读取一次当前登录状态
-    private val observeLoginStateUseCase: ObserveLoginStateUseCase,
+    private val musicRepository: MusicRepository,
+    private val playHistoryRepository: PlayHistoryRepository,
+    private val authRepository: AuthRepository,
     // 全局播放控制器，首页不直接持有 ExoPlayer
     private val playerController: MusicPlayerController
 ) : ViewModel() {
@@ -67,7 +69,7 @@ class HomeViewModel @Inject constructor(
     init {
         // 持续观察登录态：会话恢复 / 登录 / 登出后自动刷新「我喜欢的」
         viewModelScope.launch {
-            observeLoginStateUseCase().collect { loginState ->
+            authRepository.observeLoginState().collect { loginState ->
                 _uiState.update { it.copy(loginState = loginState) }
                 loadHomeContent()
             }
@@ -97,7 +99,7 @@ class HomeViewModel @Inject constructor(
         }
         // 订阅本地最近播放；播放器写入后首页会自动刷新
         viewModelScope.launch {
-            observeRecentPlayedSongsUseCase(limit = RECENT_PLAY_LIMIT).collect { recentSongs ->
+            playHistoryRepository.observeRecentPlays(limit = RECENT_PLAY_LIMIT).collect { recentSongs ->
                 _uiState.update { it.copy(recentSongs = recentSongs) }
             }
         }
@@ -120,7 +122,7 @@ class HomeViewModel @Inject constructor(
         playerController.togglePlayPause()
     }
 
-    // 加载「我喜欢的」歌单；未登录时仅清空列表，不视为错误
+    // 加载「我喜欢的」与用户歌单；未登录时仅清空列表，不视为错误
     private fun loadHomeContent() {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
@@ -128,18 +130,34 @@ class HomeViewModel @Inject constructor(
             val userId = _uiState.value.loginState.userId
 
             runCatching {
-                val liked = if (userId != null) {
+                if (userId == null) {
+                    return@runCatching HomeLoadedContent()
+                }
+                val playlists = runCatching {
+                    musicRepository.getUserPlaylists(userId)
+                }.getOrElse { emptyList() }
+                val likedPlaylist = playlists.firstOrNull { it.isLikedMusicPlaylist }
+                val likedSongs = if (likedPlaylist != null) {
                     runCatching {
-                        getLikedMusicPlaylistSongsUseCase(userId, limit = HOME_LIKED_SONGS_LIMIT)
+                        musicRepository.getPlaylistSongs(
+                            likedPlaylist.id,
+                            limit = HOME_LIKED_SONGS_LIMIT
+                        )
                     }.getOrElse { emptyList() }
                 } else {
                     emptyList()
                 }
-                liked
-            }.onSuccess { liked ->
+                HomeLoadedContent(
+                    likedSongs = likedSongs,
+                    createdPlaylists = playlists.filter { it.isCreatedByUser },
+                    subscribedPlaylists = playlists.filter { !it.isCreatedByUser }
+                )
+            }.onSuccess { content ->
                 _uiState.update {
                     it.copy(
-                        likedSongs = liked,
+                        likedSongs = content.likedSongs,
+                        createdPlaylists = content.createdPlaylists,
+                        subscribedPlaylists = content.subscribedPlaylists,
                         isLoading = false,
                         error = null
                     )
@@ -155,6 +173,13 @@ class HomeViewModel @Inject constructor(
         }
     }
 }
+
+// 首页一次加载得到的远端内容
+private data class HomeLoadedContent(
+    val likedSongs: List<Song> = emptyList(),
+    val createdPlaylists: List<UserPlaylist> = emptyList(),
+    val subscribedPlaylists: List<UserPlaylist> = emptyList()
+)
 
 // 首页「最近播放」展示条数
 private const val RECENT_PLAY_LIMIT = 20

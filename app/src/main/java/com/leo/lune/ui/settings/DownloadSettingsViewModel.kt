@@ -2,7 +2,6 @@ package com.leo.lune.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.leo.lune.data.download.AudioFileStore
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.usecase.settings.ObserveDefaultDownloadQualityUseCase
 import com.leo.lune.domain.usecase.settings.ObserveDownloadStorageLocationUseCase
@@ -23,14 +22,13 @@ data class DownloadSettingsUiState(
     val storagePathHint: String = ""
 )
 
-// 下载设置：默认音质 + SAF 存储目录
+// 下载设置：默认音质 + SAF 存储目录（仅依赖 settings UseCase，不直连 data）
 @HiltViewModel
 class DownloadSettingsViewModel @Inject constructor(
     observeDefaultDownloadQualityUseCase: ObserveDefaultDownloadQualityUseCase,
     observeDownloadStorageLocationUseCase: ObserveDownloadStorageLocationUseCase,
     private val setDefaultDownloadQualityUseCase: SetDefaultDownloadQualityUseCase,
-    private val setDownloadStorageLocationUseCase: SetDownloadStorageLocationUseCase,
-    private val audioFileStore: AudioFileStore
+    private val setDownloadStorageLocationUseCase: SetDownloadStorageLocationUseCase
 ) : ViewModel() {
 
     val uiState: StateFlow<DownloadSettingsUiState> = combine(
@@ -39,14 +37,12 @@ class DownloadSettingsViewModel @Inject constructor(
     ) { quality, storage ->
         DownloadSettingsUiState(
             selectedQuality = quality,
-            storagePathHint = audioFileStore.resolveDisplayPath(storage.treeUri)
+            storagePathHint = storage.pathHint
         )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = DownloadSettingsUiState(
-            storagePathHint = audioFileStore.privateDownloadDirPath()
-        )
+        initialValue = DownloadSettingsUiState()
     )
 
     fun selectQuality(quality: DownloadQuality) {

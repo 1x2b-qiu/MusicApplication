@@ -2,7 +2,7 @@ package com.leo.lune.ui.component.sidebar
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.leo.lune.domain.usecase.auth.ObserveLoginStateUseCase
+import com.leo.lune.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -21,10 +21,10 @@ data class SidebarUiState(
 // 侧边栏 ViewModel：持续订阅登录态（根布局早于登录页创建，一次性读取会拿到空资料）
 @HiltViewModel
 class SidebarViewModel @Inject constructor(
-    observeLoginStateUseCase: ObserveLoginStateUseCase
+    authRepository: AuthRepository
 ) : ViewModel() {
 
-    val uiState: StateFlow<SidebarUiState> = observeLoginStateUseCase()
+    val uiState: StateFlow<SidebarUiState> = authRepository.observeLoginState()
         .map { login ->
             SidebarUiState(
                 nickname = login.nickname,

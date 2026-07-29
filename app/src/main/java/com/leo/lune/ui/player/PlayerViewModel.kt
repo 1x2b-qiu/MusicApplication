@@ -9,7 +9,7 @@ import com.leo.lune.manager.SongDownloadManager
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.download.ObserveDownloadedQualitiesUseCase
+import com.leo.lune.domain.repository.DownloadRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -60,7 +60,7 @@ data class PlayerUiState(
 class PlayerViewModel @Inject constructor(
     private val playerController: MusicPlayerController,
     private val downloadManager: SongDownloadManager,
-    private val observeDownloadedQualitiesUseCase: ObserveDownloadedQualitiesUseCase
+    private val downloadRepository: DownloadRepository
 ) : ViewModel() {
 
     // 高频播放进度（约 200ms）；不进 uiState，由进度条等局部控件就近订阅
@@ -75,7 +75,7 @@ class PlayerViewModel @Inject constructor(
             .distinctUntilChanged()
             .flatMapLatest { songId ->
                 if (songId == 0L) flowOf(emptySet())
-                else observeDownloadedQualitiesUseCase(songId)
+                else downloadRepository.observeDownloadedQualities(songId)
             },
         downloadManager.tasks
     ) { state, downloadedQualities, tasks ->

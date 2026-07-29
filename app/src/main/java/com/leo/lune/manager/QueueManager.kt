@@ -2,8 +2,7 @@ package com.leo.lune.manager
 
 import com.leo.lune.controller.PlayerPlayMode
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.stats.ObservePlayStatsUseCase
-import com.leo.lune.domain.usecase.stats.UpdatePlayModeUseCase
+import com.leo.lune.domain.repository.PlayStatsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,8 +19,7 @@ import kotlin.random.Random
 // 职责：播放模式状态 + 持久化、解析上/下一首下标（纯逻辑，不操作播放器）
 @Singleton
 class QueueManager @Inject constructor(
-    private val observePlayStatsUseCase: ObservePlayStatsUseCase,
-    private val updatePlayModeUseCase: UpdatePlayModeUseCase
+    private val playStatsRepository: PlayStatsRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -32,7 +30,7 @@ class QueueManager @Inject constructor(
     init {
         // 启动时恢复本地持久化的播放模式
         scope.launch {
-            val saved = observePlayStatsUseCase().first().playMode
+            val saved = playStatsRepository.observePlayStats().first().playMode
             _playMode.value = runCatching { PlayerPlayMode.valueOf(saved) }
                 .getOrDefault(PlayerPlayMode.Loop)
         }
@@ -47,7 +45,7 @@ class QueueManager @Inject constructor(
         }
         _playMode.value = next
         scope.launch {
-            updatePlayModeUseCase(next.name)
+            playStatsRepository.setPlayMode(next.name)
         }
     }
 

@@ -1,8 +1,7 @@
 package com.leo.lune.manager
 
-import com.leo.lune.domain.usecase.auth.ObserveLoginStateUseCase
-import com.leo.lune.domain.usecase.music.GetLikedSongIdsUseCase
-import com.leo.lune.domain.usecase.music.LikeSongUseCase
+import com.leo.lune.domain.repository.AuthRepository
+import com.leo.lune.domain.repository.MusicRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -24,9 +23,8 @@ sealed interface FavoriteResult {
 // 职责：维护本地红心 id 缓存、乐观更新 + 失败回滚、对外暴露当前曲收藏态
 @Singleton
 class FavoriteManager @Inject constructor(
-    private val likeSongUseCase: LikeSongUseCase,
-    private val getLikedSongIdsUseCase: GetLikedSongIdsUseCase,
-    private val observeLoginStateUseCase: ObserveLoginStateUseCase
+    private val musicRepository: MusicRepository,
+    private val authRepository: AuthRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -50,7 +48,7 @@ class FavoriteManager @Inject constructor(
     init {
         // 持续观察登录态：登录（含会话恢复）后预热红心列表，登出后清空缓存
         scope.launch {
-            observeLoginStateUseCase().collect { loginState ->
+            authRepository.observeLoginState().collect { loginState ->
                 val userId = loginState.userId?.takeIf { loginState.isLoggedIn }
                 if (userId != currentUserId) {
                     currentUserId = userId
@@ -79,7 +77,7 @@ class FavoriteManager @Inject constructor(
 
         scope.launch {
             runCatching {
-                likeSongUseCase(songId, like = targetFavorite)
+                musicRepository.likeSong(songId, like = targetFavorite)
             }.onSuccess { result ->
                 if (!result.success) {
                     revert(songId, targetFavorite, "收藏操作失败")
@@ -109,7 +107,7 @@ class FavoriteManager @Inject constructor(
             repeat(REFRESH_ATTEMPTS) { attempt ->
                 // 用户已切换 / 登出，放弃本次（过期的）刷新
                 if (currentUserId != userId) return@launch
-                val succeeded = runCatching { getLikedSongIdsUseCase(userId) }
+                val succeeded = runCatching { musicRepository.getLikedSongIds(userId) }
                     .onSuccess { ids ->
                         likedSongIds = ids.toSet()
                         // 列表可能晚于快照恢复到达，补一次当前曲红心

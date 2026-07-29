@@ -14,9 +14,15 @@ data class UserPlaylist(
     // 歌单封面 URL，可能为空
     val coverUrl: String?,
     // 5 表示「我喜欢的音乐」歌单
-    val specialType: Int?
+    val specialType: Int?,
+    // true 表示收藏他人的歌单；false / null 表示自己创建
+    val subscribed: Boolean?
 ) {
     // 是否为「我喜欢的音乐」特殊歌单
     val isLikedMusicPlaylist: Boolean
         get() = specialType == 5
+
+    // 是否为自己创建的歌单（含「我喜欢的音乐」、年度歌单等）
+    val isCreatedByUser: Boolean
+        get() = subscribed != true
 }

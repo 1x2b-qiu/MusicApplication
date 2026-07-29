@@ -2,9 +2,8 @@ package com.leo.lune.manager
 
 import android.os.SystemClock
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.history.RecordRecentPlayUseCase
-import com.leo.lune.domain.usecase.stats.AddListenDurationUseCase
-import com.leo.lune.domain.usecase.stats.RecordWeekPlayUseCase
+import com.leo.lune.domain.repository.PlayHistoryRepository
+import com.leo.lune.domain.repository.PlayStatsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,9 +15,8 @@ import javax.inject.Singleton
 // 职责：最近播放记录、周播放次数、听歌时长结算；全部失败静默忽略
 @Singleton
 class PlayStatsRecorderManager @Inject constructor(
-    private val recordRecentPlayUseCase: RecordRecentPlayUseCase,
-    private val recordWeekPlayUseCase: RecordWeekPlayUseCase,
-    private val addListenDurationUseCase: AddListenDurationUseCase
+    private val playHistoryRepository: PlayHistoryRepository,
+    private val playStatsRepository: PlayStatsRepository
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -28,8 +26,8 @@ class PlayStatsRecorderManager @Inject constructor(
     // 记录最近播放与周播放次数（失败静默忽略）
     fun recordPlayStats(song: Song) {
         scope.launch {
-            runCatching { recordRecentPlayUseCase(song) }
-            runCatching { recordWeekPlayUseCase() }
+            runCatching { playHistoryRepository.recordPlay(song) }
+            runCatching { playStatsRepository.recordWeekPlay() }
         }
     }
 
@@ -47,7 +45,7 @@ class PlayStatsRecorderManager @Inject constructor(
         val elapsedMs = SystemClock.elapsedRealtime() - since
         if (elapsedMs <= 0L) return
         scope.launch {
-            runCatching { addListenDurationUseCase(elapsedMs) }
+            runCatching { playStatsRepository.addListenDuration(elapsedMs) }
         }
     }
 }

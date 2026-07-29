@@ -50,7 +50,8 @@ fun PlaylistDto.toUserPlaylist(): UserPlaylist {
         name = name,
         trackCount = trackCount,
         coverUrl = coverImgUrl,
-        specialType = specialType
+        specialType = specialType,
+        subscribed = subscribed
     )
 }
 

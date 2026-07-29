@@ -54,4 +54,7 @@ interface DownloadRepository {
 
     // 临时文件已写入字节数；无文件时为 0
     suspend fun getPartialDownloadBytes(songId: Long, quality: DownloadQuality): Long
+
+    // 设置页副标题：SAF tree URI → 可读路径；未选则返回私有下载目录
+    fun resolveStorageDisplayPath(treeUri: String?): String
 }

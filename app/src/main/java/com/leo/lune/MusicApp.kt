@@ -1,7 +1,7 @@
 package com.leo.lune
 
 import android.app.Application
-import com.leo.lune.domain.usecase.auth.RestoreSessionUseCase
+import com.leo.lune.domain.repository.AuthRepository
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -24,7 +24,7 @@ class MusicApp : Application() {
             SessionRestoreEntryPoint::class.java
         )
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            entryPoint.restoreSessionUseCase()
+            entryPoint.authRepository().restoreSession()
         }
     }
 }
@@ -33,5 +33,5 @@ class MusicApp : Application() {
 @EntryPoint
 @InstallIn(SingletonComponent::class)
 interface SessionRestoreEntryPoint {
-    fun restoreSessionUseCase(): RestoreSessionUseCase
+    fun authRepository(): AuthRepository
 }

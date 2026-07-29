@@ -108,4 +108,13 @@ class MusicRepositoryImpl @Inject constructor(
         }
         return response.songs.orEmpty().map { it.toSong() }
     }
+
+    // 获取每日推荐歌曲列表
+    override suspend fun getDailyRecommendSongs(afresh: Boolean): List<Song> {
+        val response = neteaseApi.getRecommendSongs(afresh = afresh)
+        if (response.code != 200) {
+            throw IllegalStateException("Get daily recommend songs failed with code ${response.code}")
+        }
+        return response.data?.dailySongs.orEmpty().map { it.toSong() }
+    }
 }

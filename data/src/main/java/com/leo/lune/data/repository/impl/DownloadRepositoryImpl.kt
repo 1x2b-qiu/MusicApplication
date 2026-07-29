@@ -185,4 +185,8 @@ class DownloadRepositoryImpl @Inject constructor(
         val file = audioFileStore.tempFile(songId, quality.bitrate)
         if (file.isFile) file.length() else 0L
     }
+
+    override fun resolveStorageDisplayPath(treeUri: String?): String {
+        return audioFileStore.resolveDisplayPath(treeUri)
+    }
 }

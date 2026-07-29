@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.stats.ObservePlayStatsUseCase
-import com.leo.lune.domain.usecase.history.ObserveRecentPlayedSongsUseCase
+import com.leo.lune.domain.repository.PlayHistoryRepository
+import com.leo.lune.domain.repository.PlayStatsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,10 +46,8 @@ data class RecentUiState(
 // 订阅本地最近播放与播放统计、本地筛选、同步播放状态；播放操作委托给全局播放器
 @HiltViewModel
 class RecentViewModel @Inject constructor(
-    // 观察 Room 中的最近播放列表
-    private val observeRecentPlayedSongsUseCase: ObserveRecentPlayedSongsUseCase,
-    // 观察本周次数与累计听歌时长
-    private val observePlayStatsUseCase: ObservePlayStatsUseCase,
+    private val playHistoryRepository: PlayHistoryRepository,
+    private val playStatsRepository: PlayStatsRepository,
     // 全局播放控制器，本页不直接持有 ExoPlayer
     private val playerController: MusicPlayerController
 ) : ViewModel() {
@@ -62,7 +60,7 @@ class RecentViewModel @Inject constructor(
         // 订阅最近播放列表；播放器写入后本页会自动刷新
         viewModelScope.launch {
             // 与本地保留上限一致，作为本页「全量」
-            observeRecentPlayedSongsUseCase(limit = RECENT_FULL_LIMIT).collect { songs ->
+            playHistoryRepository.observeRecentPlays(limit = RECENT_FULL_LIMIT).collect { songs ->
                 _uiState.update { state ->
                     state.copy(
                         songs = songs,
@@ -75,7 +73,7 @@ class RecentViewModel @Inject constructor(
         }
         // 订阅播放统计，驱动身份区「本周已播放 / 累计播放」文案
         viewModelScope.launch {
-            observePlayStatsUseCase().collect { stats ->
+            playStatsRepository.observePlayStats().collect { stats ->
                 // 总毫秒 → 整分钟，再拆成小时与剩余分钟
                 val totalMinutes = (stats.totalListenDurationMs / 60_000L).toInt()
                 _uiState.update {

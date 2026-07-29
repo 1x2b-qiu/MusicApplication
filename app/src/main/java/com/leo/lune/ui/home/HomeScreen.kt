@@ -4,14 +4,9 @@ import android.os.Build
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -44,10 +39,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.DarkMode
-import androidx.compose.material.icons.outlined.LightMode
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MaterialTheme.colorScheme
@@ -70,8 +61,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -79,7 +68,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -95,16 +83,8 @@ import com.leo.lune.util.rememberCoverRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
-// 顶栏歌词切换动画时长（毫秒）
-private const val LyricTransitionMs = 450
-// 主题切换图标旋转动画时长
-private const val ThemeTransitionMs = 250
-// 播放中头像光环脉冲一圈的时长
-private const val PulseDurationMs = 1200
 
 // 「我喜欢的」区块动画与布局参数
 // 封面切换动画时长
@@ -175,18 +155,14 @@ private data class FavoritesGlassStyle(
     val ambientColor: Color
 )
 
-// 首页：固定顶栏 + 可滚动内容区
+// 首页：可滚动内容区（顶栏由 MusicNavHost 统一挂载）
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
     hazeState: HazeState,
-    onSearchClick: () -> Unit,
     onLikedClick: () -> Unit,
     onRecentClick: () -> Unit,
-    onLoginClick: () -> Unit,
-    onOpenSidebar: () -> Unit = {},
     darkTheme: Boolean = true,
-    onToggleTheme: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -197,25 +173,6 @@ fun HomeScreen(
             .background(MaterialTheme.colorScheme.background)
             .consumePointersUnlessResumed()
     ) {
-        // 顶栏固定在 Column 顶部，不随列表滚动
-        HomeLyricsHeader(
-            currentLyricLine = uiState.currentLyricLine,
-            isPlaying = uiState.isPlaying,
-            hasPlaybackContent = uiState.hasPlaybackContent,
-            avatarUrl = uiState.loginState.avatarUrl,
-            darkTheme = darkTheme,
-            onSearchClick = onSearchClick,
-            onToggleTheme = onToggleTheme,
-            onAvatarClick = {
-                // 未登录跳转登录；已登录打开侧边栏
-                if (!uiState.loginState.isLoggedIn) {
-                    onLoginClick()
-                } else {
-                    onOpenSidebar()
-                }
-            }
-        )
-
         when {
             uiState.error != null && uiState.recentSongs.isEmpty() -> {
             }
@@ -260,272 +217,6 @@ fun HomeScreen(
             }
         }
     }
-}
-
-// 首页顶栏：用户头像 + 实时歌词 + 搜索/主题切换
-@Composable
-private fun HomeLyricsHeader(
-    currentLyricLine: String,
-    isPlaying: Boolean,
-    hasPlaybackContent: Boolean,
-    avatarUrl: String?,
-    darkTheme: Boolean,
-    onSearchClick: () -> Unit,
-    onToggleTheme: () -> Unit,
-    onAvatarClick: () -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 14.dp)
-            .height(46.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        AvatarWithPulseRing(
-            avatarUrl = avatarUrl,
-            isPlaying = isPlaying,
-            ringColor = colorScheme.primary,
-            onClick = onAvatarClick
-        )
-
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            if (hasPlaybackContent) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_music_note),
-                        contentDescription = null,
-                        tint = colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = "正在播放",
-                        color = colorScheme.onSurfaceVariant,
-                        fontSize = 10.sp,
-                        lineHeight = 15.sp,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
-            AnimatedLyricText(lyricLine = currentLyricLine)
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            HomeHeaderIconButton(
-                onClick = onSearchClick,
-                contentDescription = "搜索"
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = null,
-                    tint = colorScheme.onBackground,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-            HomeHeaderIconButton(
-                onClick = onToggleTheme,
-                contentDescription = "切换主题"
-            ) {
-                AnimatedThemeIcon(
-                    darkTheme = darkTheme,
-                    tint = colorScheme.onBackground
-                )
-            }
-        }
-    }
-}
-
-// 顶栏右侧圆形图标按钮（搜索、主题切换）
-@Composable
-private fun HomeHeaderIconButton(
-    onClick: () -> Unit,
-    contentDescription: String,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-
-    Box(
-        modifier = Modifier
-            .size(36.dp)
-            .clip(CircleShape)
-            .background(colorScheme.surfaceVariant)
-            .border(0.67.dp, colorScheme.outlineVariant, CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        content()
-    }
-}
-
-// 歌词切换动效：旧句上滑淡出，新句从下方滑入淡入
-@Composable
-private fun AnimatedLyricText(
-    lyricLine: String,
-    modifier: Modifier = Modifier
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    val easing = FastOutSlowInEasing
-
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(24.dp)
-            // 裁剪切换动画的溢出区域，避免歌词滑动时影响布局
-            .clip(RectangleShape),
-        contentAlignment = Alignment.CenterStart
-    ) {
-        AnimatedContent(
-            targetState = lyricLine,
-            transitionSpec = {
-                (slideInVertically(
-                    animationSpec = tween(LyricTransitionMs, easing = easing),
-                    initialOffsetY = { fullHeight -> fullHeight }
-                ) + fadeIn(tween(LyricTransitionMs, easing = easing)))
-                    .togetherWith(
-                        slideOutVertically(
-                            animationSpec = tween(LyricTransitionMs, easing = easing),
-                            targetOffsetY = { fullHeight -> -fullHeight }
-                        ) + fadeOut(tween(LyricTransitionMs, easing = easing))
-                    )
-            },
-            label = "home_lyric_transition"
-        ) { line ->
-            Text(
-                text = line,
-                color = colorScheme.onBackground.copy(alpha = 0.9f),
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Medium,
-                fontStyle = FontStyle.Italic,
-                lineHeight = 22.5.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
-}
-
-// 用户头像；播放中时外圈紫色光环持续向外扩散
-@Composable
-private fun AvatarWithPulseRing(
-    avatarUrl: String?,
-    isPlaying: Boolean,
-    ringColor: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val colorScheme = MaterialTheme.colorScheme
-
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier.size(44.dp)
-    ) {
-        if (isPlaying) {
-            val infiniteTransition = rememberInfiniteTransition(label = "avatar_pulse")
-            // 圆环从 1× 扩散到 2×，同时透明度降至 0，形成脉冲效果
-            val scale by infiniteTransition.animateFloat(
-                initialValue = 1f,
-                targetValue = 2f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(PulseDurationMs, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "avatar_pulse_scale"
-            )
-            val alpha by infiniteTransition.animateFloat(
-                initialValue = 0.4f,
-                targetValue = 0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(PulseDurationMs, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Restart
-                ),
-                label = "avatar_pulse_alpha"
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .scale(scale)
-                    .border(
-                        width = 1.dp,
-                        color = ringColor.copy(alpha = alpha),
-                        shape = CircleShape
-                    )
-            )
-        }
-
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(colorScheme.surfaceContainerHigh)
-                .border(0.67.dp, colorScheme.surfaceBright, CircleShape)
-                .clickable(onClick = onClick)
-        ) {
-            AsyncImage(
-                model = rememberCoverRequest(avatarUrl, 40.dp),
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(CircleShape),
-                contentScale = ContentScale.Crop,
-            )
-        }
-    }
-}
-
-// 主题切换图标：当前图标旋转 90° 淡出，新图标从 -90° 旋转进入
-@Composable
-private fun AnimatedThemeIcon(
-    darkTheme: Boolean,
-    tint: Color,
-    modifier: Modifier = Modifier
-) {
-    val easing = FastOutSlowInEasing
-    val halfDuration = ThemeTransitionMs / 2
-    var displayedDarkTheme by remember { mutableStateOf(darkTheme) }
-    val rotation = remember { Animatable(0f) }
-    val alpha = remember { Animatable(1f) }
-
-    LaunchedEffect(darkTheme) {
-        if (displayedDarkTheme == darkTheme) return@LaunchedEffect
-
-        // 前半段：退出当前图标
-        coroutineScope {
-            launch { rotation.animateTo(90f, tween(halfDuration, easing = easing)) }
-            launch { alpha.animateTo(0f, tween(halfDuration, easing = easing)) }
-        }
-
-        displayedDarkTheme = darkTheme
-        rotation.snapTo(-90f)
-        alpha.snapTo(0f)
-
-        // 后半段：新图标从反方向旋转进入
-        coroutineScope {
-            launch { rotation.animateTo(0f, tween(halfDuration, easing = easing)) }
-            launch { alpha.animateTo(1f, tween(halfDuration, easing = easing)) }
-        }
-    }
-
-    Icon(
-        // 暗色主题显示太阳图标（点击切到亮色），亮色主题显示月亮图标
-        imageVector = if (displayedDarkTheme) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
-        contentDescription = null,
-        tint = tint,
-        modifier = modifier
-            .size(16.dp)
-            .graphicsLayer {
-                rotationZ = rotation.value
-                this.alpha = alpha.value
-            }
-    )
 }
 
 // 区块标题行：左侧可选图标 + 标题，右侧「全部」

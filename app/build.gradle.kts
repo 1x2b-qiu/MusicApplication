@@ -104,6 +104,7 @@ dependencies {
     implementation(libs.media3.session)
 
     implementation(libs.haze)
+    implementation(libs.androidx.palette.ktx)
 
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.profileinstaller)

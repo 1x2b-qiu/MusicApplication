@@ -9,8 +9,7 @@ import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.manager.SongDownloadManager
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.DownloadedSong
-import com.leo.lune.domain.usecase.download.DeleteDownloadUseCase
-import com.leo.lune.domain.usecase.download.ObserveDownloadedSongsUseCase
+import com.leo.lune.domain.repository.DownloadRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,15 +30,14 @@ data class DownloadsUiState(
 // 同曲多音质各占一行
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
-    observeDownloadedSongsUseCase: ObserveDownloadedSongsUseCase,
-    private val deleteDownloadUseCase: DeleteDownloadUseCase,
+    private val downloadRepository: DownloadRepository,
     private val downloadManager: SongDownloadManager,
     private val playerController: MusicPlayerController
 ) : ViewModel() {
 
     val uiState: StateFlow<DownloadsUiState> = combine(
         downloadManager.tasks,
-        observeDownloadedSongsUseCase()
+        downloadRepository.observeDownloadedSongs()
     ) { tasks, songs ->
         DownloadsUiState(
             activeTasks = tasks.filter { it.error == null },
@@ -75,7 +73,7 @@ class DownloadsViewModel @Inject constructor(
 
     fun deleteDownload(song: DownloadedSong) {
         viewModelScope.launch {
-            deleteDownloadUseCase(
+            downloadRepository.deleteDownload(
                 song.songId,
                 DownloadQuality.fromBitrate(song.bitrate)
             )

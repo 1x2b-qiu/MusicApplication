@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.usecase.music.GetLikedMusicPlaylistSongsUseCase
-import com.leo.lune.domain.usecase.auth.ObserveLoginStateUseCase
+import com.leo.lune.domain.repository.AuthRepository
+import com.leo.lune.domain.repository.MusicRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -43,10 +43,8 @@ data class LikedUiState(
 // 负责拉取全量喜欢歌单、本地筛选、同步播放状态；播放操作委托给全局播放器
 @HiltViewModel
 class LikedViewModel @Inject constructor(
-    // 拉取网易云「我喜欢的音乐」歌单全部歌曲
-    private val getLikedMusicPlaylistSongsUseCase: GetLikedMusicPlaylistSongsUseCase,
-    // 持续观察登录态变化
-    private val observeLoginStateUseCase: ObserveLoginStateUseCase,
+    private val musicRepository: MusicRepository,
+    private val authRepository: AuthRepository,
     // 全局播放控制器，本页不直接持有 ExoPlayer
     private val playerController: MusicPlayerController
 ) : ViewModel() {
@@ -63,7 +61,7 @@ class LikedViewModel @Inject constructor(
     init {
         // 持续观察登录态：userId 变化（会话恢复 / 登录 / 登出）后重新拉取喜欢歌单
         viewModelScope.launch {
-            observeLoginStateUseCase().collect { loginState ->
+            authRepository.observeLoginState().collect { loginState ->
                 cachedUserId = loginState.userId
                 loadLikedSongs()
             }
@@ -147,8 +145,11 @@ class LikedViewModel @Inject constructor(
         loadJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             runCatching {
+                val likedPlaylist = musicRepository.getUserPlaylists(userId)
+                    .firstOrNull { it.isLikedMusicPlaylist }
+                    ?: error("Liked music playlist not found for user $userId")
                 // limit = null：不截断，返回歌单内全部歌曲
-                getLikedMusicPlaylistSongsUseCase(userId, limit = null)
+                musicRepository.getPlaylistSongs(likedPlaylist.id, limit = null)
             }.onSuccess { songs ->
                 _uiState.update { state ->
                     state.copy(

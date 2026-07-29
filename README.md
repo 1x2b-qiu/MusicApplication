@@ -1,25 +1,33 @@
 # MusicApplication
 
-个人学习用的网易云音乐 Android 客户端，采用 Clean Architecture，通过本机 NeteaseCloudMusicApi 代理访问网易云数据。
+个人学习用的网易云音乐 Android 客户端，采用 Clean Architecture，通过本机 [NeteaseCloudMusicApi Enhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced) 代理访问网易云数据。
+
+接口文档：https://neteasecloudmusicapienhanced.js.org/
 
 ## 模块结构
 
 ```
 :app     → Compose UI、ViewModel、导航、ExoPlayer 播放
-:domain  → Song 模型、Repository 接口、UseCase
+:domain  → Song 模型、Repository 接口、少量编排 UseCase
 :data    → Retrofit 对接网易云 API、Repository 实现、Hilt DI
 ```
 
 ## 前置条件
 
-1. 本机已安装 Node.js 18+
-2. 启动网易云 API 服务：
+1. 本机已安装 Node.js 18+（官方推荐 22+）
+2. 启动网易云 API 服务（社区增强版）：
 
 ```bash
-npx NeteaseCloudMusicApi@latest
+npx @neteasecloudmusicapienhanced/api@latest
 ```
 
 默认地址：`http://localhost:3000`
+
+也可使用 Docker：
+
+```bash
+docker run -d -p 3000:3000 --name ncm-api moefurina/ncm-api:latest
+```
 
 ## 运行 App
 

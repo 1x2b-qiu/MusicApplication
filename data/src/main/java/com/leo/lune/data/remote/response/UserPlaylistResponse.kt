@@ -17,6 +17,8 @@ data class PlaylistDto(
   // 歌单内歌曲数量
   val trackCount: Int,
   @SerializedName("coverImgUrl") val coverImgUrl: String?,
-  // 特殊类型：10 表示「我喜欢的音乐」
-  val specialType: Int?
+  // 特殊类型：5 表示「我喜欢的音乐」
+  val specialType: Int?,
+  // true 表示收藏他人的歌单；false / null 表示自己创建
+  val subscribed: Boolean?
 )

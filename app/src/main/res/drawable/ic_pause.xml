@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 暂停图标；由原 PNG 转 vector，使用纯白填充以保持运行时 tint 行为 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M8,5h3v14h-3z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M13,5h3v14h-3z" />
+</vector>
