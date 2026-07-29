@@ -156,7 +156,7 @@ fun MiniPlayerBar(
                             if (isFavorite) R.drawable.ic_heart2 else R.drawable.ic_heart
                         ),
                         contentDescription = if (isFavorite) "取消收藏" else "收藏",
-                        tint = if (isFavorite) Color.Unspecified else colorScheme.onBackground,
+                        tint = if (isFavorite) Color.Red else colorScheme.onBackground,
                         modifier = Modifier
                             .size(20.dp)
                     )
@@ -179,7 +179,7 @@ fun MiniPlayerBar(
                         ),
                         contentDescription = null,
                         colorFilter = ColorFilter.tint(colorScheme.onPrimary),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(24.dp)
                     )
                 }
                 Box(

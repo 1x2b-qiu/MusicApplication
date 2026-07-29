@@ -418,6 +418,7 @@ private fun HomeFavoritesSection(
         HomeSectionHeader(
             title = "我喜欢的",
             iconRes = R.drawable.ic_heart2,
+            iconTint = Color.Red,
             onViewAllClick = onViewAllClick
         )
 
@@ -636,7 +637,7 @@ private fun FavoritesGlassMainCard(
                         ),
                         contentDescription = if (isPlayingThis) "暂停" else "播放",
                         colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }

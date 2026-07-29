@@ -472,7 +472,7 @@ private fun DailyRecommendCard(
                     painter = painterResource(R.drawable.ic_play),
                     contentDescription = "播放",
                     colorFilter = ColorFilter.tint(Color.White),
-                    modifier = Modifier.size(12.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

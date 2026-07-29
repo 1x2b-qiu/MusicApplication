@@ -474,7 +474,7 @@ private fun RecentIdentityRow(
                 ),
                 contentDescription = if (isPlayingRecent) "暂停" else "播放全部",
                 colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
     }

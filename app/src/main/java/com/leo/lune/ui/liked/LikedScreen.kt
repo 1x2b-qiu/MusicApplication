@@ -375,7 +375,7 @@ private fun LikedIntroTitle(modifier: Modifier = Modifier) {
             Icon(
                 painter = painterResource(R.drawable.ic_heart2),
                 contentDescription = null,
-                tint = Color.Unspecified,
+                tint = Color.Red,
                 modifier = Modifier.size(13.dp)
             )
             Text(
@@ -472,7 +472,7 @@ private fun LikedIdentityRow(
                 ),
                 contentDescription = if (isPlayingLiked) "暂停" else "播放全部",
                 colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(26.dp)
             )
         }
     }
