@@ -375,7 +375,7 @@ private fun LikedIntroTitle(modifier: Modifier = Modifier) {
             Icon(
                 painter = painterResource(R.drawable.ic_heart2),
                 contentDescription = null,
-                tint = Color.Red,
+                tint = Color(0xFFFF4D6A),
                 modifier = Modifier.size(13.dp)
             )
             Text(

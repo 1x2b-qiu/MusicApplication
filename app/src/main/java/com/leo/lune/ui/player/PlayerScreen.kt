@@ -599,7 +599,7 @@ private fun PlayerToolBar(
                         if (isFavorite) R.drawable.ic_heart2 else R.drawable.ic_heart
                     ),
                     contentDescription = if (isFavorite) "取消收藏" else "收藏",
-                    tint = if (isFavorite) Color.Red else colorScheme.onBackground,
+                    tint = if (isFavorite) Color(0xFFFF4D6A) else colorScheme.onBackground,
                     modifier = Modifier.size(20.dp)
                 )
             }

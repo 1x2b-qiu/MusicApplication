@@ -202,6 +202,8 @@ fun HomeScreen(
                         if(uiState.recentSongs.isNotEmpty()) {
                             HomeSectionHeader(
                                 title = "最近播放",
+                                iconRes = R.drawable.ic_recent_play,
+                                iconTint = colorScheme.onBackground,
                                 onViewAllClick = onRecentClick
                             )
                         }
@@ -418,7 +420,7 @@ private fun HomeFavoritesSection(
         HomeSectionHeader(
             title = "我喜欢的",
             iconRes = R.drawable.ic_heart2,
-            iconTint = Color.Red,
+            iconTint = Color(0xFFFF4D6A),
             onViewAllClick = onViewAllClick
         )
 

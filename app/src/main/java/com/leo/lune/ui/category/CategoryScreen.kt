@@ -334,7 +334,7 @@ private fun CategorySectionHeader(
 }
 
 
-// 每日推荐：横向列表；「全部」进入独立页
+// 今日推荐：横向列表；「全部」进入独立页
 
 @Composable
 private fun DailyRecommendSection(
@@ -346,7 +346,7 @@ private fun DailyRecommendSection(
 
     Column(modifier = Modifier.fillMaxWidth()) {
         CategorySectionHeader(
-            title = "每日推荐",
+            title = "今日推荐",
             actionLabel = "全部",
             onActionClick = onViewAllClick
         )
