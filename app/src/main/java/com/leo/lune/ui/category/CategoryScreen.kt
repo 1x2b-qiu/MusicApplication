@@ -151,6 +151,8 @@ fun CategoryScreen(
 
             .background(colorScheme.background)
 
+            .padding(horizontal = 16.dp)
+
             .consumePointersUnlessResumed(),
 
         contentPadding = PaddingValues(bottom = 161.dp),

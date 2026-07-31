@@ -171,6 +171,7 @@ fun HomeScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp)
             .consumePointersUnlessResumed()
     ) {
         when {

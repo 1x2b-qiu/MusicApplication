@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -119,6 +120,8 @@ fun PlayerScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp)
             .consumePointersUnlessResumed()
     ) {
         // Haze 源：模糊封面作氛围底，避免歌词延伸到控制栏下当背景
@@ -866,6 +869,8 @@ private fun ImmersivePlayerContent(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp)
     ) {
         Column(
             modifier = Modifier

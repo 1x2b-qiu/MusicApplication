@@ -42,7 +42,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -57,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.leo.lune.ui.component.dialog.AppConfirmDialog
 import com.leo.lune.util.rememberCoverRequest
 
 private val MenuItemShape = RoundedCornerShape(16.dp)
@@ -91,14 +94,16 @@ fun AppSidebar(
     darkTheme: Boolean = true,
     // 菜单项 id 回调（playlist / download / import_local / …）
     onMenuClick: (String) -> Unit = {},
-    // 底部「退出登录」
+    // 确认退出登录后回调（由外层跳转登录页并清空返回栈）
     onLogoutClick: () -> Unit = {},
     viewModel: SidebarViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 退出登录确认弹窗
+    var showLogoutDialog by remember { mutableStateOf(false) }
 
-    // 关闭后自动失效，避免退出动画期间重复触发
-    BackHandler(enabled = open) { onDismiss() }
+    // 关闭后自动失效，避免退出动画期间重复触发；弹窗打开时让弹窗接管返回键
+    BackHandler(enabled = open && !showLogoutDialog) { onDismiss() }
 
     // 宽度：屏宽 78%，上限 320dp（与设计稿 maxWidth 一致）
     val panelWidthDp = minOf(LocalConfiguration.current.screenWidthDp * 0.78f, 320f).dp
@@ -176,17 +181,14 @@ fun AppSidebar(
                         }
                     }
 
-                    // 底部退出登录
+                    // 底部退出登录：先弹确认框，确认后再真正登出
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 12.dp)
                             .padding(bottom = 24.dp, top = 8.dp)
                             .clip(MenuItemShape)
-                            .clickable(onClick = {
-                                onLogoutClick()
-                                onDismiss()
-                            })
+                            .clickable(onClick = { showLogoutDialog = true })
                             .padding(vertical = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -210,6 +212,23 @@ fun AppSidebar(
                 }
             }
         }
+
+        AppConfirmDialog(
+            visible = showLogoutDialog,
+            title = "退出登录",
+            message = "确定要退出当前账号吗？",
+            confirmLabel = "退出",
+            danger = true,
+            darkTheme = darkTheme,
+            onConfirm = {
+                showLogoutDialog = false
+                viewModel.logout {
+                    onDismiss()
+                    onLogoutClick()
+                }
+            },
+            onDismiss = { showLogoutDialog = false }
+        )
     }
 }
 

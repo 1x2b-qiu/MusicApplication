@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -112,6 +113,8 @@ fun SearchScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp)
             .consumePointersUnlessResumed()
 //            .navigationBarsPadding()
             .imePadding()

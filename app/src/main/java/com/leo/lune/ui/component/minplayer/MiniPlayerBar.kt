@@ -195,7 +195,7 @@ fun MiniPlayerBar(
                         painter = painterResource(R.drawable.ic_skip_next),
                         contentDescription = null,
                         tint = colorScheme.onBackground,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(25.dp)
                     )
                 }
             }

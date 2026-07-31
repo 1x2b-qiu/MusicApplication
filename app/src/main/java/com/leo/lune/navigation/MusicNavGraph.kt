@@ -115,10 +115,7 @@ private fun MusicNavHost(
                 .hazeSource(state = hazeState)
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .statusBarsPadding()
-                    .padding(horizontal = 16.dp)
+                modifier = Modifier.fillMaxSize()
             ) {
                 if (showBottomTabBar) {
                     HomeLyricsHeader(
@@ -131,7 +128,10 @@ private fun MusicNavHost(
                             }
                         },
                         onToggleTheme = onToggleTheme,
-                        onOpenSidebar = { sidebarOpen = true }
+                        onOpenSidebar = { sidebarOpen = true },
+                        modifier = Modifier
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp)
                     )
                 }
 
@@ -317,6 +317,12 @@ private fun MusicNavHost(
                     "download" -> navController.navigateSingleTopTo(MusicRoute.Downloads)
                     "settings" -> navController.navigateSingleTopTo(MusicRoute.Settings)
                     "identify" -> navController.navigateSingleTopTo(MusicRoute.Identify)
+                }
+            },
+            onLogoutClick = {
+                navController.navigate(MusicRoute.Login) {
+                    popUpTo(navController.graph.startDestinationId) { inclusive = true }
+                    launchSingleTop = true
                 }
             }
         )
