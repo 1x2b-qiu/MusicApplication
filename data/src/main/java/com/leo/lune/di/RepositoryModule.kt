@@ -1,6 +1,7 @@
 package com.leo.lune.di
 
 import com.leo.lune.data.repository.impl.AuthRepositoryImpl
+import com.leo.lune.data.repository.impl.CacheRepositoryImpl
 import com.leo.lune.data.repository.impl.DownloadRepositoryImpl
 import com.leo.lune.data.repository.impl.IdentifyRepositoryImpl
 import com.leo.lune.data.repository.impl.MusicRepositoryImpl
@@ -11,6 +12,7 @@ import com.leo.lune.data.repository.impl.SearchHistoryRepositoryImpl
 import com.leo.lune.data.repository.impl.SettingsRepositoryImpl
 import com.leo.lune.data.repository.impl.ThemeRepositoryImpl
 import com.leo.lune.domain.repository.AuthRepository
+import com.leo.lune.domain.repository.CacheRepository
 import com.leo.lune.domain.repository.DownloadRepository
 import com.leo.lune.domain.repository.IdentifyRepository
 import com.leo.lune.domain.repository.MusicRepository
@@ -100,4 +102,11 @@ abstract class RepositoryModule {
     abstract fun bindSettingsRepository(
         settingsRepositoryImpl: SettingsRepositoryImpl
     ): SettingsRepository
+
+    @Binds
+    @Singleton
+    // 应用缓存仓储（体积统计 / 清理）
+    abstract fun bindCacheRepository(
+        cacheRepositoryImpl: CacheRepositoryImpl
+    ): CacheRepository
 }

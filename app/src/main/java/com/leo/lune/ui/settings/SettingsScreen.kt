@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leo.lune.ui.component.dialog.AppConfirmDialog
 import com.leo.lune.util.consumePointersUnlessResumed
 
@@ -52,7 +53,6 @@ private val CardShape = RoundedCornerShape(26.dp)
 // 行内图标容器圆角（与 SidebarMenuRow 一致）
 private val IconBoxShape = RoundedCornerShape(12.dp)
 
-// 设置项：仅 UI 占位，点击暂无业务
 private data class SettingsItem(
     val id: String,
     val label: String,
@@ -67,17 +67,16 @@ private val SettingsItems = listOf(
     SettingsItem("about", "关于", Icons.Outlined.Info)
 )
 
-// 设置页：顶栏居中标题 + 圆角卡片列表（对齐设计稿，功能后续再接）
+// 设置页：顶栏居中标题 + 圆角卡片列表；清理缓存接真实体积统计
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
     onDownloadSettingsClick: () -> Unit,
     darkTheme: Boolean,
-    @Suppress("UNUSED_PARAMETER")
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    // 清理缓存确认弹窗：仅 UI，确认后暂不执行清理
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showClearCacheDialog by remember { mutableStateOf(false) }
 
     Box(
@@ -102,6 +101,8 @@ fun SettingsScreen(
                         label = item.label,
                         icon = item.icon,
                         darkTheme = darkTheme,
+                        // 仅清理缓存行显示体积
+                        trailingText = if (item.id == "cache") uiState.cacheSizeLabel else null,
                         onClick = {
                             when (item.id) {
                                 "download" -> onDownloadSettingsClick()
@@ -117,10 +118,14 @@ fun SettingsScreen(
         AppConfirmDialog(
             visible = showClearCacheDialog,
             title = "清理缓存",
-            message = "将清除 128 MB 的缓存文件，不影响已下载的歌曲。",
+            message = "将清除 ${uiState.cacheSizeLabel} 的缓存文件，不影响已下载的歌曲。",
             confirmLabel = "清理",
             darkTheme = darkTheme,
-            onConfirm = { showClearCacheDialog = false },
+            onConfirm = {
+                viewModel.clearCache {
+                    showClearCacheDialog = false
+                }
+            },
             onDismiss = { showClearCacheDialog = false }
         )
     }
@@ -178,12 +183,13 @@ private fun SettingsCard(
     }
 }
 
-// 设置单行：图标盒 + 标题 + 右箭头（样式与 SidebarMenuRow 一致）
+// 设置单行：图标盒 + 标题 + 可选右侧文案 + 右箭头
 @Composable
 private fun SettingsRow(
     label: String,
     icon: ImageVector,
     darkTheme: Boolean,
+    trailingText: String? = null,
     onClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -196,9 +202,7 @@ private fun SettingsRow(
             .fillMaxWidth()
             .padding(bottom = 4.dp)
             .clip(IconBoxShape)
-            .clickable(
-                onClick = onClick
-            )
+            .clickable(onClick = onClick)
             .padding(horizontal = 8.dp)
             .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -235,12 +239,27 @@ private fun SettingsRow(
             overflow = TextOverflow.Ellipsis
         )
 
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-            contentDescription = null,
-            tint = textSecondary,
-            modifier = Modifier.size(16.dp)
-        )
+        // 右侧文案紧贴箭头，间距小于行内主间距
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            if (!trailingText.isNullOrBlank()) {
+                Text(
+                    text = trailingText,
+                    color = textSecondary,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = textSecondary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 
