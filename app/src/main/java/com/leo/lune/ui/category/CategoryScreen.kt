@@ -124,6 +124,7 @@ fun CategoryScreen(
                 playlists = uiState.featuredPlaylists,
                 playingPlaylistId = uiState.playingFeaturedPlaylistId,
                 onPlaylistClick = viewModel::onPlaylistClick,
+                onPlaylistPlayClick = viewModel::onPlaylistPlayClick,
                 onViewAllClick = viewModel::onFeaturedPlaylistsAllClick
             )
         }
@@ -132,6 +133,7 @@ fun CategoryScreen(
             ChartsSection(
                 charts = uiState.charts,
                 onChartClick = viewModel::onChartClick,
+                onChartSongClick = viewModel::onChartSongClick,
                 onViewAllClick = viewModel::onChartsAllClick
             )
         }
@@ -479,7 +481,10 @@ private fun DailySongRow(
 private fun FeaturedPlaylistsSection(
     playlists: List<FeaturedPlaylistItem>,
     playingPlaylistId: Long?,
+    // 点击卡片进入详情
     onPlaylistClick: (Long) -> Unit,
+    // 点击播放钮播放 / 暂停
+    onPlaylistPlayClick: (Long) -> Unit,
     onViewAllClick: () -> Unit
 ) {
     if (playlists.isEmpty()) return
@@ -496,7 +501,8 @@ private fun FeaturedPlaylistsSection(
                 FeaturedPlaylistCard(
                     playlist = playlist,
                     isPlayingThis = playingPlaylistId == playlist.id,
-                    onClick = { onPlaylistClick(playlist.id) }
+                    onOpenClick = { onPlaylistClick(playlist.id) },
+                    onPlayClick = { onPlaylistPlayClick(playlist.id) }
                 )
             }
         }
@@ -508,7 +514,8 @@ private fun FeaturedPlaylistsSection(
 private fun FeaturedPlaylistCard(
     playlist: FeaturedPlaylistItem,
     isPlayingThis: Boolean,
-    onClick: () -> Unit
+    onOpenClick: () -> Unit,
+    onPlayClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
@@ -532,7 +539,7 @@ private fun FeaturedPlaylistCard(
                         scale.animateTo(0.95f, tween(60))
                         scale.animateTo(1f, tween(100))
                     }
-                    onClick()
+                    onOpenClick()
                 }
             )
             .padding(8.dp),
@@ -567,7 +574,7 @@ private fun FeaturedPlaylistCard(
                                 playScale.animateTo(0.9f, tween(60))
                                 playScale.animateTo(1f, tween(100))
                             }
-                            onClick()
+                            onPlayClick()
                         }
                     ),
                 contentAlignment = Alignment.Center
@@ -606,6 +613,7 @@ private fun FeaturedPlaylistCard(
 private fun ChartsSection(
     charts: List<ChartItem>,
     onChartClick: (Long) -> Unit,
+    onChartSongClick: (chartId: Long, songId: Long) -> Unit,
     onViewAllClick: () -> Unit
 ) {
     if (charts.isEmpty()) return
@@ -618,7 +626,8 @@ private fun ChartsSection(
             items(charts, key = { it.id }) { chart ->
                 ChartCard(
                     chart = chart,
-                    onClick = { onChartClick(chart.id) }
+                    onClick = { onChartClick(chart.id) },
+                    onSongClick = { songId -> onChartSongClick(chart.id, songId) }
                 )
             }
         }
@@ -629,7 +638,8 @@ private fun ChartsSection(
 @Composable
 private fun ChartCard(
     chart: ChartItem,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onSongClick: (Long) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
@@ -676,11 +686,18 @@ private fun ChartCard(
             )
         }
         Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            // 外边距下放到行上，保证点击层相对内容区有内缩，且歌曲视觉位置不变
+            modifier = Modifier.padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             chart.songs.forEachIndexed { index, song ->
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 6.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = { onSongClick(song.id) })
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -688,7 +705,7 @@ private fun ChartCard(
                         text = "${index + 1}",
                         color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         fontSize = 11.sp,
-                        modifier = Modifier.width(14.dp)
+                        modifier = Modifier.width(8.dp)
                     )
                     AsyncImage(
                         model = rememberCoverRequest(song.coverUrl, 28.dp),

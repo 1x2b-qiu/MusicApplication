@@ -42,6 +42,7 @@ data class FeaturedPlaylistItem(
 
 // 排行榜内单曲预览
 data class ChartSongPreview(
+    val id: Long,
     val title: String,
     val artist: String,
     val coverUrl: String
@@ -64,7 +65,7 @@ data class GenreItem(
     val coverUrl: String
 )
 
-// 曲库页 UI 状态：每日推荐 / 猜你喜欢 / 甄选歌单为真实数据，其余暂为占位
+// 曲库页 UI 状态：每日推荐 / 猜你喜欢 / 甄选歌单 / 排行榜为真实数据，风格分类暂为占位
 data class CategoryUiState(
     // 每日推荐（Banner）
     val dailyRecommendSongs: List<DailyRecommendSongItem> = emptyList(),
@@ -80,7 +81,7 @@ data class CategoryUiState(
     val genres: List<GenreItem> = emptyList()
 )
 
-// 曲库页 ViewModel：每日推荐 + 猜你喜欢 + 甄选歌单走网易云接口，其余仍用静态占位
+// 曲库页 ViewModel：每日推荐 / 猜你喜欢 / 甄选歌单 / 排行榜走接口，风格分类仍占位
 @HiltViewModel
 class CategoryViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
@@ -97,8 +98,12 @@ class CategoryViewModel @Inject constructor(
     private var guessYouLikeQueue: List<Song> = emptyList()
     // 甄选歌单播放标记：用于判断当前播放是否来自某个甄选歌单
     private val featuredPlaylistMarkers = mutableMapOf<Long, FeaturedPlaylistMarker>()
+    // 排行榜预览歌曲队列：chartId → 前三首
+    private val chartQueues = mutableMapOf<Long, List<Song>>()
 
     init {
+        // 排行榜无需登录，进页即拉取
+        loadCharts()
         viewModelScope.launch {
             authRepository.observeLoginState().collect { loginState ->
                 if (loginState.isLoggedIn) {
@@ -196,6 +201,37 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
+    // 拉取固定四个榜单前 3 首预览（复用 playlist/track/all）
+    private fun loadCharts() {
+        viewModelScope.launch {
+            val nextQueues = mutableMapOf<Long, List<Song>>()
+            val charts = FixedCharts.map { spec ->
+                val songs = runCatching {
+                    musicRepository.getPlaylistSongs(spec.id, limit = 3)
+                }.getOrElse { emptyList() }
+                nextQueues[spec.id] = songs
+                ChartItem(
+                    id = spec.id,
+                    title = spec.title,
+                    subtitle = spec.subtitle,
+                    headerGradient = spec.headerGradient,
+                    glowColor = spec.glowColor,
+                    songs = songs.map { song ->
+                        ChartSongPreview(
+                            id = song.id,
+                            title = song.name,
+                            artist = song.artists,
+                            coverUrl = song.coverUrl.orEmpty()
+                        )
+                    }
+                )
+            }
+            chartQueues.clear()
+            chartQueues.putAll(nextQueues)
+            _uiState.update { it.copy(charts = charts) }
+        }
+    }
+
     // 猜你喜欢：播放指定歌曲（队列为当前推荐列表）
     @RequiresApi(Build.VERSION_CODES.O)
     fun onGuessYouLikePlay(songId: Long) {
@@ -216,9 +252,9 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
-    // 甄选歌单：拉取歌单歌曲并立即播放（不进入详情）
+    // 甄选歌单：仅播放按钮触发；拉取歌曲并播放 / 播放中则暂停
     @RequiresApi(Build.VERSION_CODES.O)
-    fun onPlaylistClick(playlistId: Long) {
+    fun onPlaylistPlayClick(playlistId: Long) {
         val playback = playerController.playbackState.value
         val isPlayingThis = _uiState.value.playingFeaturedPlaylistId == playlistId &&
             playback.isPlaying
@@ -240,8 +276,20 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
+    // 甄选歌单：进入详情（暂留空）
+    fun onPlaylistClick(playlistId: Long) = Unit
+
     fun onFeaturedPlaylistsAllClick() = Unit
 
+    // 排行榜：点击前三首中的某一首，以该榜预览列表为队列播放
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun onChartSongClick(chartId: Long, songId: Long) {
+        val queue = chartQueues[chartId].orEmpty()
+        val song = queue.firstOrNull { it.id == songId } ?: return
+        playerController.playSong(song, queue)
+    }
+
+    // 排行榜：进入详情（暂留空）
     fun onChartClick(chartId: Long) = Unit
 
     fun onChartsAllClick() = Unit
@@ -291,61 +339,27 @@ private fun PersonalizedPlaylist.toFeaturedItem(): FeaturedPlaylistItem =
         coverUrl = coverUrl.orEmpty()
     )
 
+// 固定四个榜单：id 来自网易云官方榜，样式沿用原 UI 配色
+private data class ChartSpec(
+    val id: Long,
+    val title: String,
+    val subtitle: String,
+    val headerGradient: List<Long>,
+    val glowColor: Long
+)
+
+private val FixedCharts = listOf(
+    ChartSpec(3778678, "热歌榜", "实时热门", listOf(0xFFF97316L, 0xFFEF4444L), 0x40EF4444L),
+    ChartSpec(3779629, "新歌榜", "每周更新", listOf(0xFF34D399L, 0xFF06B6D4L), 0x4022D3EEL),
+    ChartSpec(6723173524, "网络热歌榜", "全网爆款", listOf(0xFF60A5FAL, 0xFF8B5CF6L), 0x408B5CF6L),
+    ChartSpec(6688069460, "听歌识曲榜", "听歌识曲热榜", listOf(0xFFEC4899L, 0xFFFB7185L), 0x40EC4899L)
+)
+
 private fun u(id: String, w: Int = 400, h: Int = 400): String =
     "https://images.unsplash.com/$id?w=$w&h=$h&fit=crop&auto=format"
 
-// 静态占位：排行榜 / 风格分类（甄选歌单改由接口填充）
+// 静态占位：风格分类
 private fun sampleCategoryUiState(): CategoryUiState = CategoryUiState(
-    charts = listOf(
-        ChartItem(
-            id = 1,
-            title = "热歌榜",
-            subtitle = "实时热门",
-            headerGradient = listOf(0xFFF97316L, 0xFFEF4444L),
-            glowColor = 0x40EF4444L,
-            songs = listOf(
-                ChartSongPreview("Starfall", "Lunar Echo", u("photo-1618172842918-3eabce30c912", 80, 80)),
-                ChartSongPreview("Afterimage", "KAIA", u("photo-1657627157213-c5f44dbd0724", 80, 80)),
-                ChartSongPreview("Dreamcore", "Cello Wolf", u("photo-1784401930662-b9e573c8d79e", 80, 80))
-            )
-        ),
-        ChartItem(
-            id = 2,
-            title = "新歌榜",
-            subtitle = "每周更新",
-            headerGradient = listOf(0xFF34D399L, 0xFF06B6D4L),
-            glowColor = 0x4022D3EEL,
-            songs = listOf(
-                ChartSongPreview("Quantum Drift", "vektøR", u("photo-1619983081593-e2ba5b543168", 80, 80)),
-                ChartSongPreview("Glass Ocean", "Mira Sol", u("photo-1752801375943-f0cb633f3422", 80, 80)),
-                ChartSongPreview("Velvet Sky", "ANA", u("photo-1761104169769-1aefefbcb5f2", 80, 80))
-            )
-        ),
-        ChartItem(
-            id = 3,
-            title = "网络热歌榜",
-            subtitle = "全网爆款",
-            headerGradient = listOf(0xFF60A5FAL, 0xFF8B5CF6L),
-            glowColor = 0x408B5CF6L,
-            songs = listOf(
-                ChartSongPreview("Purple Haze", "Neon Drift", u("photo-1619983081593-e2ba5b543168", 80, 80)),
-                ChartSongPreview("Circuit Bloom", "ByteFlower", u("photo-1539631934288-4f99f71032c6", 80, 80)),
-                ChartSongPreview("Neon Gospel", "Phantom Eye", u("photo-1620219365320-a8c4e958ef0b", 80, 80))
-            )
-        ),
-        ChartItem(
-            id = 4,
-            title = "听歌识曲榜",
-            subtitle = "Shazam 热榜",
-            headerGradient = listOf(0xFFEC4899L, 0xFFFB7185L),
-            glowColor = 0x40EC4899L,
-            songs = listOf(
-                ChartSongPreview("Serotonin Rush", "SANA", u("photo-1768885514740-d64d25ac9a64", 80, 80)),
-                ChartSongPreview("Dreamcore", "Cello Wolf", u("photo-1784401930662-b9e573c8d79e", 80, 80)),
-                ChartSongPreview("Starfall", "Lunar Echo", u("photo-1618172842918-3eabce30c912", 80, 80))
-            )
-        )
-    ),
     genres = listOf(
         GenreItem(1, "流行", u("photo-1514525253161-7a46d19cd819", 600, 400)),
         GenreItem(2, "摇滚", u("photo-1516924962500-2b4b3b99ea02", 600, 400)),
