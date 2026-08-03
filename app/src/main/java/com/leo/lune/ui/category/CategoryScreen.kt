@@ -41,13 +41,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -59,6 +69,7 @@ import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
 import kotlinx.coroutines.launch
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -71,6 +82,39 @@ private val PlaylistCoverShape = RoundedCornerShape(12.dp)
 private val ChartShape = RoundedCornerShape(16.dp)
 // 风格分类格子圆角
 private val GenreShape = RoundedCornerShape(16.dp)
+// DailyMix 播放钮外轮廓：大圆减去偏右小圆，形成开口朝右的弯月
+private val CrescentMoonShape = object : Shape {
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        val w = size.width
+        val h = size.height
+        val outer = Path().apply { addOval(Rect(0f, 0f, w, h)) }
+        val cut = Path().apply {
+            val cutW = w * 0.82f
+            val cutH = h * 0.82f
+            val left = w * 0.28f
+            val top = (h - cutH) / 2f
+            addOval(Rect(left, top, left + cutW, top + cutH))
+        }
+        val crescent = Path().apply {
+            op(outer, cut, PathOperation.Difference)
+        }
+        return Outline.Generic(crescent)
+    }
+}
+
+// 太阳色（夕阳红）/ 月亮色
+private val SunColor = Color(0xFFFF6B4A)
+private val MoonColor = Color(0xFFF6E7A8)
+
+// 本地时间 5:00（含）～18:00（不含）为白天，显示太阳；其余显示月亮
+@RequiresApi(Build.VERSION_CODES.O)
+private fun isDailyMixDaytime(now: LocalTime = LocalTime.now()): Boolean =
+    now.hour in 5 until 18
+
 
 // ─── 猜你喜欢分页 ─────────────────────────────────────────────────────────────
 // 每页歌曲数
@@ -259,6 +303,7 @@ private fun GuessYouLikePageIndicator(
 }
 
 // Daily Mix Banner
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 private fun DailyMixBanner(
     // 每日推荐歌曲列表（取首曲封面作背景）
@@ -332,14 +377,17 @@ private fun DailyMixBanner(
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
-                // 播放按钮（样式与 HomeScreen FavoritesMainCard 一致）
+                // 播放按钮：白天圆日 / 夜晚弯月；未播放白色，播放中用对应天体色
+                val isDaytime = isDailyMixDaytime()
+                val celestialShape = if (isDaytime) CircleShape else CrescentMoonShape
+                val celestialColor = if (isPlayingThis) {
+                    if (isDaytime) SunColor else MoonColor
+                } else {
+                    Color.White
+                }
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .scale(playScale.value)
-                        .shadow(12.dp, CircleShape, spotColor = colorScheme.primary)
-                        .clip(CircleShape)
-                        .background(Color(0xFFF4F2FB))
                         .clickable(
                             interactionSource = playInteraction,
                             indication = null,
@@ -350,18 +398,15 @@ private fun DailyMixBanner(
                                 }
                                 onPlayClick()
                             }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(
-                            if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
-                        ),
-                        contentDescription = if (isPlayingThis) "暂停" else "播放全部",
-                        colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                        )
+                        .scale(playScale.value)
+                        .shadow(12.dp, celestialShape, spotColor = celestialColor)
+                        .clip(celestialShape)
+                        .background(celestialColor)
+                        .semantics {
+                            contentDescription = if (isPlayingThis) "暂停" else "播放全部"
+                        }
+                )
             }
 
             // 封面条：预览前 6 首
@@ -653,12 +698,6 @@ private fun ChartCard(
         modifier = Modifier
             .width(160.dp)
             .scale(scale.value)
-            .shadow(
-                elevation = 8.dp,
-                shape = ChartShape,
-                spotColor = Color(chart.glowColor.toInt()),
-                ambientColor = Color(chart.glowColor.toInt())
-            )
             .cardSurface(ChartShape)
             .clickable(
                 interactionSource = interaction,

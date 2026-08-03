@@ -349,32 +349,38 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 播放/暂停：无 currentSong 时用 preview 走 playSong；
-    // 已有曲目时先 ensurePlaybackService（暂停期间服务可能被系统回收）再 play/pause
+    // 播放/暂停：暂停直接 pause；续播仅在播放器仍可直接 play 时走 play()，
+    // 否则（仅有 preview / 无 MediaItem / IDLE / ENDED / 出错）走 playSong 重新拉地址并 prepare。
+    // 后台久置后服务回收或流地址失效时，裸 play() 会无响应，必须回退到 playSong。
     @RequiresApi(Build.VERSION_CODES.O)
     fun togglePlayPause() {
         val state = _playbackState.value
-        if (state.currentSong == null) {
-            state.previewSong?.let { preview ->
-                playSong(preview, state.queue.ifEmpty { listOf(preview) })
-            }
+        val song = state.currentSong ?: state.previewSong ?: return
+        if (player.isPlaying) {
+            player.pause()
+            return
+        }
+        val canResume = state.currentSong != null &&
+            player.mediaItemCount > 0 &&
+            player.playbackState != Player.STATE_IDLE &&
+            player.playbackState != Player.STATE_ENDED &&
+            player.playerError == null
+        if (!canResume) {
+            playSong(song, state.queue.ifEmpty { listOf(song) })
             return
         }
         ensurePlaybackService()
-        if (player.isPlaying) {
-            player.pause()
-        } else {
-            player.play()
-        }
+        player.play()
     }
 
-    // 播放列表播完（下一首未预取或预取失败时）：单曲循环重播，其余模式切下一首
+    // 播放列表播完（下一首未预取或预取失败时）：单曲循环走 playSong 刷新地址后重播，其余模式切下一首
     @RequiresApi(Build.VERSION_CODES.O)
     private fun onPlaybackEnded() {
         when (queueManager.playMode.value) {
             PlayerPlayMode.Single -> {
-                player.seekTo(0)
-                player.play()
+                val state = _playbackState.value
+                val song = state.currentSong ?: return
+                playSong(song, state.queue.ifEmpty { listOf(song) })
             }
             PlayerPlayMode.Loop, PlayerPlayMode.Shuffle -> skipToNext()
         }
