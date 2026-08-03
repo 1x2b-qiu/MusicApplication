@@ -1,9 +1,11 @@
 package com.leo.lune.data.mapper
 
+import com.leo.lune.data.remote.response.PersonalizedPlaylistDto
 import com.leo.lune.data.remote.response.PlaylistDto
 import com.leo.lune.data.remote.response.SongDto
 import com.leo.lune.data.remote.response.SongUrlDto
 import com.leo.lune.domain.model.LikeSongResult
+import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
@@ -52,6 +54,19 @@ fun PlaylistDto.toUserPlaylist(): UserPlaylist {
         coverUrl = coverImgUrl,
         specialType = specialType,
         subscribed = subscribed
+    )
+}
+
+// 推荐歌单 DTO → 领域模型
+fun PersonalizedPlaylistDto.toPersonalizedPlaylist(): PersonalizedPlaylist? {
+    val playlistId = id ?: return null
+    return PersonalizedPlaylist(
+        id = playlistId,
+        name = name.orEmpty(),
+        copywriter = copywriter?.takeIf { it.isNotBlank() },
+        coverUrl = normalizeCoverUrl(picUrl),
+        trackCount = trackCount ?: 0,
+        playCount = playCount?.toLong() ?: 0L
     )
 }
 

@@ -5,6 +5,8 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
+import com.leo.lune.controller.PlaybackState
+import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.MusicRepository
@@ -13,6 +15,8 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -60,18 +64,23 @@ data class GenreItem(
     val coverUrl: String
 )
 
-// 曲库页 UI 状态：每日推荐 / 猜你喜欢为真实数据，其余暂为占位
+// 曲库页 UI 状态：每日推荐 / 猜你喜欢 / 甄选歌单为真实数据，其余暂为占位
 data class CategoryUiState(
     // 每日推荐（Banner）
     val dailyRecommendSongs: List<DailyRecommendSongItem> = emptyList(),
     // 猜你喜欢（推荐新音乐）
     val guessYouLikeSongs: List<DailyRecommendSongItem> = emptyList(),
+    // 甄选歌单（推荐歌单）
     val featuredPlaylists: List<FeaturedPlaylistItem> = emptyList(),
+    // 每日推荐 Banner 播放按钮是否处于「播放中」态
+    val isDailyRecommendPlaying: Boolean = false,
+    // 当前正在播放的甄选歌单 id，null 表示无
+    val playingFeaturedPlaylistId: Long? = null,
     val charts: List<ChartItem> = emptyList(),
     val genres: List<GenreItem> = emptyList()
 )
 
-// 曲库页 ViewModel：每日推荐 + 猜你喜欢走网易云接口，其余仍用静态占位
+// 曲库页 ViewModel：每日推荐 + 猜你喜欢 + 甄选歌单走网易云接口，其余仍用静态占位
 @HiltViewModel
 class CategoryViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
@@ -86,6 +95,8 @@ class CategoryViewModel @Inject constructor(
     private var dailyRecommendQueue: List<Song> = emptyList()
     // 猜你喜欢原始队列，供播放器用
     private var guessYouLikeQueue: List<Song> = emptyList()
+    // 甄选歌单播放标记：用于判断当前播放是否来自某个甄选歌单
+    private val featuredPlaylistMarkers = mutableMapOf<Long, FeaturedPlaylistMarker>()
 
     init {
         viewModelScope.launch {
@@ -93,17 +104,41 @@ class CategoryViewModel @Inject constructor(
                 if (loginState.isLoggedIn) {
                     loadDailyRecommend()
                     loadGuessYouLike()
+                    loadFeaturedPlaylists()
                 } else {
                     dailyRecommendQueue = emptyList()
                     guessYouLikeQueue = emptyList()
+                    featuredPlaylistMarkers.clear()
                     _uiState.update {
                         it.copy(
                             dailyRecommendSongs = emptyList(),
-                            guessYouLikeSongs = emptyList()
+                            guessYouLikeSongs = emptyList(),
+                            featuredPlaylists = emptyList(),
+                            isDailyRecommendPlaying = false,
+                            playingFeaturedPlaylistId = null
                         )
                     }
                 }
             }
+        }
+        // 同步每日推荐与甄选歌单播放按钮状态
+        viewModelScope.launch {
+            playerController.playbackState
+                .map { state ->
+                    Pair(
+                        isPlayingDailyRecommend(state),
+                        resolvePlayingFeaturedPlaylistId(state)
+                    )
+                }
+                .distinctUntilChanged()
+                .collect { (isDailyPlaying, playingFeaturedId) ->
+                    _uiState.update {
+                        it.copy(
+                            isDailyRecommendPlaying = isDailyPlaying,
+                            playingFeaturedPlaylistId = playingFeaturedId
+                        )
+                    }
+                }
         }
     }
 
@@ -114,7 +149,12 @@ class CategoryViewModel @Inject constructor(
                 .onSuccess { songs ->
                     dailyRecommendQueue = songs
                     _uiState.update {
-                        it.copy(dailyRecommendSongs = songs.map { song -> song.toDailyRecommendItem() })
+                        it.copy(
+                            dailyRecommendSongs = songs.map { song -> song.toDailyRecommendItem() },
+                            isDailyRecommendPlaying = isPlayingDailyRecommend(
+                                playerController.playbackState.value
+                            )
+                        )
                     }
                 }
                 .onFailure {
@@ -141,6 +181,21 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
+    // 拉取推荐歌单并映射到甄选歌单 UI
+    private fun loadFeaturedPlaylists() {
+        viewModelScope.launch {
+            runCatching { musicRepository.getPersonalizedPlaylists(limit = 10) }
+                .onSuccess { playlists ->
+                    _uiState.update {
+                        it.copy(featuredPlaylists = playlists.map { playlist -> playlist.toFeaturedItem() })
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(featuredPlaylists = emptyList()) }
+                }
+        }
+    }
+
     // 猜你喜欢：播放指定歌曲（队列为当前推荐列表）
     @RequiresApi(Build.VERSION_CODES.O)
     fun onGuessYouLikePlay(songId: Long) {
@@ -149,15 +204,41 @@ class CategoryViewModel @Inject constructor(
         playerController.playSong(song, queue)
     }
 
-    // 每日推荐：播放全部
+    // 每日推荐：播放全部 / 播放中则暂停
     @RequiresApi(Build.VERSION_CODES.O)
-    fun onDailyRecommendPlayAll() {
+    fun onDailyRecommendPlayClick() {
         val queue = dailyRecommendQueue
         if (queue.isEmpty()) return
-        playerController.playSong(queue.first(), queue)
+        if (_uiState.value.isDailyRecommendPlaying) {
+            playerController.togglePlayPause()
+        } else {
+            playerController.playSong(queue.first(), queue)
+        }
     }
 
-    fun onPlaylistClick(playlistId: Long) = Unit
+    // 甄选歌单：拉取歌单歌曲并立即播放（不进入详情）
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun onPlaylistClick(playlistId: Long) {
+        val playback = playerController.playbackState.value
+        val isPlayingThis = _uiState.value.playingFeaturedPlaylistId == playlistId &&
+            playback.isPlaying
+        if (isPlayingThis) {
+            playerController.togglePlayPause()
+            return
+        }
+
+        viewModelScope.launch {
+            runCatching { musicRepository.getPlaylistSongs(playlistId) }
+                .onSuccess { songs ->
+                    if (songs.isEmpty()) return@onSuccess
+                    featuredPlaylistMarkers[playlistId] = FeaturedPlaylistMarker(
+                        firstSongId = songs.first().id,
+                        songIds = songs.map { it.id }.toSet()
+                    )
+                    playerController.playSong(songs.first(), songs)
+                }
+        }
+    }
 
     fun onFeaturedPlaylistsAllClick() = Unit
 
@@ -166,7 +247,32 @@ class CategoryViewModel @Inject constructor(
     fun onChartsAllClick() = Unit
 
     fun onGenreClick(genreId: Long) = Unit
+
+    // 当前是否正在播放每日推荐队列
+    private fun isPlayingDailyRecommend(state: PlaybackState): Boolean {
+        val queue = dailyRecommendQueue
+        if (queue.isEmpty() || !state.isPlaying) return false
+        val dailyFirstId = queue.first().id
+        val currentSongId = state.currentSong?.id ?: return false
+        return state.queue.firstOrNull()?.id == dailyFirstId &&
+            queue.any { it.id == currentSongId }
+    }
+
+    // 返回当前正在播放的甄选歌单 id；无则为 null
+    private fun resolvePlayingFeaturedPlaylistId(state: PlaybackState): Long? {
+        if (!state.isPlaying) return null
+        val currentSongId = state.currentSong?.id ?: return null
+        val queueFirstId = state.queue.firstOrNull()?.id ?: return null
+        return featuredPlaylistMarkers.entries.firstOrNull { (_, marker) ->
+            marker.firstSongId == queueFirstId && currentSongId in marker.songIds
+        }?.key
+    }
 }
+
+private data class FeaturedPlaylistMarker(
+    val firstSongId: Long,
+    val songIds: Set<Long>
+)
 
 private fun Song.toDailyRecommendItem(): DailyRecommendSongItem = DailyRecommendSongItem(
     id = id,
@@ -176,22 +282,20 @@ private fun Song.toDailyRecommendItem(): DailyRecommendSongItem = DailyRecommend
     duration = formatSongDuration(durationMs)
 )
 
+private fun PersonalizedPlaylist.toFeaturedItem(): FeaturedPlaylistItem =
+    FeaturedPlaylistItem(
+        id = id,
+        title = name,
+        subtitle = copywriter ?: "$trackCount 首",
+        trackCount = trackCount,
+        coverUrl = coverUrl.orEmpty()
+    )
+
 private fun u(id: String, w: Int = 400, h: Int = 400): String =
     "https://images.unsplash.com/$id?w=$w&h=$h&fit=crop&auto=format"
 
-// 静态占位：甄选歌单 / 排行榜 / 风格分类（不含每日推荐与猜你喜欢）
+// 静态占位：排行榜 / 风格分类（甄选歌单改由接口填充）
 private fun sampleCategoryUiState(): CategoryUiState = CategoryUiState(
-    featuredPlaylists = listOf(
-        FeaturedPlaylistItem(1, "深夜孤独症", "凌晨2点", 42, u("photo-1761104169769-1aefefbcb5f2", 300, 300)),
-        FeaturedPlaylistItem(2, "赛博朋克", "未来感", 88, u("photo-1784401930662-b9e573c8d79e", 300, 300)),
-        FeaturedPlaylistItem(3, "清晨咖啡馆", "轻音乐", 36, u("photo-1618172842918-3eabce30c912", 300, 300)),
-        FeaturedPlaylistItem(4, "电子夜游记", "EDM合集", 64, u("photo-1768885514740-d64d25ac9a64", 300, 300)),
-        FeaturedPlaylistItem(5, "失眠专用", "白噪音", 29, u("photo-1752801375943-f0cb633f3422", 300, 300)),
-        FeaturedPlaylistItem(6, "燃爆健身房", "高强度", 57, u("photo-1619983081593-e2ba5b543168", 300, 300)),
-        FeaturedPlaylistItem(7, "雨天发呆", "Lo-Fi", 33, u("photo-1657627157213-c5f44dbd0724", 300, 300)),
-        FeaturedPlaylistItem(8, "午夜情书", "R&B精选", 51, u("photo-1539631934288-4f99f71032c6", 300, 300)),
-        FeaturedPlaylistItem(9, "阳光早安", "元气满满", 24, u("photo-1620219365320-a8c4e958ef0b", 300, 300))
-    ),
     charts = listOf(
         ChartItem(
             id = 1,

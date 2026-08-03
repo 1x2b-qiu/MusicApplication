@@ -2,6 +2,7 @@ package com.leo.lune.domain.repository
 
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
+import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
@@ -36,4 +37,6 @@ interface MusicRepository {
     suspend fun getDailyRecommendSongs(afresh: Boolean = false): List<Song>
     // 获取推荐新音乐（猜你喜欢）
     suspend fun getPersonalizedNewsongs(limit: Int = 15): List<Song>
+    // 获取推荐歌单（甄选歌单）
+    suspend fun getPersonalizedPlaylists(limit: Int = 10): List<PersonalizedPlaylist>
 }

@@ -7,6 +7,7 @@ import com.leo.lune.data.remote.response.LoginResponse
 import com.leo.lune.data.remote.response.LoginStatusResponse
 import com.leo.lune.data.remote.response.LyricResponse
 import com.leo.lune.data.remote.response.PersonalizedNewsongResponse
+import com.leo.lune.data.remote.response.PersonalizedPlaylistResponse
 import com.leo.lune.data.remote.response.PlaylistTrackAllResponse
 import com.leo.lune.data.remote.response.RecommendSongsResponse
 import com.leo.lune.data.remote.response.SearchResponse
@@ -89,6 +90,12 @@ interface NeteaseApi {
     suspend fun getPersonalizedNewsong(
         @Query("limit") limit: Int = 15
     ): PersonalizedNewsongResponse
+
+    // 获取推荐歌单（甄选歌单）
+    @GET("personalized")
+    suspend fun getPersonalized(
+        @Query("limit") limit: Int = 10
+    ): PersonalizedPlaylistResponse
 
     // 向手机号发送登录验证码
     @GET("captcha/sent")

@@ -110,7 +110,8 @@ fun CategoryScreen(
                 dailySongs = uiState.dailyRecommendSongs,
                 guessYouLikeSongs = uiState.guessYouLikeSongs,
                 playingSongId = playingSongId,
-                onPlayAll = viewModel::onDailyRecommendPlayAll,
+                isDailyRecommendPlaying = uiState.isDailyRecommendPlaying,
+                onDailyRecommendPlayClick = viewModel::onDailyRecommendPlayClick,
                 onGuessYouLikePlay = { id ->
                     playingSongId = id
                     viewModel.onGuessYouLikePlay(id)
@@ -121,6 +122,7 @@ fun CategoryScreen(
         item {
             FeaturedPlaylistsSection(
                 playlists = uiState.featuredPlaylists,
+                playingPlaylistId = uiState.playingFeaturedPlaylistId,
                 onPlaylistClick = viewModel::onPlaylistClick,
                 onViewAllClick = viewModel::onFeaturedPlaylistsAllClick
             )
@@ -153,8 +155,10 @@ private fun DailyRecommendSection(
     guessYouLikeSongs: List<DailyRecommendSongItem>,
     // 当前高亮播放的猜你喜欢歌曲 id，null 表示无选中
     playingSongId: Long?,
-    // 一键播放全部每日推荐
-    onPlayAll: () -> Unit,
+    // 每日推荐 Banner 是否正在播放
+    isDailyRecommendPlaying: Boolean,
+    // 播放 / 暂停每日推荐
+    onDailyRecommendPlayClick: () -> Unit,
     // 点击猜你喜欢单曲播放
     onGuessYouLikePlay: (Long) -> Unit
 ) {
@@ -175,7 +179,8 @@ private fun DailyRecommendSection(
             DailyMixBanner(
                 songs = dailySongs,
                 dateLabel = dateLabel,
-                onPlayAll = onPlayAll,
+                isPlayingThis = isDailyRecommendPlaying,
+                onPlayClick = onDailyRecommendPlayClick,
             )
         }
         // 猜你喜欢
@@ -258,8 +263,10 @@ private fun DailyMixBanner(
     songs: List<DailyRecommendSongItem>,
     // Banner 副标题日期文案
     dateLabel: String,
-    // 一键播放全部推荐
-    onPlayAll: () -> Unit,
+    // 是否正在播放每日推荐队列
+    isPlayingThis: Boolean,
+    // 播放 / 暂停
+    onPlayClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -339,14 +346,16 @@ private fun DailyMixBanner(
                                     playScale.animateTo(0.9f, tween(60))
                                     playScale.animateTo(1f, tween(100))
                                 }
-                                onPlayAll()
+                                onPlayClick()
                             }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
-                        painter = painterResource(R.drawable.ic_play),
-                        contentDescription = "播放全部",
+                        painter = painterResource(
+                            if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
+                        ),
+                        contentDescription = if (isPlayingThis) "暂停" else "播放全部",
                         colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
                         modifier = Modifier.size(28.dp)
                     )
@@ -469,6 +478,7 @@ private fun DailySongRow(
 @Composable
 private fun FeaturedPlaylistsSection(
     playlists: List<FeaturedPlaylistItem>,
+    playingPlaylistId: Long?,
     onPlaylistClick: (Long) -> Unit,
     onViewAllClick: () -> Unit
 ) {
@@ -485,6 +495,7 @@ private fun FeaturedPlaylistsSection(
             items(playlists, key = { it.id }) { playlist ->
                 FeaturedPlaylistCard(
                     playlist = playlist,
+                    isPlayingThis = playingPlaylistId == playlist.id,
                     onClick = { onPlaylistClick(playlist.id) }
                 )
             }
@@ -496,6 +507,7 @@ private fun FeaturedPlaylistsSection(
 @Composable
 private fun FeaturedPlaylistCard(
     playlist: FeaturedPlaylistItem,
+    isPlayingThis: Boolean,
     onClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -503,6 +515,9 @@ private fun FeaturedPlaylistCard(
     val clickScope = rememberCoroutineScope()
     // 点击时主动播缩小再回弹，避免短按看不到 isPressed 缩放
     val scale = remember { Animatable(1f) }
+    val playInteraction = remember { MutableInteractionSource() }
+    val playScope = rememberCoroutineScope()
+    val playScale = remember { Animatable(1f) }
 
     Column(
         modifier = Modifier
@@ -534,23 +549,36 @@ private fun FeaturedPlaylistCard(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            // 右下角半透明播放钮
+            // 右下角播放钮（样式与 DailyMixBanner 一致，尺寸更小）
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(6.dp)
-                    .size(28.dp)
+                    .size(32.dp)
+                    .scale(playScale.value)
+                    .shadow(8.dp, CircleShape, spotColor = colorScheme.primary)
                     .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.55f)),
+                    .background(Color(0xFFF4F2FB))
+                    .clickable(
+                        interactionSource = playInteraction,
+                        indication = null,
+                        onClick = {
+                            playScope.launch {
+                                playScale.animateTo(0.9f, tween(60))
+                                playScale.animateTo(1f, tween(100))
+                            }
+                            onClick()
+                        }
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_play),
-                    contentDescription = null,
-                    colorFilter = ColorFilter.tint(Color.White),
-                    modifier = Modifier
-                        .size(14.dp)
-                        .padding(start = 1.dp)
+                    painter = painterResource(
+                        if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
+                    ),
+                    contentDescription = if (isPlayingThis) "暂停" else "播放歌单",
+                    colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
+                    modifier = Modifier.size(18.dp)
                 )
             }
         }

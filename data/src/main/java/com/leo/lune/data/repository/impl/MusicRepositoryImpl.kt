@@ -1,6 +1,7 @@
 package com.leo.lune.data.repository.impl
 
 import com.leo.lune.data.mapper.toLikeSongResult
+import com.leo.lune.data.mapper.toPersonalizedPlaylist
 import com.leo.lune.data.mapper.toSong
 import com.leo.lune.data.mapper.toSongUrl
 import com.leo.lune.data.mapper.toUserPlaylist
@@ -8,6 +9,7 @@ import com.leo.lune.data.remote.api.NeteaseApi
 import com.leo.lune.data.util.LrcParser
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
+import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
@@ -125,5 +127,14 @@ class MusicRepositoryImpl @Inject constructor(
             throw IllegalStateException("Get personalized newsong failed with code ${response.code}")
         }
         return response.result.orEmpty().mapNotNull { it.song?.toSong() }
+    }
+
+    // 获取推荐歌单列表（甄选歌单）
+    override suspend fun getPersonalizedPlaylists(limit: Int): List<PersonalizedPlaylist> {
+        val response = neteaseApi.getPersonalized(limit = limit)
+        if (response.code != 200) {
+            throw IllegalStateException("Get personalized playlists failed with code ${response.code}")
+        }
+        return response.result.orEmpty().mapNotNull { it.toPersonalizedPlaylist() }
     }
 }
