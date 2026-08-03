@@ -27,7 +27,7 @@ fun SongDto.toSong(): Song {
 }
 
 // 补全协议相对路径的封面 URL（//xxx → https://xxx）
-private fun normalizeCoverUrl(url: String?): String? {
+internal fun normalizeCoverUrl(url: String?): String? {
     if (url.isNullOrBlank()) return null
     return when {
         url.startsWith("//") -> "https:$url"

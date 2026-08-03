@@ -8,11 +8,13 @@ import com.leo.lune.data.remote.response.LoginStatusResponse
 import com.leo.lune.data.remote.response.LyricResponse
 import com.leo.lune.data.remote.response.PersonalizedNewsongResponse
 import com.leo.lune.data.remote.response.PersonalizedPlaylistResponse
+import com.leo.lune.data.remote.response.PlaylistHotResponse
 import com.leo.lune.data.remote.response.PlaylistTrackAllResponse
 import com.leo.lune.data.remote.response.RecommendSongsResponse
 import com.leo.lune.data.remote.response.SearchResponse
 import com.leo.lune.data.remote.response.SongDetailResponse
 import com.leo.lune.data.remote.response.SongUrlResponse
+import com.leo.lune.data.remote.response.TopPlaylistResponse
 import com.leo.lune.data.remote.response.UserPlaylistResponse
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
@@ -96,6 +98,18 @@ interface NeteaseApi {
     suspend fun getPersonalized(
         @Query("limit") limit: Int = 10
     ): PersonalizedPlaylistResponse
+
+    // 获取热门歌单分类（风格分类）
+    @GET("playlist/hot")
+    suspend fun getPlaylistHot(): PlaylistHotResponse
+
+    // 按分类获取网友精选碟歌单（用于取封面）
+    @GET("top/playlist")
+    suspend fun getTopPlaylist(
+        @Query("cat") cat: String,
+        @Query("limit") limit: Int = 1,
+        @Query("order") order: String = "hot"
+    ): TopPlaylistResponse
 
     // 向手机号发送登录验证码
     @GET("captcha/sent")

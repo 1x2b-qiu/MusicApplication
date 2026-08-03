@@ -1,5 +1,6 @@
 package com.leo.lune.data.repository.impl
 
+import com.leo.lune.data.mapper.normalizeCoverUrl
 import com.leo.lune.data.mapper.toLikeSongResult
 import com.leo.lune.data.mapper.toPersonalizedPlaylist
 import com.leo.lune.data.mapper.toSong
@@ -10,10 +11,14 @@ import com.leo.lune.data.util.LrcParser
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.PersonalizedPlaylist
+import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
 import com.leo.lune.domain.repository.MusicRepository
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -136,5 +141,35 @@ class MusicRepositoryImpl @Inject constructor(
             throw IllegalStateException("Get personalized playlists failed with code ${response.code}")
         }
         return response.result.orEmpty().mapNotNull { it.toPersonalizedPlaylist() }
+    }
+
+    // 获取热门风格分类，并为每个分类补一张热门歌单封面
+    override suspend fun getHotPlaylistGenres(): List<PlaylistGenre> = coroutineScope {
+        val response = neteaseApi.getPlaylistHot()
+        if (response.code != 200) {
+            throw IllegalStateException("Get playlist hot tags failed with code ${response.code}")
+        }
+        val tags = response.tags.orEmpty().mapNotNull { tag ->
+            val id = tag.id ?: return@mapNotNull null
+            val name = tag.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            id to name
+        }
+        tags.map { (id, name) ->
+            async {
+                val coverUrl = runCatching {
+                    neteaseApi.getTopPlaylist(cat = name, limit = 1)
+                        .playlists
+                        ?.firstOrNull()
+                        ?.coverImgUrl
+                }.getOrNull()
+                // 去掉 imageView/watermark 参数，避免封面上叠分类字样
+                val cleanCover = coverUrl?.substringBefore('?')
+                PlaylistGenre(
+                    id = id,
+                    name = name,
+                    coverUrl = normalizeCoverUrl(cleanCover)
+                )
+            }
+        }.awaitAll()
     }
 }

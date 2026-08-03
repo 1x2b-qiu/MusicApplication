@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.controller.PlaybackState
 import com.leo.lune.domain.model.PersonalizedPlaylist
+import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.MusicRepository
@@ -65,7 +66,7 @@ data class GenreItem(
     val coverUrl: String
 )
 
-// 曲库页 UI 状态：每日推荐 / 猜你喜欢 / 甄选歌单 / 排行榜为真实数据，风格分类暂为占位
+// 曲库页 UI 状态：曲库各区块均为真实数据
 data class CategoryUiState(
     // 每日推荐（Banner）
     val dailyRecommendSongs: List<DailyRecommendSongItem> = emptyList(),
@@ -81,7 +82,7 @@ data class CategoryUiState(
     val genres: List<GenreItem> = emptyList()
 )
 
-// 曲库页 ViewModel：每日推荐 / 猜你喜欢 / 甄选歌单 / 排行榜走接口，风格分类仍占位
+// 曲库页 ViewModel：曲库各区块走网易云接口
 @HiltViewModel
 class CategoryViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
@@ -102,8 +103,9 @@ class CategoryViewModel @Inject constructor(
     private val chartQueues = mutableMapOf<Long, List<Song>>()
 
     init {
-        // 排行榜无需登录，进页即拉取
+        // 排行榜 / 风格分类无需登录，进页即拉取
         loadCharts()
+        loadGenres()
         viewModelScope.launch {
             authRepository.observeLoginState().collect { loginState ->
                 if (loginState.isLoggedIn) {
@@ -232,6 +234,21 @@ class CategoryViewModel @Inject constructor(
         }
     }
 
+    // 拉取热门风格分类（含封面）
+    private fun loadGenres() {
+        viewModelScope.launch {
+            runCatching { musicRepository.getHotPlaylistGenres() }
+                .onSuccess { genres ->
+                    _uiState.update {
+                        it.copy(genres = genres.map { genre -> genre.toGenreItem() })
+                    }
+                }
+                .onFailure {
+                    _uiState.update { it.copy(genres = emptyList()) }
+                }
+        }
+    }
+
     // 猜你喜欢：播放指定歌曲（队列为当前推荐列表）
     @RequiresApi(Build.VERSION_CODES.O)
     fun onGuessYouLikePlay(songId: Long) {
@@ -339,6 +356,12 @@ private fun PersonalizedPlaylist.toFeaturedItem(): FeaturedPlaylistItem =
         coverUrl = coverUrl.orEmpty()
     )
 
+private fun PlaylistGenre.toGenreItem(): GenreItem = GenreItem(
+    id = id,
+    name = name,
+    coverUrl = coverUrl.orEmpty()
+)
+
 // 固定四个榜单：id 来自网易云官方榜，样式沿用原 UI 配色
 private data class ChartSpec(
     val id: Long,
@@ -355,23 +378,5 @@ private val FixedCharts = listOf(
     ChartSpec(6688069460, "听歌识曲榜", "听歌识曲热榜", listOf(0xFFEC4899L, 0xFFFB7185L), 0x40EC4899L)
 )
 
-private fun u(id: String, w: Int = 400, h: Int = 400): String =
-    "https://images.unsplash.com/$id?w=$w&h=$h&fit=crop&auto=format"
-
-// 静态占位：风格分类
-private fun sampleCategoryUiState(): CategoryUiState = CategoryUiState(
-    genres = listOf(
-        GenreItem(1, "流行", u("photo-1514525253161-7a46d19cd819", 600, 400)),
-        GenreItem(2, "摇滚", u("photo-1516924962500-2b4b3b99ea02", 600, 400)),
-        GenreItem(3, "电子", u("photo-1470225620780-dba8ba36b745", 600, 400)),
-        GenreItem(4, "嘻哈", u("photo-1638115311992-494f8d1d858b", 600, 400)),
-        GenreItem(5, "R&B", u("photo-1655659775262-3a4a479532b0", 600, 400)),
-        GenreItem(6, "国际", u("photo-1646765444015-5881f0fab3e8", 600, 400)),
-        GenreItem(7, "爵士", u("photo-1774544809959-1991aa21c904", 600, 400)),
-        GenreItem(8, "古典", u("photo-1763627516727-2ca3e324fa59", 600, 400)),
-        GenreItem(9, "民谣", u("photo-1758272960116-93c2a2463e42", 600, 400)),
-        GenreItem(10, "氛围", u("photo-1696488567389-e582d3ba3f19", 600, 400)),
-        GenreItem(11, "说唱", u("photo-1771775735506-9705c4c186b8", 600, 400)),
-        GenreItem(12, "轻音乐", u("photo-1565879629766-30adf38aac56", 600, 400))
-    )
-)
+// 初始空态：各区块由接口填充
+private fun sampleCategoryUiState(): CategoryUiState = CategoryUiState()

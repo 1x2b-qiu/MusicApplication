@@ -3,6 +3,7 @@ package com.leo.lune.domain.repository
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.PersonalizedPlaylist
+import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
@@ -39,4 +40,6 @@ interface MusicRepository {
     suspend fun getPersonalizedNewsongs(limit: Int = 15): List<Song>
     // 获取推荐歌单（甄选歌单）
     suspend fun getPersonalizedPlaylists(limit: Int = 10): List<PersonalizedPlaylist>
+    // 获取热门风格分类（含封面）
+    suspend fun getHotPlaylistGenres(): List<PlaylistGenre>
 }
