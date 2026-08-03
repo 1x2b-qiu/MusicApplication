@@ -160,7 +160,6 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.Home> {
                     HomeScreen(
-                        hazeState = hazeState,
                         onLikedClick = {
                             navController.navigateSingleTopTo(MusicRoute.Liked)
                         },
@@ -176,9 +175,7 @@ private fun MusicNavHost(
                 }
 
                 composable<MusicRoute.Category> {
-                    CategoryScreen(
-                        darkTheme = darkTheme
-                    )
+                    CategoryScreen()
                 }
 
                 composable<MusicRoute.Settings> {

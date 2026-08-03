@@ -4,6 +4,7 @@ import android.os.Build
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -20,7 +21,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -80,9 +81,6 @@ import com.leo.lune.R
 import com.leo.lune.domain.model.Song
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.HazeTint
-import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -97,12 +95,8 @@ private const val FavoritesThumbTransitionMs = 300
 private const val FavoritesAutoCarouselIntervalMs = 4_000L
 // 用户无操作后恢复自动轮播的等待时长
 private const val FavoritesAutoCarouselResumeDelayMs = 5_000L
-// 磨砂玻璃淡入延迟（毫秒），首帧先用纯色背景
-private const val FavoritesHazeFadeDelayMs = 150L
-// 磨砂玻璃淡入动画时长（毫秒）
-private const val FavoritesHazeFadeDurationMs = 400
-// 磨砂玻璃主卡圆角
-private val GlassCardShape = RoundedCornerShape(26.dp)
+// 「我喜欢的」主卡圆角
+private val FavoritesCardShape = RoundedCornerShape(26.dp)
 // 主卡内封面图圆角
 private val CoverShape = RoundedCornerShape(16.dp)
 // 底部缩略图圆角
@@ -133,14 +127,8 @@ private val favoritesTitleExitTransition = slideOutVertically(
     targetOffsetY = { -it / 3 }
 ) + fadeOut(tween(FavoritesTitleTransitionMs, easing = FastOutSlowInEasing))
 
-// 主卡磨砂玻璃在不同主题下的视觉参数
-private data class FavoritesGlassStyle(
-    // 背景模糊半径
-    val blurRadius: Dp,
-    // Haze 叠色层
-    val hazeTints: List<HazeTint>,
-    // 噪点强度，增强磨砂质感
-    val noiseFactor: Float,
+// 「我喜欢的」主卡在不同主题下的视觉参数（无模糊）
+private data class FavoritesCardStyle(
     // 半透明表面叠层
     val surfaceOverlay: Color,
     // 卡片描边颜色
@@ -159,7 +147,6 @@ private data class FavoritesGlassStyle(
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
-    hazeState: HazeState,
     onLikedClick: () -> Unit,
     onRecentClick: () -> Unit,
     darkTheme: Boolean = true,
@@ -189,7 +176,6 @@ fun HomeScreen(
                         item {
                             HomeFavoritesSection(
                                 songs = uiState.likedSongs,
-                                hazeState = hazeState,
                                 darkTheme = darkTheme,
                                 isPlaying = uiState.isPlaying,
                                 currentSongId = uiState.currentSongId,
@@ -222,14 +208,15 @@ fun HomeScreen(
     }
 }
 
-// 区块标题行：左侧可选图标 + 标题，右侧「全部」
+// 区块标题行：左侧可选图标 + 标题，右侧可选「全部」
 @Composable
 fun HomeSectionHeader(
     title: String,
     // 传 null 时不显示图标；彩色 PNG 请保持 iconTint 默认 Unspecified
     @DrawableRes iconRes: Int? = null,
     iconTint: Color = Color.Unspecified,
-    onViewAllClick: () -> Unit
+    // 传 null 时不显示「全部」
+    onViewAllClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -259,28 +246,30 @@ fun HomeSectionHeader(
                 letterSpacing = (-0.34).sp
             )
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null,
-                    onClick = onViewAllClick
-                ),
-            horizontalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = "全部",
-                color = colorScheme.onSurfaceVariant,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                lineHeight = 19.5.sp
-            )
-            Image(
-                painter = painterResource(R.drawable.ic_chevron_right),
-                contentDescription = null,
-                modifier = Modifier.size(16.dp)
-            )
+        if (onViewAllClick != null) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onViewAllClick
+                    ),
+                horizontalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = "全部",
+                    color = colorScheme.onSurfaceVariant,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    lineHeight = 19.5.sp
+                )
+                Image(
+                    painter = painterResource(R.drawable.ic_chevron_right),
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
     }
 }
@@ -342,11 +331,10 @@ fun HomeRecentItem(
     }
 }
 
-// 「我喜欢的」磨砂玻璃主卡 + 缩略图横向选择
+// 「我喜欢的」主卡 + 缩略图横向选择
 @Composable
 private fun HomeFavoritesSection(
     songs: List<Song>,
-    hazeState: HazeState,
     darkTheme: Boolean,
     isPlaying: Boolean,
     currentSongId: Long?,
@@ -425,10 +413,9 @@ private fun HomeFavoritesSection(
             onViewAllClick = onViewAllClick
         )
 
-        FavoritesGlassMainCard(
+        FavoritesMainCard(
             selectedSongId = selectedSong.id,
             songById = songById,
-            hazeState = hazeState,
             darkTheme = darkTheme,
             isPlayingThis = isPlaying && currentSongId == selectedSong.id,
             onPlayClick = {
@@ -464,58 +451,35 @@ private fun HomeFavoritesSection(
     }
 }
 
-// 磨砂玻璃主卡：封面/歌名动画层 + 固定渐变与播放按钮
+// 「我喜欢的」主卡：封面/歌名动画层 + 固定渐变与播放按钮
 @Composable
-private fun FavoritesGlassMainCard(
+private fun FavoritesMainCard(
     selectedSongId: Long,
     songById: Map<Long, Song>,
-    hazeState: HazeState,
     darkTheme: Boolean,
     isPlayingThis: Boolean,
     onPlayClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val glassStyle = rememberFavoritesGlassStyle(darkTheme)
+    val cardStyle = rememberFavoritesCardStyle(darkTheme)
     val coverDecodeWidth = LocalConfiguration.current.screenWidthDp.dp
     val playInteraction = remember { MutableInteractionSource() }
-    val isPlayPressed by playInteraction.collectIsPressedAsState()
-    val playScale by animateFloatAsState(
-        targetValue = if (isPlayPressed) 0.9f else 1f,
-        animationSpec = tween(120),
-        label = "play_button_scale"
-    )
-
-    // 延迟 Haze 模糊：首帧用纯色背景，延迟后淡入模糊效果
-    var isHazeReady by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(FavoritesHazeFadeDelayMs)
-        isHazeReady = true
-    }
-    val hazeAlpha by animateFloatAsState(
-        targetValue = if (isHazeReady) 1f else 0f,
-        animationSpec = tween(FavoritesHazeFadeDurationMs, easing = FastOutSlowInEasing),
-        label = "haze_fade_in"
-    )
+    val playScope = rememberCoroutineScope()
+    // 点击时主动播缩小再回弹，避免短按看不到 isPressed 缩放
+    val playScale = remember { Animatable(1f) }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(
-                elevation = glassStyle.shadowElevation,
-                shape = GlassCardShape,
-                spotColor = glassStyle.spotColor,
-                ambientColor = glassStyle.ambientColor
+                elevation = cardStyle.shadowElevation,
+                shape = FavoritesCardShape,
+                spotColor = cardStyle.spotColor,
+                ambientColor = cardStyle.ambientColor
             )
-            .clip(GlassCardShape)
-            .hazeEffect(state = hazeState) {
-                blurRadius = glassStyle.blurRadius * hazeAlpha
-                tints = glassStyle.hazeTints.map { tint ->
-                    HazeTint(tint.color.copy(alpha = tint.color.alpha * hazeAlpha))
-                }
-                noiseFactor = glassStyle.noiseFactor * hazeAlpha
-            }
-            .background(glassStyle.surfaceOverlay)
-            .border(0.67.dp, glassStyle.borderColor, GlassCardShape)
+            .clip(FavoritesCardShape)
+            .background(cardStyle.surfaceOverlay)
+            .border(0.67.dp, cardStyle.borderColor, FavoritesCardShape)
             .padding(12.dp)
     ) {
         Box(
@@ -528,7 +492,7 @@ private fun FavoritesGlassMainCard(
                     Brush.horizontalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.White.copy(alpha = glassStyle.highlightCenterAlpha),
+                            Color.White.copy(alpha = cardStyle.highlightCenterAlpha),
                             Color.Transparent
                         )
                     )
@@ -623,14 +587,20 @@ private fun FavoritesGlassMainCard(
                 Box(
                     modifier = Modifier
                         .size(48.dp)
-                        .scale(playScale)
+                        .scale(playScale.value)
                         .shadow(12.dp, CircleShape, spotColor = colorScheme.primary)
                         .clip(CircleShape)
                         .background(Color(0xFFF4F2FB))
                         .clickable(
                             interactionSource = playInteraction,
                             indication = null,
-                            onClick = onPlayClick
+                            onClick = {
+                                playScope.launch {
+                                    playScale.animateTo(0.9f, tween(60))
+                                    playScale.animateTo(1f, tween(100))
+                                }
+                                onPlayClick()
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
@@ -721,20 +691,13 @@ private fun FavoritesThumbnailItem(
     }
 }
 
-// 按深/浅主题返回对应的玻璃样式
+// 按深/浅主题返回对应的主卡样式（无模糊）
 @Composable
-private fun rememberFavoritesGlassStyle(darkTheme: Boolean): FavoritesGlassStyle {
-    val colorScheme = MaterialTheme.colorScheme
-    return remember(darkTheme, colorScheme) {
+private fun rememberFavoritesCardStyle(darkTheme: Boolean): FavoritesCardStyle {
+    return remember(darkTheme) {
         if (darkTheme) {
             // 深色主题：暗底 + 白色描边/高光
-            FavoritesGlassStyle(
-                blurRadius = 20.dp,
-                hazeTints = listOf(
-                    HazeTint(colorScheme.background.copy(alpha = 0.5f)),
-                    HazeTint(Color.White.copy(alpha = 0.08f))
-                ),
-                noiseFactor = 0.12f,
+            FavoritesCardStyle(
                 surfaceOverlay = Color.White.copy(alpha = 0.06f),
                 borderColor = Color.White.copy(alpha = 0.18f),
                 highlightCenterAlpha = 0.5f,
@@ -743,14 +706,8 @@ private fun rememberFavoritesGlassStyle(darkTheme: Boolean): FavoritesGlassStyle
                 ambientColor = Color(0x407B5CFF)
             )
         } else {
-            // 浅色主题：乳白磨砂 + 黑色描边，提高对比度
-            FavoritesGlassStyle(
-                blurRadius = 28.dp,
-                hazeTints = listOf(
-                    HazeTint(Color.White.copy(alpha = 0.72f)),
-                    HazeTint(Color.Black.copy(alpha = 0.04f))
-                ),
-                noiseFactor = 0.2f,
+            // 浅色主题：乳白底 + 黑色描边，提高对比度
+            FavoritesCardStyle(
                 surfaceOverlay = Color.White.copy(alpha = 0.62f),
                 borderColor = Color.Black.copy(alpha = 0.18f),
                 highlightCenterAlpha = 0.85f,
