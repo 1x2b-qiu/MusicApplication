@@ -1,13 +1,23 @@
 package com.leo.lune.ui.category
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.leo.lune.controller.MusicPlayerController
+import com.leo.lune.domain.model.Song
+import com.leo.lune.domain.repository.AuthRepository
+import com.leo.lune.domain.repository.MusicRepository
+import com.leo.lune.ui.home.formatSongDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// 每日推荐单曲
+// 每日推荐 / 猜你喜欢单曲（UI 展示用）
 data class DailyRecommendSongItem(
     val id: Long,
     val title: String,
@@ -50,24 +60,102 @@ data class GenreItem(
     val coverUrl: String
 )
 
-// 曲库页 UI 状态（目前为静态占位数据，不做真实请求）
+// 曲库页 UI 状态：每日推荐 / 猜你喜欢为真实数据，其余暂为占位
 data class CategoryUiState(
+    // 每日推荐（Banner）
     val dailyRecommendSongs: List<DailyRecommendSongItem> = emptyList(),
+    // 猜你喜欢（推荐新音乐）
+    val guessYouLikeSongs: List<DailyRecommendSongItem> = emptyList(),
     val featuredPlaylists: List<FeaturedPlaylistItem> = emptyList(),
     val charts: List<ChartItem> = emptyList(),
     val genres: List<GenreItem> = emptyList()
 )
 
-// 曲库页 ViewModel：仅提供静态 UI 数据，点击事件预留空实现
+// 曲库页 ViewModel：每日推荐 + 猜你喜欢走网易云接口，其余仍用静态占位
 @HiltViewModel
-class CategoryViewModel @Inject constructor() : ViewModel() {
+class CategoryViewModel @Inject constructor(
+    private val musicRepository: MusicRepository,
+    private val authRepository: AuthRepository,
+    private val playerController: MusicPlayerController
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(sampleCategoryUiState())
     val uiState: StateFlow<CategoryUiState> = _uiState.asStateFlow()
 
-    fun onDailyRecommendPlay(songId: Long) = Unit
+    // 每日推荐原始队列，供播放器用
+    private var dailyRecommendQueue: List<Song> = emptyList()
+    // 猜你喜欢原始队列，供播放器用
+    private var guessYouLikeQueue: List<Song> = emptyList()
 
-    fun onDailyRecommendPlayAll() = Unit
+    init {
+        viewModelScope.launch {
+            authRepository.observeLoginState().collect { loginState ->
+                if (loginState.isLoggedIn) {
+                    loadDailyRecommend()
+                    loadGuessYouLike()
+                } else {
+                    dailyRecommendQueue = emptyList()
+                    guessYouLikeQueue = emptyList()
+                    _uiState.update {
+                        it.copy(
+                            dailyRecommendSongs = emptyList(),
+                            guessYouLikeSongs = emptyList()
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 拉取每日推荐并映射到 Banner UI
+    private fun loadDailyRecommend() {
+        viewModelScope.launch {
+            runCatching { musicRepository.getDailyRecommendSongs() }
+                .onSuccess { songs ->
+                    dailyRecommendQueue = songs
+                    _uiState.update {
+                        it.copy(dailyRecommendSongs = songs.map { song -> song.toDailyRecommendItem() })
+                    }
+                }
+                .onFailure {
+                    dailyRecommendQueue = emptyList()
+                    _uiState.update { it.copy(dailyRecommendSongs = emptyList()) }
+                }
+        }
+    }
+
+    // 拉取推荐新音乐并映射到猜你喜欢 UI（固定最多 15 首）
+    private fun loadGuessYouLike() {
+        viewModelScope.launch {
+            runCatching { musicRepository.getPersonalizedNewsongs(limit = 15) }
+                .onSuccess { songs ->
+                    guessYouLikeQueue = songs
+                    _uiState.update {
+                        it.copy(guessYouLikeSongs = songs.map { song -> song.toDailyRecommendItem() })
+                    }
+                }
+                .onFailure {
+                    guessYouLikeQueue = emptyList()
+                    _uiState.update { it.copy(guessYouLikeSongs = emptyList()) }
+                }
+        }
+    }
+
+    // 猜你喜欢：播放指定歌曲（队列为当前推荐列表）
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun onGuessYouLikePlay(songId: Long) {
+        val queue = guessYouLikeQueue
+        val song = queue.firstOrNull { it.id == songId } ?: return
+        playerController.playSong(song, queue)
+    }
+
+    // 每日推荐：播放全部
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun onDailyRecommendPlayAll() {
+        val queue = dailyRecommendQueue
+        if (queue.isEmpty()) return
+        playerController.playSong(queue.first(), queue)
+    }
 
     fun onPlaylistClick(playlistId: Long) = Unit
 
@@ -80,28 +168,19 @@ class CategoryViewModel @Inject constructor() : ViewModel() {
     fun onGenreClick(genreId: Long) = Unit
 }
 
+private fun Song.toDailyRecommendItem(): DailyRecommendSongItem = DailyRecommendSongItem(
+    id = id,
+    title = name,
+    artist = artists,
+    coverUrl = coverUrl.orEmpty(),
+    duration = formatSongDuration(durationMs)
+)
+
 private fun u(id: String, w: Int = 400, h: Int = 400): String =
     "https://images.unsplash.com/$id?w=$w&h=$h&fit=crop&auto=format"
 
-// 与曲库设计稿对齐的静态占位数据
+// 静态占位：甄选歌单 / 排行榜 / 风格分类（不含每日推荐与猜你喜欢）
 private fun sampleCategoryUiState(): CategoryUiState = CategoryUiState(
-    dailyRecommendSongs = listOf(
-        DailyRecommendSongItem(1, "Starfall", "Lunar Echo", u("photo-1618172842918-3eabce30c912", 160, 160), "3:24", hot = true),
-        DailyRecommendSongItem(2, "Purple Haze", "Neon Drift", u("photo-1619983081593-e2ba5b543168", 160, 160), "4:02"),
-        DailyRecommendSongItem(3, "Afterimage", "KAIA", u("photo-1657627157213-c5f44dbd0724", 160, 160), "3:51", hot = true),
-        DailyRecommendSongItem(4, "Glass Ocean", "Mira Sol", u("photo-1752801375943-f0cb633f3422", 160, 160), "2:49"),
-        DailyRecommendSongItem(5, "Circuit Bloom", "ByteFlower", u("photo-1539631934288-4f99f71032c6", 160, 160), "4:33"),
-        DailyRecommendSongItem(6, "Velvet Sky", "ANA", u("photo-1761104169769-1aefefbcb5f2", 160, 160), "3:17"),
-        DailyRecommendSongItem(7, "Dreamcore", "Cello Wolf", u("photo-1784401930662-b9e573c8d79e", 160, 160), "5:09", hot = true),
-        DailyRecommendSongItem(8, "Serotonin Rush", "SANA", u("photo-1768885514740-d64d25ac9a64", 160, 160), "3:42"),
-        DailyRecommendSongItem(9, "Neon Gospel", "Phantom Eye", u("photo-1620219365320-a8c4e958ef0b", 160, 160), "4:18"),
-        DailyRecommendSongItem(10, "Quantum Drift", "vektøR", u("photo-1619983081593-e2ba5b543168", 160, 160), "3:57"),
-        DailyRecommendSongItem(11, "Midnight Wire", "KAIA", u("photo-1514525253161-7a46d19cd819", 160, 160), "3:11"),
-        DailyRecommendSongItem(12, "Soft Static", "Mira Sol", u("photo-1493225457124-a3eb161ffa5f", 160, 160), "4:05", hot = true),
-        DailyRecommendSongItem(13, "Orbit Lane", "ByteFlower", u("photo-1518609878373-06d740f60d8b", 160, 160), "2:58"),
-        DailyRecommendSongItem(14, "Low Tide", "ANA", u("photo-1502691876148-a84978e59af8", 160, 160), "3:36"),
-        DailyRecommendSongItem(15, "Paper Moon", "Lunar Echo", u("photo-1520170350707-b2da59970118", 160, 160), "4:21")
-    ),
     featuredPlaylists = listOf(
         FeaturedPlaylistItem(1, "深夜孤独症", "凌晨2点", 42, u("photo-1761104169769-1aefefbcb5f2", 300, 300)),
         FeaturedPlaylistItem(2, "赛博朋克", "未来感", 88, u("photo-1784401930662-b9e573c8d79e", 300, 300)),

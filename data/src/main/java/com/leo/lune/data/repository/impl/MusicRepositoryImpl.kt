@@ -117,4 +117,13 @@ class MusicRepositoryImpl @Inject constructor(
         }
         return response.data?.dailySongs.orEmpty().map { it.toSong() }
     }
+
+    // 获取推荐新音乐列表（猜你喜欢）
+    override suspend fun getPersonalizedNewsongs(limit: Int): List<Song> {
+        val response = neteaseApi.getPersonalizedNewsong(limit = limit)
+        if (response.code != 200) {
+            throw IllegalStateException("Get personalized newsong failed with code ${response.code}")
+        }
+        return response.result.orEmpty().mapNotNull { it.song?.toSong() }
+    }
 }

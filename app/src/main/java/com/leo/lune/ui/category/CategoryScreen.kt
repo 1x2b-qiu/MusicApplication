@@ -92,7 +92,7 @@ fun CategoryScreen(
     val colorScheme = MaterialTheme.colorScheme
 
 
-    // 当前高亮播放的每日推荐曲目；null 表示无选中
+    // 当前高亮的猜你喜欢曲目；null 表示无选中
     var playingSongId by remember { mutableStateOf<Long?>(null) }
 
     LazyColumn(
@@ -107,13 +107,13 @@ fun CategoryScreen(
     ) {
         item {
             DailyRecommendSection(
-                songs = uiState.dailyRecommendSongs,
+                dailySongs = uiState.dailyRecommendSongs,
+                guessYouLikeSongs = uiState.guessYouLikeSongs,
                 playingSongId = playingSongId,
                 onPlayAll = viewModel::onDailyRecommendPlayAll,
-                onPlaySong = { id ->
-                    // 再次点击同一首则取消高亮
-                    playingSongId = if (playingSongId == id) null else id
-                    viewModel.onDailyRecommendPlay(id)
+                onGuessYouLikePlay = { id ->
+                    playingSongId = id
+                    viewModel.onGuessYouLikePlay(id)
                 }
             )
         }
@@ -143,23 +143,24 @@ fun CategoryScreen(
     }
 }
 
-// 每日推荐区块
+// 每日推荐 Banner + 猜你喜欢分页列表
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 private fun DailyRecommendSection(
-    // 每日推荐歌曲列表
-    songs: List<DailyRecommendSongItem>,
-    // 当前高亮播放的歌曲 id，null 表示无选中
+    // 每日推荐（真实数据，供 Banner）
+    dailySongs: List<DailyRecommendSongItem>,
+    // 猜你喜欢（推荐新音乐）
+    guessYouLikeSongs: List<DailyRecommendSongItem>,
+    // 当前高亮播放的猜你喜欢歌曲 id，null 表示无选中
     playingSongId: Long?,
-    // 一键播放全部推荐
+    // 一键播放全部每日推荐
     onPlayAll: () -> Unit,
-    // 点击单曲播放
-    onPlaySong: (Long) -> Unit
+    // 点击猜你喜欢单曲播放
+    onGuessYouLikePlay: (Long) -> Unit
 ) {
-    if (songs.isEmpty()) return
     // 猜你喜欢：15 首切成 5 页，每页 3 首
-    val guessPages = remember(songs) {
-        songs.take(GuessYouLikeSongCount).chunked(GuessYouLikePageSize)
+    val guessPages = remember(guessYouLikeSongs) {
+        guessYouLikeSongs.take(GuessYouLikeSongCount).chunked(GuessYouLikePageSize)
     }
     val pagerState = rememberPagerState(pageCount = { guessPages.size.coerceAtLeast(1) })
     val pagerScope = rememberCoroutineScope()
@@ -169,45 +170,49 @@ private fun DailyRecommendSection(
     }
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-        // 顶部 Daily Mix Banner
-        DailyMixBanner(
-            songs = songs,
-            dateLabel = dateLabel,
-            onPlayAll = onPlayAll,
-        )
+        // 有数据时才展示每日推荐 Banner
+        if (dailySongs.isNotEmpty()) {
+            DailyMixBanner(
+                songs = dailySongs,
+                dateLabel = dateLabel,
+                onPlayAll = onPlayAll,
+            )
+        }
         // 猜你喜欢
-        HomeSectionHeader(
-            title = "猜你喜欢",
-            iconRes = R.drawable.ic_section_sparkles,
-            iconTint = Color(0xFFFFB020)
-        )
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(GuessYouLikePageHeight)
-        ) { page ->
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                guessPages.getOrNull(page).orEmpty().forEach { song ->
-                    DailySongRow(
-                        song = song,
-                        playing = playingSongId == song.id,
-                        onPlay = { onPlaySong(song.id) }
-                    )
+        if (guessPages.isNotEmpty()) {
+            HomeSectionHeader(
+                title = "猜你喜欢",
+                iconRes = R.drawable.ic_section_sparkles,
+                iconTint = Color(0xFFFFB020)
+            )
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(GuessYouLikePageHeight)
+            ) { page ->
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    guessPages.getOrNull(page).orEmpty().forEach { song ->
+                        DailySongRow(
+                            song = song,
+                            playing = playingSongId == song.id,
+                            onPlay = { onGuessYouLikePlay(song.id) }
+                        )
+                    }
                 }
             }
+            // 圆点指示器
+            GuessYouLikePageIndicator(
+                pageCount = guessPages.size,
+                currentPage = pagerState.currentPage,
+                onDotClick = { index ->
+                    pagerScope.launch { pagerState.animateScrollToPage(index) }
+                },
+                modifier = Modifier
+                    .align(Alignment.CenterHorizontally)
+                    .padding(top = 12.dp)
+            )
         }
-        // 圆点指示器
-        GuessYouLikePageIndicator(
-            pageCount = guessPages.size,
-            currentPage = pagerState.currentPage,
-            onDotClick = { index ->
-                pagerScope.launch { pagerState.animateScrollToPage(index) }
-            },
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .padding(top = 12.dp)
-        )
     }
 }
 
