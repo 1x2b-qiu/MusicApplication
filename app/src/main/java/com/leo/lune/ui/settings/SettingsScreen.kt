@@ -29,9 +29,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,7 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.leo.lune.ui.component.dialog.AppConfirmDialog
+import com.leo.lune.ui.component.dialog.ConfirmDialogRequest
+import com.leo.lune.ui.component.dialog.rememberConfirmDialogController
 import com.leo.lune.util.consumePointersUnlessResumed
 
 // 设置列表外层卡片圆角（对齐设计稿 rounded-[26px]）
@@ -77,7 +75,7 @@ fun SettingsScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    var showClearCacheDialog by remember { mutableStateOf(false) }
+    val confirmDialog = rememberConfirmDialogController()
 
     Box(
         modifier = Modifier
@@ -106,7 +104,14 @@ fun SettingsScreen(
                         onClick = {
                             when (item.id) {
                                 "download" -> onDownloadSettingsClick()
-                                "cache" -> showClearCacheDialog = true
+                                "cache" -> confirmDialog.show(
+                                    ConfirmDialogRequest(
+                                        title = "清理缓存",
+                                        message = "将清除 ${uiState.cacheSizeLabel} 的缓存文件，不影响已下载的歌曲。",
+                                        confirmLabel = "清理",
+                                        onConfirm = { viewModel.clearCache() }
+                                    )
+                                )
                                 else -> Unit
                             }
                         }
@@ -114,20 +119,6 @@ fun SettingsScreen(
                 }
             }
         }
-
-        AppConfirmDialog(
-            visible = showClearCacheDialog,
-            title = "清理缓存",
-            message = "将清除 ${uiState.cacheSizeLabel} 的缓存文件，不影响已下载的歌曲。",
-            confirmLabel = "清理",
-            darkTheme = darkTheme,
-            onConfirm = {
-                viewModel.clearCache {
-                    showClearCacheDialog = false
-                }
-            },
-            onDismiss = { showClearCacheDialog = false }
-        )
     }
 }
 

@@ -32,9 +32,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.leo.lune.ui.component.bottombar.BottomTabBar
+import com.leo.lune.ui.component.dialog.AppConfirmDialogHost
 import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeader
 import com.leo.lune.ui.component.minplayer.MiniPlayerBar
 import com.leo.lune.ui.component.sidebar.AppSidebar
+import com.leo.lune.ui.component.toast.FavoriteToastHost
 import com.leo.lune.ui.category.CategoryScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
 import com.leo.lune.permission.PermissionCoordinator
@@ -52,6 +54,7 @@ import com.leo.lune.ui.startup.SessionBootstrapViewModel
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun MusicNavGraph(
     darkTheme: Boolean = true,
@@ -322,6 +325,15 @@ private fun MusicNavHost(
                     launchSingleTop = true
                 }
             }
+        )
+
+        // 全局确认弹窗 / 红心 Toast：卡片采样根 Haze（与 MiniPlayerBar 同源）
+        AppConfirmDialogHost(
+            hazeState = hazeState,
+            darkTheme = darkTheme
+        )
+        FavoriteToastHost(
+            darkTheme = darkTheme
         )
     }
 }

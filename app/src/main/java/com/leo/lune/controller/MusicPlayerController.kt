@@ -18,7 +18,6 @@ import com.leo.lune.domain.repository.DownloadRepository
 import com.leo.lune.domain.repository.MusicRepository
 import com.leo.lune.audio.ArtworkLoader
 import com.leo.lune.manager.FavoriteManager
-import com.leo.lune.manager.FavoriteResult
 import com.leo.lune.manager.LyricManager
 import com.leo.lune.manager.PlayStatsRecorderManager
 import com.leo.lune.manager.PlaybackSnapshotManager
@@ -207,16 +206,6 @@ class MusicPlayerController @Inject constructor(
             favoriteManager.isFavorite.collect { fav ->
                 _playbackState.update { state ->
                     if (state.isFavorite == fav) state else state.copy(isFavorite = fav)
-                }
-            }
-        }
-        // 订阅收藏操作结果，失败时写入 error 供 UI 提示
-        scope.launch {
-            favoriteManager.lastResult.collect { result ->
-                when (result) {
-                    is FavoriteResult.Failure ->
-                        _playbackState.update { it.copy(error = result.message) }
-                    else -> { /* Success / null 不清除其他来源的 error */ }
                 }
             }
         }

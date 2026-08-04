@@ -6,16 +6,20 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// 收藏操作结果；UI 层据此展示 Toast / Snackbar
+// 收藏操作结果；UI 层据此展示 Toast
 sealed interface FavoriteResult {
-    data object Success : FavoriteResult
+    // liked=true 表示已喜欢，false 表示已取消喜欢
+    data class Success(val liked: Boolean) : FavoriteResult
     data class Failure(val message: String) : FavoriteResult
 }
 
@@ -34,9 +38,9 @@ class FavoriteManager @Inject constructor(
     val isFavorite: StateFlow<Boolean> = _isFavorite.asStateFlow()
 
 
-    // 最近一次收藏操作结果（成功/失败），供 UI 展示提示；null 表示无事件
-    private val _lastResult = MutableStateFlow<FavoriteResult?>(null)
-    val lastResult: StateFlow<FavoriteResult?> = _lastResult.asStateFlow()
+    // 收藏操作结果事件（成功/失败），供 UI 展示 Toast；SharedFlow 保证连续同结果也能收到
+    private val _results = MutableSharedFlow<FavoriteResult>(extraBufferCapacity = 1)
+    val results: SharedFlow<FavoriteResult> = _results.asSharedFlow()
 
     // 本地缓存的红心歌单 id 集合，用于即时判断收藏态
     private var likedSongIds: Set<Long> = emptySet()
@@ -66,7 +70,7 @@ class FavoriteManager @Inject constructor(
     // 切换收藏（乐观更新）；未登录时返回失败，请求失败则回滚
     fun toggleFavorite(songId: Long) {
         if (currentUserId == null) {
-            _lastResult.value = FavoriteResult.Failure("请先登录后收藏")
+            _results.tryEmit(FavoriteResult.Failure("请先登录后收藏"))
             return
         }
 
@@ -82,7 +86,7 @@ class FavoriteManager @Inject constructor(
                 if (!result.success) {
                     revert(songId, targetFavorite, "收藏操作失败")
                 } else {
-                    _lastResult.value = FavoriteResult.Success
+                    _results.tryEmit(FavoriteResult.Success(liked = targetFavorite))
                 }
             }.onFailure { throwable ->
                 revert(songId, targetFavorite, throwable.message ?: "收藏操作失败")
@@ -137,7 +141,7 @@ class FavoriteManager @Inject constructor(
     private fun revert(songId: Long, attemptedFavorite: Boolean, message: String) {
         likedSongIds = if (attemptedFavorite) likedSongIds - songId else likedSongIds + songId
         _isFavorite.value = !attemptedFavorite
-        _lastResult.value = FavoriteResult.Failure(message)
+        _results.tryEmit(FavoriteResult.Failure(message))
     }
 
     private companion object {
