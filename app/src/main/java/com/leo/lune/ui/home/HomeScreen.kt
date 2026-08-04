@@ -91,6 +91,8 @@ private const val FavoritesCoverTransitionMs = 400
 private const val FavoritesTitleTransitionMs = 300
 // 缩略图选中态动画时长
 private const val FavoritesThumbTransitionMs = 300
+// 「我喜欢的」自动轮播总开关；关掉后保留下方轮播逻辑，仅不启动
+private const val FavoritesAutoCarouselEnabled = false
 // 自动轮播间隔
 private const val FavoritesAutoCarouselIntervalMs = 4_000L
 // 用户无操作后恢复自动轮播的等待时长
@@ -350,7 +352,9 @@ private fun HomeFavoritesSection(
     // 当前选中的缩略图下标，驱动主卡封面与歌名
     var selectedIndex by remember(songs) { mutableIntStateOf(0) }
     // 是否启用自动轮播；用户手动操作后会暂时关闭
-    var isAutoCarouselEnabled by remember { mutableStateOf(true) }
+    var isAutoCarouselEnabled by remember {
+        mutableStateOf(FavoritesAutoCarouselEnabled)
+    }
     // 每次用户操作递增，用于重置「5 秒后恢复轮播」计时
     var idleResumeEpoch by remember { mutableIntStateOf(0) }
     // 底部缩略图横向列表滚动状态，供自动轮播 animateScrollToItem
@@ -368,8 +372,10 @@ private fun HomeFavoritesSection(
 
     // 用户手动操作：暂停自动轮播，并重启空闲恢复计时
     val onUserInteraction: () -> Unit = {
-        isAutoCarouselEnabled = false
-        idleResumeEpoch++
+        if (FavoritesAutoCarouselEnabled) {
+            isAutoCarouselEnabled = false
+            idleResumeEpoch++
+        }
     }
     // 包一层 rememberUpdatedState，供 NestedScrollConnection 安全读取最新回调
     val onUserInteractionState = rememberUpdatedState(onUserInteraction)
@@ -387,6 +393,7 @@ private fun HomeFavoritesSection(
 
     // 用户停止操作 5 秒后，重新开启自动轮播
     LaunchedEffect(idleResumeEpoch, songs) {
+        if (!FavoritesAutoCarouselEnabled) return@LaunchedEffect
         if (idleResumeEpoch == 0) return@LaunchedEffect
         delay(FavoritesAutoCarouselResumeDelayMs)
         if (songs.size > 1) {
@@ -396,6 +403,7 @@ private fun HomeFavoritesSection(
 
     // 自动轮播：定时切歌并滚动缩略图；手动选中时不触发列表滚动
     LaunchedEffect(songs, isAutoCarouselEnabled) {
+        if (!FavoritesAutoCarouselEnabled) return@LaunchedEffect
         if (!isAutoCarouselEnabled || songs.size <= 1) return@LaunchedEffect
         while (true) {
             delay(FavoritesAutoCarouselIntervalMs)
