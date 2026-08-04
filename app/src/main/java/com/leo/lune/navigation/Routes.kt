@@ -21,6 +21,9 @@ sealed interface MusicRoute {
     data object DownloadSettings : MusicRoute
 
     @Serializable
+    data object PlaybackSettings : MusicRoute
+
+    @Serializable
     data object Search : MusicRoute
 
     @Serializable

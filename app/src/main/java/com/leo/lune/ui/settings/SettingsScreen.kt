@@ -70,6 +70,7 @@ private val SettingsItems = listOf(
 fun SettingsScreen(
     onBack: () -> Unit,
     onDownloadSettingsClick: () -> Unit,
+    onPlaybackSettingsClick: () -> Unit,
     darkTheme: Boolean,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -103,6 +104,7 @@ fun SettingsScreen(
                         trailingText = if (item.id == "cache") uiState.cacheSizeLabel else null,
                         onClick = {
                             when (item.id) {
+                                "playback" -> onPlaybackSettingsClick()
                                 "download" -> onDownloadSettingsClick()
                                 "cache" -> confirmDialog.show(
                                     ConfirmDialogRequest(

@@ -1,9 +1,6 @@
 package com.leo.lune.ui.settings
 
-import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,15 +12,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,57 +32,29 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.documentfile.provider.DocumentFile
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.util.consumePointersUnlessResumed
 
-// 与本地下载页一致的列表外层卡片圆角
+// 与下载设置页一致的列表外层卡片圆角
 private val CardShape = RoundedCornerShape(24.dp)
 
-// 存储位置图标容器圆角
-private val IconBoxShape = RoundedCornerShape(12.dp)
+private val BadgeShape = RoundedCornerShape(6.dp)
 
-// 设计稿音质体积说明（仅展示用）
-private fun DownloadQuality.sizeHint(): String = when (this) {
-    DownloadQuality.Standard -> "约 1.5 MB / 分钟"
-    DownloadQuality.High -> "约 3.6 MB / 分钟"
-    DownloadQuality.Lossless -> "约 10 MB / 分钟"
-}
-
-// 下载设置页：默认音质单选 + SAF 存储目录选择
+// 播放设置页：默认音质单选 + 与其他应用同时播放开关（UI 骨架）
 @Composable
-fun DownloadSettingsScreen(
+fun PlaybackSettingsScreen(
     onBack: () -> Unit,
     darkTheme: Boolean,
-    viewModel: DownloadSettingsViewModel = hiltViewModel()
+    viewModel: PlaybackSettingsViewModel = hiltViewModel()
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
-    val contentResolver = context.contentResolver
-
-    val openTreeLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        if (uri == null) return@rememberLauncherForActivityResult
-        val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or
-            Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        runCatching {
-            contentResolver.takePersistableUriPermission(uri, flags)
-        }
-        val displayName = DocumentFile.fromTreeUri(context, uri)?.name
-            ?.takeIf { it.isNotBlank() }
-            ?: "已选择文件夹"
-        viewModel.setStorageLocation(uri.toString(), displayName)
-    }
 
     Column(
         modifier = Modifier
@@ -93,21 +64,23 @@ fun DownloadSettingsScreen(
             .padding(horizontal = 16.dp)
             .consumePointersUnlessResumed()
     ) {
-        DownloadSettingsTopBar(onBack = onBack)
+        PlaybackSettingsTopBar(onBack = onBack)
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
         ) {
             Spacer(modifier = Modifier.height(8.dp))
 
-            SectionLabel(title = "下载默认音质")
+            SectionLabel(title = "默认播放音质")
             Spacer(modifier = Modifier.height(12.dp))
-            DownloadSettingsCard {
-                DownloadQuality.entries.forEach { quality ->
-                    QualityOptionRow(
+            PlaybackSettingsCard {
+                PlaybackQuality.entries.forEach { quality ->
+                    PlaybackQualityOptionRow(
                         title = quality.label,
-                        detail = quality.sizeHint(),
+                        detail = quality.detail,
+                        badge = quality.badge,
                         selected = uiState.selectedQuality == quality,
                         onClick = { viewModel.selectQuality(quality) }
                     )
@@ -116,21 +89,24 @@ fun DownloadSettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SectionLabel(title = "下载歌曲存储位置")
+            SectionLabel(title = "音频")
             Spacer(modifier = Modifier.height(12.dp))
-            StorageLocationRow(
-                title = "内部存储",
-                pathHint = uiState.storagePathHint,
-                darkTheme = darkTheme,
-                onClick = { openTreeLauncher.launch(null) }
-            )
+            PlaybackSettingsCard {
+                MixWithOthersRow(
+                    enabled = uiState.mixWithOthers,
+                    darkTheme = darkTheme,
+                    onCheckedChange = viewModel::setMixWithOthers
+                )
+            }
+
+            Spacer(modifier = Modifier.height(28.dp))
         }
     }
 }
 
-// 顶栏：左返回 + 居中「下载设置」（与本地下载页同结构）
+// 顶栏：左返回 + 居中「播放设置」（与下载设置页同结构）
 @Composable
-private fun DownloadSettingsTopBar(onBack: () -> Unit) {
+private fun PlaybackSettingsTopBar(onBack: () -> Unit) {
     val colorScheme = MaterialTheme.colorScheme
     Row(
         modifier = Modifier
@@ -139,7 +115,7 @@ private fun DownloadSettingsTopBar(onBack: () -> Unit) {
             .height(46.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        DownloadSettingsHeaderIconButton(onClick = onBack) {
+        PlaybackSettingsHeaderIconButton(onClick = onBack) {
             Icon(
                 imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowLeft,
                 contentDescription = "返回",
@@ -148,7 +124,7 @@ private fun DownloadSettingsTopBar(onBack: () -> Unit) {
             )
         }
         Text(
-            text = "下载设置",
+            text = "播放设置",
             modifier = Modifier.weight(1f),
             color = colorScheme.onBackground,
             fontSize = 18.sp,
@@ -156,6 +132,7 @@ private fun DownloadSettingsTopBar(onBack: () -> Unit) {
             letterSpacing = (-0.3).sp,
             textAlign = TextAlign.Center
         )
+        // 与左侧返回按钮等宽，保证标题视觉居中
         Spacer(modifier = Modifier.size(36.dp))
     }
 }
@@ -172,9 +149,9 @@ private fun SectionLabel(title: String) {
     )
 }
 
-// 列表外层卡片外壳（surfaceVariant + 细描边，对齐本地下载页）
+// 列表外层卡片外壳（surfaceVariant + 细描边，对齐下载设置页）
 @Composable
-private fun DownloadSettingsCard(
+private fun PlaybackSettingsCard(
     content: @Composable () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -189,14 +166,18 @@ private fun DownloadSettingsCard(
     }
 }
 
+// 音质单选行：布局对齐下载设置 QualityOptionRow，右侧保留推荐 / HiFi badge
 @Composable
-private fun QualityOptionRow(
+private fun PlaybackQualityOptionRow(
     title: String,
     detail: String,
+    badge: String?,
     selected: Boolean,
     onClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val badgeBg = colorScheme.onBackground.copy(alpha = if (selected) 0.12f else 0.06f)
+    val badgeFg = colorScheme.onBackground.copy(alpha = if (selected) 0.85f else 0.35f)
 
     Row(
         modifier = Modifier
@@ -252,77 +233,121 @@ private fun QualityOptionRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
+
+        if (!badge.isNullOrBlank()) {
+            Text(
+                text = badge,
+                color = badgeFg,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier
+                    .clip(BadgeShape)
+                    .background(badgeBg)
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
+            )
+        }
     }
 }
 
 @Composable
-private fun StorageLocationRow(
-    title: String,
-    pathHint: String,
+private fun MixWithOthersRow(
+    enabled: Boolean,
     darkTheme: Boolean,
-    onClick: () -> Unit
+    onCheckedChange: (Boolean) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val iconBg = if (darkTheme) Color.White.copy(alpha = 0.09f) else Color.Black.copy(alpha = 0.055f)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(CardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(0.67.dp, colorScheme.outlineVariant, CardShape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
+            .clickable { onCheckedChange(!enabled) }
+            .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(IconBoxShape)
-                .background(iconBg),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.FolderOpen,
-                contentDescription = null,
-                tint = colorScheme.onBackground,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                color = colorScheme.onBackground,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = pathHint,
-                color = colorScheme.onSurfaceVariant,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(top = 2.dp),
-                // 完整路径可能较长，允许多行展示
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-            contentDescription = null,
-            tint = colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
-            modifier = Modifier.size(16.dp)
+        Text(
+            text = "与其他应用同时播放",
+            color = colorScheme.onBackground,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(Modifier.weight(1f))
+        PlaybackToggle(
+            checked = enabled,
+            darkTheme = darkTheme,
+            onCheckedChange = onCheckedChange
         )
     }
 }
 
-// 与本地下载页一致的圆形图标按钮
+// 对齐设计稿 50×30 自定义开关（开启：主色轨道 + 反色滑块；关闭：浅色轨道 + 描边）
 @Composable
-private fun DownloadSettingsHeaderIconButton(
+private fun PlaybackToggle(
+    checked: Boolean,
+    darkTheme: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    // 滑块左右位：关 3dp / 开 23dp（轨道宽 50、滑块 24）
+    val thumbOffset by animateDpAsState(
+        targetValue = if (checked) 26.dp else 1.dp,
+        label = "playbackToggleThumb"
+    )
+    // 轨道：开=前景实色，关=低透明底
+    val trackColor = when {
+        checked && darkTheme -> Color.White
+        checked -> Color.Black
+        darkTheme -> Color.White.copy(alpha = 0.12f)
+        else -> Color.Black.copy(alpha = 0.1f)
+    }
+    // 滑块：开=与轨道反色，关=半透明灰
+    val thumbColor = when {
+        checked && darkTheme -> Color.Black
+        checked -> Color.White
+        darkTheme -> Color.White.copy(alpha = 0.55f)
+        else -> Color.Black.copy(alpha = 0.28f)
+    }
+
+    // 轨道容器；关闭态额外描边，开启态无边框
+    Box(
+        modifier = Modifier
+            .width(50.dp)
+            .height(24.dp)
+            .clip(CircleShape)
+            .background(trackColor)
+            .then(
+                if (checked) {
+                    Modifier
+                } else {
+                    Modifier.border(
+                        width = 1.dp,
+                        color = if (darkTheme) {
+                            Color.White.copy(alpha = 0.1f)
+                        } else {
+                            Color.Black.copy(alpha = 0.1f)
+                        },
+                        shape = CircleShape
+                    )
+                }
+            )
+            .clickable { onCheckedChange(!checked) },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        // 圆形滑块，水平 offset 随 checked 动画
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset)
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(thumbColor)
+        )
+    }
+}
+
+// 与下载设置页一致的圆形图标按钮
+@Composable
+private fun PlaybackSettingsHeaderIconButton(
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
