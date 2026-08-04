@@ -3,14 +3,14 @@ package com.leo.lune.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.domain.model.DownloadQuality
-import com.leo.lune.domain.usecase.settings.ObserveDefaultDownloadQualityUseCase
+import com.leo.lune.domain.model.SettingKeys
+import com.leo.lune.domain.repository.SettingsRepository
 import com.leo.lune.domain.usecase.settings.ObserveDownloadStorageLocationUseCase
-import com.leo.lune.domain.usecase.settings.SetDefaultDownloadQualityUseCase
-import com.leo.lune.domain.usecase.settings.SetDownloadStorageLocationUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -22,17 +22,18 @@ data class DownloadSettingsUiState(
     val storagePathHint: String = ""
 )
 
-// 下载设置：默认音质 + SAF 存储目录（仅依赖 settings UseCase，不直连 data）
+// 下载设置：默认音质直连 SettingsRepository；存储位置仍走跨仓储 UseCase
 @HiltViewModel
 class DownloadSettingsViewModel @Inject constructor(
-    observeDefaultDownloadQualityUseCase: ObserveDefaultDownloadQualityUseCase,
-    observeDownloadStorageLocationUseCase: ObserveDownloadStorageLocationUseCase,
-    private val setDefaultDownloadQualityUseCase: SetDefaultDownloadQualityUseCase,
-    private val setDownloadStorageLocationUseCase: SetDownloadStorageLocationUseCase
+    private val settingsRepository: SettingsRepository,
+    observeDownloadStorageLocationUseCase: ObserveDownloadStorageLocationUseCase
 ) : ViewModel() {
 
     val uiState: StateFlow<DownloadSettingsUiState> = combine(
-        observeDefaultDownloadQualityUseCase(),
+        settingsRepository.observeValue(SettingKeys.DOWNLOAD_DEFAULT_QUALITY).map { raw ->
+            val bitrate = raw?.toIntOrNull() ?: return@map DownloadQuality.Default
+            DownloadQuality.fromBitrate(bitrate)
+        },
         observeDownloadStorageLocationUseCase()
     ) { quality, storage ->
         DownloadSettingsUiState(
@@ -47,14 +48,21 @@ class DownloadSettingsViewModel @Inject constructor(
 
     fun selectQuality(quality: DownloadQuality) {
         viewModelScope.launch {
-            setDefaultDownloadQualityUseCase(quality)
+            settingsRepository.setValue(
+                SettingKeys.DOWNLOAD_DEFAULT_QUALITY,
+                quality.bitrate.toString()
+            )
         }
     }
 
-    // 保存用户通过 SAF 选择的下载目录
+    // 保存用户通过 SAF 选择的下载目录（tree URI + 展示名）
     fun setStorageLocation(treeUri: String, displayName: String) {
         viewModelScope.launch {
-            setDownloadStorageLocationUseCase(treeUri, displayName)
+            settingsRepository.setValue(SettingKeys.DOWNLOAD_STORAGE_TREE_URI, treeUri)
+            settingsRepository.setValue(
+                SettingKeys.DOWNLOAD_STORAGE_DISPLAY_NAME,
+                displayName.ifBlank { "已选择文件夹" }
+            )
         }
     }
 }

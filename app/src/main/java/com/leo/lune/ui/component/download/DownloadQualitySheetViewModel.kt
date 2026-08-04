@@ -3,15 +3,17 @@ package com.leo.lune.ui.component.download
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.domain.model.DownloadQuality
+import com.leo.lune.domain.model.SettingKeys
 import com.leo.lune.domain.repository.DownloadRepository
+import com.leo.lune.domain.repository.SettingsRepository
 import com.leo.lune.domain.usecase.download.GetDownloadQualitySizesUseCase
-import com.leo.lune.domain.usecase.settings.ObserveDefaultDownloadQualityUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,7 +37,7 @@ data class DownloadQualitySheetUiState(
 class DownloadQualitySheetViewModel @Inject constructor(
     private val getDownloadQualitySizesUseCase: GetDownloadQualitySizesUseCase,
     private val downloadRepository: DownloadRepository,
-    observeDefaultDownloadQualityUseCase: ObserveDefaultDownloadQualityUseCase
+    settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DownloadQualitySheetUiState())
@@ -43,7 +45,10 @@ class DownloadQualitySheetViewModel @Inject constructor(
     // 默认音质来自设置表，与本地 UIState 合并对外暴露
     val uiState: StateFlow<DownloadQualitySheetUiState> = combine(
         _uiState,
-        observeDefaultDownloadQualityUseCase()
+        settingsRepository.observeValue(SettingKeys.DOWNLOAD_DEFAULT_QUALITY).map { raw ->
+            val bitrate = raw?.toIntOrNull() ?: return@map DownloadQuality.Default
+            DownloadQuality.fromBitrate(bitrate)
+        }
     ) { state, defaultQuality ->
         state.copy(defaultQuality = defaultQuality)
     }.stateIn(

@@ -13,9 +13,12 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.LyricLine
+import com.leo.lune.domain.model.PlaybackQuality
+import com.leo.lune.domain.model.SettingKeys
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.repository.DownloadRepository
 import com.leo.lune.domain.repository.MusicRepository
+import com.leo.lune.domain.repository.SettingsRepository
 import com.leo.lune.audio.ArtworkLoader
 import com.leo.lune.manager.FavoriteManager
 import com.leo.lune.manager.LyricManager
@@ -34,6 +37,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -63,6 +68,8 @@ data class PlaybackState(
     val isFavorite: Boolean = false,
     // 最近一次成功获取到的流媒体地址
     val playUrl: String? = null,
+    // 当前实际播放音质文案（标准 / 高品质 / 无损）；未开播为空
+    val qualityLabel: String = "",
     // 播放或拉取地址时的错误信息
     val error: String? = null,
     // 当前播放队列
@@ -101,6 +108,8 @@ class MusicPlayerController @Inject constructor(
     private val musicRepository: MusicRepository,
     // 已下载时返回本地文件路径
     private val downloadRepository: DownloadRepository,
+    // 播放设置（默认音质 / 音频焦点策略）
+    private val settingsRepository: SettingsRepository,
     // 歌词管理器（加载 / 匹配 / 展示文案）
     private val lyricManager: LyricManager,
     // 听歌统计记录器（最近播放 / 周次数 / 时长）
@@ -114,20 +123,23 @@ class MusicPlayerController @Inject constructor(
     // 封面加载器：下载并压缩封面供系统通知栏内嵌显示
     private val artworkLoader: ArtworkLoader
 ) {
+    // 是否由 ExoPlayer 处理音频焦点；与「同时播放」开关相反，创建前可读到缓存值
+    @Volatile
+    private var handleAudioFocus: Boolean = true
+
+    // 标记 ExoPlayer 是否已懒加载创建，避免设置变更时过早触发创建
+    @Volatile
+    private var playerReady: Boolean = false
+
     // 底层播放器（懒加载）；音频焦点与「拔出耳机暂停」交给 Media3
     // 播放/暂停状态通过 Listener 回写 playbackState
     val player: ExoPlayer by lazy {
         ExoPlayer.Builder(context)
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(C.USAGE_MEDIA)
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .build(),
-                /* handleAudioFocus = */ true
-            )
+            .setAudioAttributes(mediaAudioAttributes(), handleAudioFocus)
             .setHandleAudioBecomingNoisy(true)
             .build()
             .also { player ->
+                playerReady = true
                 player.addListener(
                     object : Player.Listener {
                         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -168,6 +180,21 @@ class MusicPlayerController @Inject constructor(
             }
     }
 
+    // 媒体用途的 AudioAttributes（USAGE_MEDIA + MUSIC）
+    private fun mediaAudioAttributes(): AudioAttributes {
+        return AudioAttributes.Builder()
+            .setUsage(C.USAGE_MEDIA)
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .build()
+    }
+
+    // mixWithOthers=true → 不处理焦点（可与导航等同时出声）；false → 独占焦点
+    private fun applyMixWithOthers(enabled: Boolean) {
+        handleAudioFocus = !enabled
+        if (!playerReady) return
+        player.setAudioAttributes(mediaAudioAttributes(), handleAudioFocus)
+    }
+
     private companion object {
         // 距歌曲结束不足该时长时，预取下一首 URL 并追加进 Media3 播放列表
         const val PREFETCH_WINDOW_MS = 15_000L
@@ -191,8 +218,19 @@ class MusicPlayerController @Inject constructor(
     private var prefetchJob: Job? = null
     // 已追加进 Media3 播放列表的下一首歌曲 id；用于预取去重与自动切歌对账
     private var prefetchedNextSongId: Long? = null
+    // 预取下一首对应的音质文案，切到该曲时写入 PlaybackState
+    private var prefetchedNextQualityLabel: String? = null
 
     init {
+        // 订阅「与其他应用同时播放」，即时调整 ExoPlayer 音频焦点策略
+        scope.launch {
+            settingsRepository.observeValue(SettingKeys.PLAYBACK_MIX_WITH_OTHERS)
+                .map { it == "true" }
+                .distinctUntilChanged()
+                .collect { mixWithOthers ->
+                    applyMixWithOthers(mixWithOthers)
+                }
+        }
         // 订阅 QueueManager 的播放模式，同步进 PlaybackState
         scope.launch {
             queueManager.playMode.collect { mode ->
@@ -267,6 +305,7 @@ class MusicPlayerController @Inject constructor(
         urlJob?.cancel()
         prefetchJob?.cancel()
         prefetchedNextSongId = null
+        prefetchedNextQualityLabel = null
 
         _playbackState.update {
             it.copy(
@@ -277,6 +316,7 @@ class MusicPlayerController @Inject constructor(
                 isPlaying = false,
                 error = null,
                 playUrl = null,
+                qualityLabel = "",
                 lyrics = emptyList(),
                 currentLyricLine = lyricManager.fallbackLyric(song),
                 activeLyricIndex = 0
@@ -295,12 +335,16 @@ class MusicPlayerController @Inject constructor(
                 // 封面下载与播放地址获取并行，互不阻塞
                 val artworkDeferred = async { artworkLoader.loadArtworkBytes(song.coverUrl) }
 
-                // 已下载优先播本地文件（可指定音质），否则拉在线流地址
-                val localPath = downloadRepository.getLocalPath(requestSongId, requestQuality)
-                val playUri = if (localPath != null) {
-                    localPathToPlayUri(localPath)
+                // 已下载优先播本地文件（可指定音质），否则按设置页默认音质拉在线流
+                val local = downloadRepository.getLocalPlayback(requestSongId, requestQuality)
+                val qualityLabel: String
+                val playUri = if (local != null) {
+                    qualityLabel = local.second.label
+                    localPathToPlayUri(local.first)
                 } else {
-                    val songUrl = musicRepository.getSongUrl(requestSongId)
+                    val bitrate = resolveStreamBitrate()
+                    val songUrl = musicRepository.getSongUrl(requestSongId, bitrate)
+                    qualityLabel = PlaybackQuality.fromBitrate(songUrl.bitrate).label
                     songUrl.url
                 }
                 // 用户已切到别的歌：丢弃本次结果
@@ -315,7 +359,12 @@ class MusicPlayerController @Inject constructor(
                     }
                 } else {
                     _playbackState.update {
-                        it.copy(isLoading = false, playUrl = playUri, error = null)
+                        it.copy(
+                            isLoading = false,
+                            playUrl = playUri,
+                            qualityLabel = qualityLabel,
+                            error = null
+                        )
                     }
                     playStatsRecorderManager.recordPlayStats(song)
                     saveSnapshot()
@@ -465,6 +514,7 @@ class MusicPlayerController @Inject constructor(
         urlJob?.cancel()
         prefetchJob?.cancel()
         prefetchedNextSongId = null
+        prefetchedNextQualityLabel = null
         player.stop()
         player.clearMediaItems()
         _playbackPosition.value = PlaybackPosition()
@@ -535,12 +585,16 @@ class MusicPlayerController @Inject constructor(
                 // 封面与播放地址并行加载
                 val artworkDeferred = async { artworkLoader.loadArtworkBytes(nextSong.coverUrl) }
 
-                // 已下载优先用本地文件，否则拉在线流地址
-                val localPath = downloadRepository.getLocalPath(nextSong.id)
-                val playUri = if (localPath != null) {
-                    localPathToPlayUri(localPath)
+                // 已下载优先用本地文件，否则按设置页默认音质拉在线流
+                val local = downloadRepository.getLocalPlayback(nextSong.id)
+                val qualityLabel: String
+                val playUri = if (local != null) {
+                    qualityLabel = local.second.label
+                    localPathToPlayUri(local.first)
                 } else {
-                    musicRepository.getSongUrl(nextSong.id).url
+                    val songUrl = musicRepository.getSongUrl(nextSong.id, resolveStreamBitrate())
+                    qualityLabel = PlaybackQuality.fromBitrate(songUrl.bitrate).label
+                    songUrl.url
                 }
                 if (playUri.isNullOrBlank()) return@launch
                 if (_playbackState.value.currentSong?.id != originSongId) return@launch
@@ -548,6 +602,7 @@ class MusicPlayerController @Inject constructor(
                 val artworkBytes = artworkDeferred.await()
                 player.addMediaItem(buildMediaItem(nextSong, playUri, artworkBytes))
                 prefetchedNextSongId = nextSong.id
+                prefetchedNextQualityLabel = qualityLabel
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (throwable: Throwable) {
@@ -565,7 +620,9 @@ class MusicPlayerController @Inject constructor(
         playStatsRecorderManager.settleListenDuration()
         // 自动衔接期间 isPlaying 不变，onIsPlayingChanged 不会重开计时，需手动开段
         playStatsRecorderManager.markListeningStarted()
+        val qualityLabel = prefetchedNextQualityLabel.orEmpty()
         prefetchedNextSongId = null
+        prefetchedNextQualityLabel = null
         // 移除已播完的旧项，播放列表始终保持「当前曲 + 预取的下一首」
         val currentIndex = player.currentMediaItemIndex
         if (currentIndex > 0) {
@@ -578,6 +635,7 @@ class MusicPlayerController @Inject constructor(
                 isLoading = false,
                 error = null,
                 playUrl = player.currentMediaItem?.localConfiguration?.uri?.toString(),
+                qualityLabel = qualityLabel,
                 lyrics = emptyList(),
                 currentLyricLine = lyricManager.fallbackLyric(song),
                 activeLyricIndex = 0
@@ -596,6 +654,7 @@ class MusicPlayerController @Inject constructor(
             player.removeMediaItem(nextIndex)
         }
         prefetchedNextSongId = null
+        prefetchedNextQualityLabel = null
     }
 
     // 将 Song + 可播 URL 转为 Media3 MediaItem；Metadata 供通知栏/锁屏，mediaId 用歌曲 id
@@ -635,6 +694,13 @@ class MusicPlayerController @Inject constructor(
         } else {
             Uri.fromFile(File(localPath)).toString()
         }
+    }
+
+    // 读取设置页默认流媒体音质对应的码率（bps）；未配置时回退 PlaybackQuality.Default
+    private suspend fun resolveStreamBitrate(): Int {
+        val raw = settingsRepository.getValue(SettingKeys.PLAYBACK_DEFAULT_QUALITY)
+        val bitrate = raw?.toIntOrNull() ?: return PlaybackQuality.Default.bitrate
+        return PlaybackQuality.fromBitrate(bitrate).bitrate
     }
 
     // 将当前播放状态快照持久化到 Room，供进程被杀后恢复

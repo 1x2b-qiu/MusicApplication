@@ -24,6 +24,12 @@ interface DownloadRepository {
     // quality 非空时取该档；为空则取最高音质
     suspend fun getLocalPath(songId: Long, quality: DownloadQuality? = null): String?
 
+    // 可播本地路径及其音质档位；无本地文件时 null（quality 为空则取最高音质）
+    suspend fun getLocalPlayback(
+        songId: Long,
+        quality: DownloadQuality? = null
+    ): Pair<String, DownloadQuality>?
+
     suspend fun isDownloaded(songId: Long): Boolean
 
     // 是否至少有一档已下载（播放页图标等）

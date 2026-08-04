@@ -35,6 +35,8 @@ data class PlayerUiState(
     val error: String? = null,
     val isPlaying: Boolean = false,
     val isFavorite: Boolean = false,
+    // 当前实际播放音质（标准 / 高品质 / 无损）；未开播为空
+    val qualityLabel: String = "",
     // 播放队列与当前下标
     val queue: List<Song> = emptyList(),
     val queueIndex: Int = 0,
@@ -93,6 +95,7 @@ class PlayerViewModel @Inject constructor(
             error = state.error,
             isPlaying = state.isPlaying,
             isFavorite = state.isFavorite,
+            qualityLabel = state.qualityLabel,
             queue = state.queue,
             queueIndex = state.queueIndex,
             lyrics = state.lyrics,

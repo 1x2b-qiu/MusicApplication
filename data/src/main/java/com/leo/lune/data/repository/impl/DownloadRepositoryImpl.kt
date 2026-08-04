@@ -92,14 +92,21 @@ class DownloadRepositoryImpl @Inject constructor(
     override suspend fun getLocalPath(
         songId: Long,
         quality: DownloadQuality?
-    ): String? = withContext(Dispatchers.IO) {
+    ): String? = getLocalPlayback(songId, quality)?.first
+
+    // 可播本地路径 + 音质；指定 quality 则取该档，否则取最高已下载且文件仍在的档
+    override suspend fun getLocalPlayback(
+        songId: Long,
+        quality: DownloadQuality?
+    ): Pair<String, DownloadQuality>? = withContext(Dispatchers.IO) {
         if (quality != null) {
             val entity = downloadedSongDao.getById(songId, quality.bitrate) ?: return@withContext null
-            return@withContext entity.localPath.takeIf { audioFileStore.exists(it) }
+            val path = entity.localPath.takeIf { audioFileStore.exists(it) } ?: return@withContext null
+            return@withContext path to quality
         }
         downloadedSongDao.getAllBySongId(songId)
             .firstOrNull { audioFileStore.exists(it.localPath) }
-            ?.localPath
+            ?.let { it.localPath to DownloadQuality.fromBitrate(it.bitrate) }
     }
 
     // 是否至少有一档已下载且本地文件仍存在

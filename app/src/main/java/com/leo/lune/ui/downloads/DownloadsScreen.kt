@@ -450,7 +450,13 @@ private fun DownloadedSongRow(
     val colorScheme = MaterialTheme.colorScheme
     var menuOpen by remember(song.songId) { mutableStateOf(false) }
 
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                onClick = onClick
+            ),
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -460,12 +466,7 @@ private fun DownloadedSongRow(
         ) {
             Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onClick
-                    ),
+                    .weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {

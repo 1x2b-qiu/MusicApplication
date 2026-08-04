@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.leo.lune.domain.model.PlaybackQuality
 import com.leo.lune.util.consumePointersUnlessResumed
 
 // 与下载设置页一致的列表外层卡片圆角
@@ -46,7 +47,7 @@ private val CardShape = RoundedCornerShape(24.dp)
 
 private val BadgeShape = RoundedCornerShape(6.dp)
 
-// 播放设置页：默认音质单选 + 与其他应用同时播放开关（UI 骨架）
+// 播放设置页：默认音质单选 + 与其他应用同时播放开关
 @Composable
 fun PlaybackSettingsScreen(
     onBack: () -> Unit,

@@ -713,9 +713,10 @@ private fun PlayerControlsCard(
                 }
 
                 else -> {
-                    // 细圆角进度条，无拇指；拖动结束再回调 onSeek
+                    // 细圆角进度条，无拇指；拖动结束再回调 onSeek；音质在条右下角
                     PlayerProgressBar(
                         progress = progressFraction.coerceIn(0f, 1f),
+                        qualityLabel = uiState.qualityLabel,
                         onProgressChange = { fraction ->
                             isDragging = true
                             dragFraction = fraction
@@ -801,58 +802,75 @@ private fun PlayerControlsCard(
     }
 }
 
-// 细圆角双色进度条，无可见拇指；整条可点按 / 拖动
+// 细圆角双色进度条，无可见拇指；整条可点按 / 拖动；音质文案在右下角
 @Composable
 private fun PlayerProgressBar(
     progress: Float,
     onProgressChange: (Float) -> Unit,
     onProgressChangeFinished: () -> Unit,
+    qualityLabel: String = "",
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val fraction = progress.coerceIn(0f, 1f)
 
-    Box(
-        modifier = modifier
-            .fillMaxWidth()
-            // 扩大触控高度，视觉仍是 6dp 细条
-            .height(12.dp)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onDragEnd = onProgressChangeFinished,
-                    onDragCancel = onProgressChangeFinished,
-                    onHorizontalDrag = { change, _ ->
-                        change.consume()
-                        val width = size.width.toFloat().coerceAtLeast(1f)
-                        onProgressChange((change.position.x / width).coerceIn(0f, 1f))
-                    }
-                )
-            }
-            .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    val width = size.width.toFloat().coerceAtLeast(1f)
-                    onProgressChange((offset.x / width).coerceIn(0f, 1f))
-                    onProgressChangeFinished()
-                }
-            },
-        contentAlignment = Alignment.CenterStart
-    ) {
-        // 底轨
+    Column(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(6.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(colorScheme.onBackground.copy(alpha = 0.2f))
-        )
-        // 已播放
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(fraction)
-                .height(6.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(colorScheme.onBackground)
-        )
+                // 扩大触控高度，视觉仍是 6dp 细条
+                .height(12.dp)
+                .pointerInput(Unit) {
+                    detectHorizontalDragGestures(
+                        onDragEnd = onProgressChangeFinished,
+                        onDragCancel = onProgressChangeFinished,
+                        onHorizontalDrag = { change, _ ->
+                            change.consume()
+                            val width = size.width.toFloat().coerceAtLeast(1f)
+                            onProgressChange((change.position.x / width).coerceIn(0f, 1f))
+                        }
+                    )
+                }
+                .pointerInput(Unit) {
+                    detectTapGestures { offset ->
+                        val width = size.width.toFloat().coerceAtLeast(1f)
+                        onProgressChange((offset.x / width).coerceIn(0f, 1f))
+                        onProgressChangeFinished()
+                    }
+                },
+            contentAlignment = Alignment.CenterStart
+        ) {
+            // 底轨
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(colorScheme.onBackground.copy(alpha = 0.2f))
+            )
+            // 已播放
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(colorScheme.onBackground)
+            )
+        }
+
+        if (qualityLabel.isNotBlank()) {
+            Text(
+                text = qualityLabel,
+                color = colorScheme.onSurfaceVariant,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .padding(top = 4.dp)
+            )
+        }
     }
 }
 
