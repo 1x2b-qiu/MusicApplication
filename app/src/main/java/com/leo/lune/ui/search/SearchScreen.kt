@@ -1,5 +1,7 @@
 package com.leo.lune.ui.search
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -77,6 +80,7 @@ import kotlinx.coroutines.delay
 // 底部留白：迷你播放栏 66dp + 导航层间距 12dp，避免列表最后一项被遮挡
 private val MiniPlayerBottomInset = 78.dp
 
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun SearchScreen(
     onBack: () -> Unit,
@@ -475,6 +479,15 @@ private fun RecentSearchSection(
     onRemoveRecent: (String) -> Unit,
     onClearAll: () -> Unit
 ) {
+    // 点击删除图标后进入编辑态：隐藏图标，改为「全部删除 | 完成」，并显示 Chip 删除按钮
+    var isEditing by remember { mutableStateOf(false) }
+
+    LaunchedEffect(recents.isEmpty()) {
+        if (recents.isEmpty()) {
+            isEditing = false
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -500,16 +513,56 @@ private fun RecentSearchSection(
             )
 
             if (recents.isNotEmpty()) {
-                SearchHeaderIconButton(
-                    onClick = onClearAll,
-                    contentDescription = "清空最近搜索"
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteOutline,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onBackground,
-                        modifier = Modifier.size(16.dp)
-                    )
+                if (isEditing) {
+                    Row(
+                        modifier = Modifier.height(36.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "全部删除",
+                            color = themeStyle.sectionLabelColor,
+                            fontSize = 13.sp,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = {
+                                    onClearAll()
+                                    isEditing = false
+                                }
+                            )
+                        )
+                        Text(
+                            text = "|",
+                            color = themeStyle.sectionLabelColor.copy(alpha = 0.4f),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "完成",
+                            color = themeStyle.sectionLabelColor,
+                            fontSize = 13.sp,
+                            letterSpacing = 1.sp,
+                            modifier = Modifier.clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                                onClick = { isEditing = false }
+                            )
+                        )
+                        Spacer(Modifier.width(2.dp))
+                    }
+                } else {
+                    SearchHeaderIconButton(
+                        onClick = { isEditing = true },
+                        contentDescription = "编辑最近搜索"
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.DeleteOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
                 }
             } else {
                 Box(
@@ -541,6 +594,7 @@ private fun RecentSearchSection(
                         themeStyle = themeStyle,
                         animationDelayMs = index * 40,
                         mountedAlpha = mountedAlpha,
+                        showRemove = isEditing,
                         onSelect = { onRecentClick(term) },
                         onRemove = { onRemoveRecent(term) }
                     )
@@ -550,13 +604,14 @@ private fun RecentSearchSection(
     }
 }
 
-// 最近搜索 Chip：点击复搜，右侧 × 删除单条
+// 最近搜索 Chip：点击复搜；编辑态下右侧 × 删除单条
 @Composable
 private fun RecentSearchChip(
     term: String,
     themeStyle: SearchThemeStyle,
     animationDelayMs: Int,
     mountedAlpha: Float,
+    showRemove: Boolean,
     onSelect: () -> Unit,
     onRemove: () -> Unit
 ) {
@@ -596,16 +651,18 @@ private fun RecentSearchChip(
                     onClick = onSelect
                 ),
         )
-        IconButton(
-            onClick = onRemove,
-            modifier = Modifier.size(16.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Close,
-                contentDescription = "删除",
-                tint = themeStyle.chipRemoveIconColor,
-                modifier = Modifier.size(11.dp)
-            )
+        if (showRemove) {
+            IconButton(
+                onClick = onRemove,
+                modifier = Modifier.size(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "删除",
+                    tint = themeStyle.chipRemoveIconColor,
+                    modifier = Modifier.size(11.dp)
+                )
+            }
         }
     }
 }
