@@ -379,9 +379,9 @@ private fun DailyMixBanner(
                 }
                 // 播放按钮：白天圆日 / 夜晚弯月；未播放白色，播放中用对应天体色
                 val isDaytime = isDailyMixDaytime()
-                val celestialShape = if (isDaytime) CircleShape else CrescentMoonShape
+                val celestialShape = if (isDaytime) CrescentMoonShape else CrescentMoonShape
                 val celestialColor = if (isPlayingThis) {
-                    if (isDaytime) SunColor else MoonColor
+                    if (isDaytime) MoonColor else MoonColor
                 } else {
                     Color.White
                 }
