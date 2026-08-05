@@ -71,6 +71,9 @@ class PlayerViewModel @Inject constructor(
     // 高频播放进度（约 200ms）；不进 uiState，由进度条等局部控件就近订阅
     val positionState: StateFlow<PlaybackPosition> = playerController.playbackPosition
 
+    // 定时关闭到期时刻；按钮倒计时就近订阅，避免整页按秒重组
+    val sleepTimerEndsAtEpochMs: StateFlow<Long?> = playerController.sleepTimerEndsAtEpochMs
+
     // 合并：全局播放态 + 当前曲已下载音质 + 全局下载任务 + 定时关闭
     val uiState: StateFlow<PlayerUiState> = combine(
         playerController.playbackState,
@@ -155,6 +158,9 @@ class PlayerViewModel @Inject constructor(
     fun startSleepTimer(option: SleepTimerOption, customMinutes: Int?) {
         playerController.startSleepTimer(option.toDurationMs(customMinutes))
     }
+
+    // 取消定时关闭
+    fun cancelSleepTimer() = playerController.cancelSleepTimer()
 
     // 下载当前展示曲指定音质；该档已下载或正在下同档则忽略
     fun downloadCurrentSong(quality: DownloadQuality = DownloadQuality.Default) {

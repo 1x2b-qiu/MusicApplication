@@ -423,6 +423,9 @@ class MusicPlayerController @Inject constructor(
     // 定时关闭是否进行中（供播放页闹钟按钮高亮）
     val sleepTimerActive: StateFlow<Boolean> = sleepTimerManager.isActive
 
+    // 定时关闭到期时刻；未启用为 null（供倒计时文案）
+    val sleepTimerEndsAtEpochMs: StateFlow<Long?> = sleepTimerManager.endsAtEpochMs
+
     // 启动或覆盖定时关闭；到期后 pause()
     fun startSleepTimer(durationMs: Long) {
         sleepTimerManager.start(durationMs) { pause() }

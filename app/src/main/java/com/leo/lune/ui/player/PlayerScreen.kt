@@ -49,6 +49,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -90,6 +91,7 @@ import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
 // 底部浮层控制区预留高度：控制卡 + 间距 + 工具栏 + 底边距
@@ -104,6 +106,8 @@ fun PlayerScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // 定时关闭到期时刻：仅闹钟按钮订阅，按秒刷新剩余文案
+    val sleepTimerEndsAt by viewModel.sleepTimerEndsAtEpochMs.collectAsStateWithLifecycle()
     // 播放页独立 Haze：背景氛围层为源，底栏卡片在源外采样
     val playerHazeState = rememberHazeState()
 
@@ -148,6 +152,7 @@ fun PlayerScreen(
                     isDownloading = uiState.isDownloading,
                     downloadProgress = uiState.downloadProgress,
                     sleepTimerActive = uiState.sleepTimerActive,
+                    sleepTimerEndsAtEpochMs = sleepTimerEndsAt,
                     onSleepTimerClick = { sleepTimerSheetOpen = true },
                     onDownloadClick = {
                         when {
@@ -277,7 +282,12 @@ fun PlayerScreen(
 
         if (sleepTimerSheetOpen) {
             SleepTimerBottomSheet(
+                active = uiState.sleepTimerActive,
                 onDismiss = { sleepTimerSheetOpen = false },
+                onStart = { option, customMinutes ->
+                    viewModel.startSleepTimer(option, customMinutes)
+                },
+                onCancel = { viewModel.cancelSleepTimer() },
                 onConfirm = { option, customMinutes ->
                     sleepTimerSheetOpen = false
                     viewModel.startSleepTimer(option, customMinutes)
@@ -295,6 +305,7 @@ private fun PlayerTopBar(
     isDownloading: Boolean,
     downloadProgress: Float,
     sleepTimerActive: Boolean,
+    sleepTimerEndsAtEpochMs: Long?,
     onSleepTimerClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onImmersiveClick: () -> Unit
@@ -321,14 +332,22 @@ private fun PlayerTopBar(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        PlayerIconButton(onClick = onSleepTimerClick) {
-            Icon(
-                imageVector = Icons.Outlined.Alarm,
-                contentDescription = "定时关闭",
-                // 进行中用主色高亮，便于识别已开启
-                tint = if (sleepTimerActive) colorScheme.primary else colorScheme.onBackground,
-                modifier = Modifier.size(18.dp)
-            )
+        // 闹钟按钮保持完整图标；开启后倒计时用 offset 叠在按钮正下方
+        Box(contentAlignment = Alignment.TopCenter) {
+            PlayerIconButton(onClick = onSleepTimerClick) {
+                Icon(
+                    imageVector = Icons.Outlined.Alarm,
+                    contentDescription = "定时关闭",
+                    tint = if (sleepTimerActive) colorScheme.primary else colorScheme.onBackground,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            if (sleepTimerActive && sleepTimerEndsAtEpochMs != null) {
+                SleepTimerCountdownLabel(
+                    endsAtEpochMs = sleepTimerEndsAtEpochMs,
+                    modifier = Modifier.offset(y = 36.dp)
+                )
+            }
         }
 
         PlayerDownloadButton(
@@ -347,6 +366,45 @@ private fun PlayerTopBar(
             )
         }
     }
+}
+
+// 定时关闭剩余时间：按秒刷新，叠在闹钟按钮下方（由调用方 offset）
+@Composable
+private fun SleepTimerCountdownLabel(
+    endsAtEpochMs: Long,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    var remainingMs by remember(endsAtEpochMs) {
+        mutableLongStateOf((endsAtEpochMs - System.currentTimeMillis()).coerceAtLeast(0L))
+    }
+    LaunchedEffect(endsAtEpochMs) {
+        while (true) {
+            val left = (endsAtEpochMs - System.currentTimeMillis()).coerceAtLeast(0L)
+            remainingMs = left
+            if (left <= 0L) break
+            delay(1_000)
+        }
+    }
+    val totalSec = (remainingMs / 1_000L).toInt()
+    val hours = totalSec / 3600
+    val minutes = (totalSec % 3600) / 60
+    val seconds = totalSec % 60
+    // 有时：h:mm:ss；不足一小时只显示 m:ss
+    val label = if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
+    }
+    Text(
+        text = label,
+        color = colorScheme.primary,
+        fontSize = 9.sp,
+        fontWeight = FontWeight.Medium,
+        maxLines = 1,
+        softWrap = false,
+        modifier = modifier
+    )
 }
 
 // 下载按钮：下载中描边为真实字节环形进度；已下载 / 下载中点击进列表

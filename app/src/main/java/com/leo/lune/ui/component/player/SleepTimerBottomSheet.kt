@@ -1,5 +1,6 @@
 package com.leo.lune.ui.component.player
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -37,6 +39,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -82,21 +86,28 @@ enum class SleepTimerOption(
 
 /**
  * 定时关闭底部弹层：风格对齐下载音质弹层
- * 预设分钟单选 + 确认；点「自定义」再叠一层时间拨轮弹层
+ * 标题旁开关可启停定时；预设单选 + 确认；点「自定义」再叠拨轮弹层
  *
+ * @param active 当前是否已开启定时（驱动开关）
  * @param onDismiss 遮罩 / 返回键关闭主弹层
- * @param onConfirm 确认：option 为选中档；自定义时 customMinutes 为总分钟，预设为 null
+ * @param onStart 开关拨开：按当前预设档启动，不关弹层
+ * @param onCancel 取消定时（开关拨关）
+ * @param onConfirm 确认 / 自定义拨轮确认：启动并由调用方关弹层；自定义时带 customMinutes
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepTimerBottomSheet(
+    active: Boolean,
     onDismiss: () -> Unit,
+    onStart: (SleepTimerOption, customMinutes: Int?) -> Unit = { _, _ -> },
+    onCancel: () -> Unit = {},
     onConfirm: (SleepTimerOption, customMinutes: Int?) -> Unit = { _, _ -> }
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val darkTheme = colorScheme.background.luminance() < 0.5f
     // 禁止半展开，避免列表高度抖动
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    // 默认选中 15 分钟
+    // 默认选中 15 分钟；自定义不可选中，仅开拨轮
     var selected by remember { mutableStateOf(SleepTimerOption.Minutes15) }
     // 点击「自定义」后叠一层时间选择弹窗
     var customPickerOpen by remember { mutableStateOf(false) }
@@ -121,17 +132,33 @@ fun SleepTimerBottomSheet(
                 .border(1.dp, colorScheme.primary, SheetShape)
                 .padding(20.dp)
         ) {
-            Text(
-                text = "定时关闭",
-                color = colorScheme.onBackground,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.3).sp
-            )
+            // 标题 + 启停开关：拨开即启动（不关弹层），拨关取消
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "定时关闭",
+                    color = colorScheme.onBackground,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.3).sp,
+                    modifier = Modifier.weight(1f)
+                )
+                SleepTimerToggle(
+                    checked = active,
+                    darkTheme = darkTheme,
+                    onCheckedChange = { enabled ->
+                        // 拨开：仅按当前预设档启动，不关弹层；自定义不可选中故无需处理
+                        if (enabled) onStart(selected, null)
+                        else onCancel()
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 档位列表：预设直接选中；自定义只开第二层弹窗，不在本层展开拨轮
+            // 档位列表：预设直接选中；自定义只开第二层弹窗，不改变 selected
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SleepTimerOption.entries.forEach { option ->
                     SleepTimerOptionRow(
@@ -150,19 +177,13 @@ fun SleepTimerBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // 确认：预设立刻回调；若当前是自定义（二次进入）则再开拨轮弹层
+            // 确认：按当前预设档启动并关弹层
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(ConfirmShape)
                     .background(colorScheme.primary)
-                    .clickable {
-                        if (selected == SleepTimerOption.Custom) {
-                            customPickerOpen = true
-                        } else {
-                            onConfirm(selected, null)
-                        }
-                    }
+                    .clickable { onConfirm(selected, null) }
                     .padding(vertical = 14.dp),
                 contentAlignment = Alignment.Center
             ) {
@@ -176,15 +197,72 @@ fun SleepTimerBottomSheet(
         }
     }
 
-    // 自定义时长弹层：确认后带回总分钟并关闭本层选择
+    // 自定义时长弹层：确认后启动并关主弹层；不把「自定义」设为选中
     if (customPickerOpen) {
         SleepTimerCustomPickerSheet(
             onDismiss = { customPickerOpen = false },
             onConfirm = { totalMinutes ->
                 customPickerOpen = false
-                selected = SleepTimerOption.Custom
                 onConfirm(SleepTimerOption.Custom, totalMinutes)
             }
+        )
+    }
+}
+
+// 对齐播放设置页的自定义开关（50×24）
+@Composable
+private fun SleepTimerToggle(
+    checked: Boolean,
+    darkTheme: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    val thumbOffset by animateDpAsState(
+        targetValue = if (checked) 26.dp else 1.dp,
+        label = "sleepTimerToggleThumb"
+    )
+    val trackColor = when {
+        checked && darkTheme -> Color.White
+        checked -> Color.Black
+        darkTheme -> Color.White.copy(alpha = 0.12f)
+        else -> Color.Black.copy(alpha = 0.1f)
+    }
+    val thumbColor = when {
+        checked && darkTheme -> Color.Black
+        checked -> Color.White
+        darkTheme -> Color.White.copy(alpha = 0.55f)
+        else -> Color.Black.copy(alpha = 0.28f)
+    }
+
+    Box(
+        modifier = Modifier
+            .width(50.dp)
+            .height(24.dp)
+            .clip(CircleShape)
+            .background(trackColor)
+            .then(
+                if (checked) {
+                    Modifier
+                } else {
+                    Modifier.border(
+                        width = 1.dp,
+                        color = if (darkTheme) {
+                            Color.White.copy(alpha = 0.1f)
+                        } else {
+                            Color.Black.copy(alpha = 0.1f)
+                        },
+                        shape = CircleShape
+                    )
+                }
+            )
+            .clickable { onCheckedChange(!checked) },
+        contentAlignment = Alignment.CenterStart
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = thumbOffset)
+                .size(24.dp)
+                .clip(CircleShape)
+                .background(thumbColor)
         )
     }
 }
