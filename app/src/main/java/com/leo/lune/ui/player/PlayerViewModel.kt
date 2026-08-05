@@ -10,6 +10,7 @@ import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.repository.DownloadRepository
+import com.leo.lune.ui.component.player.SleepTimerOption
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.SharingStarted
@@ -52,7 +53,9 @@ data class PlayerUiState(
     val downloadProgress: Float = 0f,
     val downloadError: String? = null,
     // 已落盘的音质；用于拦截重复下载同档
-    val downloadedQualities: Set<DownloadQuality> = emptySet()
+    val downloadedQualities: Set<DownloadQuality> = emptySet(),
+    // 定时关闭是否进行中
+    val sleepTimerActive: Boolean = false
 )
 
 // 全屏播放页 ViewModel
@@ -68,7 +71,7 @@ class PlayerViewModel @Inject constructor(
     // 高频播放进度（约 200ms）；不进 uiState，由进度条等局部控件就近订阅
     val positionState: StateFlow<PlaybackPosition> = playerController.playbackPosition
 
-    // 合并三路：全局播放态 + 当前曲已下载音质 + 全局下载任务
+    // 合并：全局播放态 + 当前曲已下载音质 + 全局下载任务 + 定时关闭
     val uiState: StateFlow<PlayerUiState> = combine(
         playerController.playbackState,
         // 切歌后切换观察目标，避免一直订阅上一首的下载标记
@@ -79,8 +82,9 @@ class PlayerViewModel @Inject constructor(
                 if (songId == 0L) flowOf(emptySet())
                 else downloadRepository.observeDownloadedQualities(songId)
             },
-        downloadManager.tasks
-    ) { state, downloadedQualities, tasks ->
+        downloadManager.tasks,
+        playerController.sleepTimerActive
+    ) { state, downloadedQualities, tasks, sleepTimerActive ->
         val song = state.displaySong
         val songId = song?.id ?: 0L
         val activeTask = tasks.firstOrNull { it.songId == songId && it.error == null }
@@ -107,7 +111,8 @@ class PlayerViewModel @Inject constructor(
             isDownloading = activeTask != null,
             downloadProgress = activeTask?.progress ?: 0f,
             downloadError = tasks.firstOrNull { it.songId == songId }?.error,
-            downloadedQualities = downloadedQualities
+            downloadedQualities = downloadedQualities,
+            sleepTimerActive = sleepTimerActive
         )
     }
         .distinctUntilChanged()
@@ -145,6 +150,11 @@ class PlayerViewModel @Inject constructor(
 
     // 切换播放模式，逻辑在 Controller
     fun cyclePlayMode() = playerController.cyclePlayMode()
+
+    // 启动定时关闭；自定义用 customMinutes，预设忽略该参数
+    fun startSleepTimer(option: SleepTimerOption, customMinutes: Int?) {
+        playerController.startSleepTimer(option.toDurationMs(customMinutes))
+    }
 
     // 下载当前展示曲指定音质；该档已下载或正在下同档则忽略
     fun downloadCurrentSong(quality: DownloadQuality = DownloadQuality.Default) {

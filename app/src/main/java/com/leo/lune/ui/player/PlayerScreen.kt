@@ -147,6 +147,7 @@ fun PlayerScreen(
                     isDownloaded = uiState.isDownloaded,
                     isDownloading = uiState.isDownloading,
                     downloadProgress = uiState.downloadProgress,
+                    sleepTimerActive = uiState.sleepTimerActive,
                     onSleepTimerClick = { sleepTimerSheetOpen = true },
                     onDownloadClick = {
                         when {
@@ -277,9 +278,9 @@ fun PlayerScreen(
         if (sleepTimerSheetOpen) {
             SleepTimerBottomSheet(
                 onDismiss = { sleepTimerSheetOpen = false },
-                onConfirm = { _, _ ->
-                    // 功能未接：仅关闭弹层
+                onConfirm = { option, customMinutes ->
                     sleepTimerSheetOpen = false
+                    viewModel.startSleepTimer(option, customMinutes)
                 }
             )
         }
@@ -293,6 +294,7 @@ private fun PlayerTopBar(
     isDownloaded: Boolean,
     isDownloading: Boolean,
     downloadProgress: Float,
+    sleepTimerActive: Boolean,
     onSleepTimerClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onImmersiveClick: () -> Unit
@@ -323,7 +325,8 @@ private fun PlayerTopBar(
             Icon(
                 imageVector = Icons.Outlined.Alarm,
                 contentDescription = "定时关闭",
-                tint = colorScheme.onBackground,
+                // 进行中用主色高亮，便于识别已开启
+                tint = if (sleepTimerActive) colorScheme.primary else colorScheme.onBackground,
                 modifier = Modifier.size(18.dp)
             )
         }

@@ -25,6 +25,7 @@ import com.leo.lune.manager.LyricManager
 import com.leo.lune.manager.PlayStatsRecorderManager
 import com.leo.lune.manager.PlaybackSnapshotManager
 import com.leo.lune.manager.QueueManager
+import com.leo.lune.manager.SleepTimerManager
 import com.leo.lune.service.MusicPlaybackService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -118,6 +119,8 @@ class MusicPlayerController @Inject constructor(
     private val queueManager: QueueManager,
     // 红心收藏管理器（缓存 + 乐观更新 + 回滚）
     val favoriteManager: FavoriteManager,
+    // 定时关闭（倒计时到期后暂停）
+    private val sleepTimerManager: SleepTimerManager,
     // 播放快照持久化（进程级恢复）
     private val snapshotManager: PlaybackSnapshotManager,
     // 封面加载器：下载并压缩封面供系统通知栏内嵌显示
@@ -395,7 +398,7 @@ class MusicPlayerController @Inject constructor(
         val state = _playbackState.value
         val song = state.currentSong ?: state.previewSong ?: return
         if (player.isPlaying) {
-            player.pause()
+            pause()
             return
         }
         val canResume = state.currentSong != null &&
@@ -410,6 +413,23 @@ class MusicPlayerController @Inject constructor(
         ensurePlaybackService()
         player.play()
     }
+
+    // 暂停播放（播放器未创建时为空操作）
+    fun pause() {
+        if (!playerReady) return
+        player.pause()
+    }
+
+    // 定时关闭是否进行中（供播放页闹钟按钮高亮）
+    val sleepTimerActive: StateFlow<Boolean> = sleepTimerManager.isActive
+
+    // 启动或覆盖定时关闭；到期后 pause()
+    fun startSleepTimer(durationMs: Long) {
+        sleepTimerManager.start(durationMs) { pause() }
+    }
+
+    // 取消定时关闭
+    fun cancelSleepTimer() = sleepTimerManager.cancel()
 
     // 播放列表播完（下一首未预取或预取失败时）：单曲循环走 playSong 刷新地址后重播，其余模式切下一首
     @RequiresApi(Build.VERSION_CODES.O)
@@ -506,7 +526,7 @@ class MusicPlayerController @Inject constructor(
         }
     }
 
-    // 清空播放队列并停止当前播放，保留播放模式
+    // 清空播放队列并停止当前播放，保留播放模式；一并取消定时关闭
     fun clearQueue() {
         playStatsRecorderManager.settleListenDuration()
         positionJob?.cancel()
@@ -515,6 +535,7 @@ class MusicPlayerController @Inject constructor(
         prefetchJob?.cancel()
         prefetchedNextSongId = null
         prefetchedNextQualityLabel = null
+        cancelSleepTimer()
         player.stop()
         player.clearMediaItems()
         _playbackPosition.value = PlaybackPosition()

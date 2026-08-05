@@ -37,6 +37,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -45,14 +47,20 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlin.math.abs
 
+// 弹层圆角（与下载音质弹层一致）
 private val SheetShape = RoundedCornerShape(28.dp)
+
+// 选项行圆角
 private val OptionShape = RoundedCornerShape(16.dp)
+
+// 底部确认按钮圆角
 private val ConfirmShape = RoundedCornerShape(16.dp)
 
+// 拨轮单行高度；可见 3 行时总高 = 3 × 本值
 private val WheelItemHeight = 40.dp
 private const val WheelVisibleCount = 3
 
-// 定时关闭选项（UI 骨架，暂未接入真实计时）
+// 定时关闭档位：预设分钟 + 自定义
 enum class SleepTimerOption(
     val label: String
 ) {
@@ -60,21 +68,33 @@ enum class SleepTimerOption(
     Minutes30("30 分钟"),
     Minutes45("45 分钟"),
     Minutes60("60 分钟"),
-    Custom("自定义")
+    Custom("自定义");
+
+    // 转为倒计时毫秒；自定义用 customMinutes（分钟），其余忽略该参数
+    fun toDurationMs(customMinutes: Int?): Long = when (this) {
+        Minutes15 -> 15 * 60_000L
+        Minutes30 -> 30 * 60_000L
+        Minutes45 -> 45 * 60_000L
+        Minutes60 -> 60 * 60_000L
+        Custom -> (customMinutes ?: 0).coerceAtLeast(0) * 60_000L
+    }
 }
 
 /**
  * 定时关闭底部弹层：风格对齐下载音质弹层
- * 预设分钟单选 + 确认；点「自定义」再弹出独立时间拨轮弹层
+ * 预设分钟单选 + 确认；点「自定义」再叠一层时间拨轮弹层
+ *
+ * @param onDismiss 遮罩 / 返回键关闭主弹层
+ * @param onConfirm 确认：option 为选中档；自定义时 customMinutes 为总分钟，预设为 null
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SleepTimerBottomSheet(
     onDismiss: () -> Unit,
-    // 确认回调预留；功能未接时由调用方直接 dismiss 即可
     onConfirm: (SleepTimerOption, customMinutes: Int?) -> Unit = { _, _ -> }
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    // 禁止半展开，避免列表高度抖动
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // 默认选中 15 分钟
     var selected by remember { mutableStateOf(SleepTimerOption.Minutes15) }
@@ -85,6 +105,7 @@ fun SleepTimerBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = colorScheme.background,
+        // 关闭色调抬升，与自定义弹层背景一致
         tonalElevation = 0.dp,
         scrimColor = colorScheme.scrim.copy(alpha = 0.55f),
         dragHandle = null,
@@ -110,6 +131,7 @@ fun SleepTimerBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // 档位列表：预设直接选中；自定义只开第二层弹窗，不在本层展开拨轮
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 SleepTimerOption.entries.forEach { option ->
                     SleepTimerOptionRow(
@@ -117,7 +139,6 @@ fun SleepTimerBottomSheet(
                         selected = selected == option,
                         onClick = {
                             if (option == SleepTimerOption.Custom) {
-                                // 自定义：另开时间选择弹层，不在本层展开拨轮
                                 customPickerOpen = true
                             } else {
                                 selected = option
@@ -129,6 +150,7 @@ fun SleepTimerBottomSheet(
 
             Spacer(modifier = Modifier.height(20.dp))
 
+            // 确认：预设立刻回调；若当前是自定义（二次进入）则再开拨轮弹层
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -154,6 +176,7 @@ fun SleepTimerBottomSheet(
         }
     }
 
+    // 自定义时长弹层：确认后带回总分钟并关闭本层选择
     if (customPickerOpen) {
         SleepTimerCustomPickerSheet(
             onDismiss = { customPickerOpen = false },
@@ -168,6 +191,9 @@ fun SleepTimerBottomSheet(
 
 /**
  * 自定义时长弹层：时 / 分拨轮 + 确认（叠在定时关闭弹层之上）
+ *
+ * @param onDismiss 取消选择，仅关本层
+ * @param onConfirm 确认时回传总分钟（小时×60 + 分钟）
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -177,6 +203,7 @@ private fun SleepTimerCustomPickerSheet(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    // 拨轮初始：0 时 30 分
     var hours by remember { mutableIntStateOf(0) }
     var minutes by remember { mutableIntStateOf(30) }
 
@@ -184,7 +211,7 @@ private fun SleepTimerCustomPickerSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         containerColor = colorScheme.background,
-        // 关闭色调抬升，避免叠层弹窗表面被 surface tint 染成与主弹层不一致
+        // 关闭色调抬升，避免叠层表面被 surface tint 染成与主弹层不一致
         tonalElevation = 0.dp,
         scrimColor = colorScheme.scrim.copy(alpha = 0.55f),
         dragHandle = null,
@@ -239,6 +266,7 @@ private fun SleepTimerCustomPickerSheet(
     }
 }
 
+// 单档选项行：标题 + 右侧单选圆点（选中填充）
 @Composable
 private fun SleepTimerOptionRow(
     option: SleepTimerOption,
@@ -270,6 +298,7 @@ private fun SleepTimerOptionRow(
             fontWeight = FontWeight.Medium
         )
 
+        // 单选指示：选中时实心圆 + 内点
         Box(
             modifier = Modifier
                 .size(17.dp)
@@ -339,6 +368,7 @@ private fun DurationWheelPicker(
     }
 }
 
+// 数字拨轮：snap 吸附 + 视口中心项回写 value
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun NumberWheel(
@@ -348,14 +378,18 @@ private fun NumberWheel(
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    // 拨轮数据源：将 IntRange 物化为列表，供 LazyColumn 按 index 取数
     val values = remember(range) { range.toList() }
+    // 列表状态：初始滚到当前 value 对应行，保证打开时中线对准
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = (value - range.first).coerceIn(0, values.lastIndex)
     )
+    // 甩动结束吸附到最近一行，避免停在两行之间
     val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    // 可视区域高度 = 单行高 × 可见行数（上下各露半行/一行邻项）
     val pickerHeight = WheelItemHeight * WheelVisibleCount
 
-    // 滚动停止后，取最靠近视口中心的项
+    // 滚动停止后，取最靠近视口中心的项并回写
     LaunchedEffect(listState) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
@@ -380,6 +414,7 @@ private fun NumberWheel(
         }
     }
 
+    // 用于高亮：实时计算当前居中行下标
     val centeredIndex by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
@@ -391,11 +426,21 @@ private fun NumberWheel(
         }
     }
 
+    // 滑动连震：居中档位每变一次触发轻触反馈（跳过首帧，避免打开时误震）
+    val haptic = LocalHapticFeedback.current
+    var lastHapticIndex by remember { mutableIntStateOf(centeredIndex) }
+    LaunchedEffect(centeredIndex) {
+        if (centeredIndex != lastHapticIndex) {
+            lastHapticIndex = centeredIndex
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+    }
+
     Box(
         modifier = modifier.height(pickerHeight),
         contentAlignment = Alignment.Center
     ) {
-        // 中线高亮条
+        // 中线高亮条（装饰，不拦截触摸）
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -404,6 +449,7 @@ private fun NumberWheel(
                 .background(colorScheme.onBackground.copy(alpha = 0.06f))
         )
 
+        // 上下各垫一行高度，使首尾项也能滚到中线
         LazyColumn(
             state = listState,
             flingBehavior = flingBehavior,
