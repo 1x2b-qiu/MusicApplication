@@ -7,11 +7,16 @@ import com.leo.lune.data.mapper.toSong
 import com.leo.lune.data.mapper.toSongUrl
 import com.leo.lune.data.mapper.toUserPlaylist
 import com.leo.lune.data.remote.api.NeteaseApi
+import com.leo.lune.data.remote.response.SuggestAlbumDto
+import com.leo.lune.data.remote.response.SuggestArtistDto
+import com.leo.lune.data.remote.response.SuggestSongDto
 import com.leo.lune.data.util.LrcParser
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.PlaylistGenre
+import com.leo.lune.domain.model.SearchSuggestion
+import com.leo.lune.domain.model.SearchSuggestionType
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
@@ -36,6 +41,43 @@ class MusicRepositoryImpl @Inject constructor(
             throw IllegalStateException("Search failed with code ${response.code}")
         }
         return response.result?.songs.orEmpty().map { it.toSong() }
+    }
+
+    // 获取热搜关键词（失败时向上抛，由 ViewModel 静默处理）
+    override suspend fun getHotSearchTerms(): List<String> {
+        val response = neteaseApi.getSearchHot()
+        if (response.code != 200) {
+            throw IllegalStateException("Get hot search failed with code ${response.code}")
+        }
+        return response.result?.hots.orEmpty()
+            .mapNotNull { it.first?.trim()?.takeIf(String::isNotEmpty) }
+            .distinct()
+    }
+
+    // 获取搜索联想：优先歌曲 / 歌手 / 专辑；若为空则兜底 allMatch 关键词
+    override suspend fun getSearchSuggestions(keywords: String): List<SearchSuggestion> {
+        val response = neteaseApi.getSearchSuggest(keywords)
+        if (response.code != 200) {
+            throw IllegalStateException("Get search suggest failed with code ${response.code}")
+        }
+        val result = response.result ?: return emptyList()
+        val typed = buildList {
+            result.songs.orEmpty().mapNotNullTo(this) { it.toSuggestion() }
+            result.artists.orEmpty().mapNotNullTo(this) { it.toSuggestion() }
+            result.albums.orEmpty().mapNotNullTo(this) { it.toSuggestion() }
+        }
+        if (typed.isNotEmpty()) return typed.distinctBy { it.text to it.type }
+
+        return result.allMatch.orEmpty()
+            .mapNotNull { match ->
+                val keyword = match.keyword?.trim()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+                SearchSuggestion(
+                    text = keyword,
+                    keyword = keyword,
+                    type = SearchSuggestionType.Song
+                )
+            }
+            .distinctBy { it.text }
     }
 
     // 获取歌曲可播放的音频 URL；bitrate 指定目标码率时按该档返回
@@ -172,4 +214,37 @@ class MusicRepositoryImpl @Inject constructor(
             }
         }.awaitAll()
     }
+}
+
+private fun SuggestSongDto.toSuggestion(): SearchSuggestion? {
+    val songName = name?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    val artistName = (artists ?: ar).orEmpty()
+        .mapNotNull { it.name?.trim()?.takeIf(String::isNotEmpty) }
+        .firstOrNull()
+    val text = if (artistName != null) "$songName - $artistName" else songName
+    return SearchSuggestion(
+        text = text,
+        keyword = songName,
+        type = SearchSuggestionType.Song
+    )
+}
+
+private fun SuggestArtistDto.toSuggestion(): SearchSuggestion? {
+    val artistName = name?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    return SearchSuggestion(
+        text = artistName,
+        keyword = artistName,
+        type = SearchSuggestionType.Artist
+    )
+}
+
+private fun SuggestAlbumDto.toSuggestion(): SearchSuggestion? {
+    val albumName = name?.trim()?.takeIf(String::isNotEmpty) ?: return null
+    val artistName = artist?.name?.trim()?.takeIf(String::isNotEmpty)
+    val text = if (artistName != null) "$albumName - $artistName" else albumName
+    return SearchSuggestion(
+        text = text,
+        keyword = albumName,
+        type = SearchSuggestionType.Album
+    )
 }

@@ -4,6 +4,7 @@ import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.PlaylistGenre
+import com.leo.lune.domain.model.SearchSuggestion
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
@@ -12,6 +13,10 @@ import com.leo.lune.domain.model.UserPlaylist
 interface MusicRepository {
     // 按关键词搜索歌曲
     suspend fun searchSongs(keywords: String, limit: Int = 20): List<Song>
+    // 获取热搜关键词列表
+    suspend fun getHotSearchTerms(): List<String>
+    // 按输入获取搜索联想建议
+    suspend fun getSearchSuggestions(keywords: String): List<SearchSuggestion>
     // 获取歌曲流媒体播放地址；bitrate 为可选目标码率（bps）
     suspend fun getSongUrl(songId: Long, bitrate: Int? = null): SongUrl
     // 获取歌曲 LRC 歌词

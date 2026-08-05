@@ -11,7 +11,9 @@ import com.leo.lune.data.remote.response.PersonalizedPlaylistResponse
 import com.leo.lune.data.remote.response.PlaylistHotResponse
 import com.leo.lune.data.remote.response.PlaylistTrackAllResponse
 import com.leo.lune.data.remote.response.RecommendSongsResponse
+import com.leo.lune.data.remote.response.SearchHotResponse
 import com.leo.lune.data.remote.response.SearchResponse
+import com.leo.lune.data.remote.response.SearchSuggestResponse
 import com.leo.lune.data.remote.response.SongDetailResponse
 import com.leo.lune.data.remote.response.SongUrlResponse
 import com.leo.lune.data.remote.response.TopPlaylistResponse
@@ -32,6 +34,16 @@ interface NeteaseApi {
         @Query("limit") limit: Int = 20,
         @Query("type") type: Int = 1
     ): SearchResponse
+
+    // 热搜列表（简略，仅关键词）
+    @GET("search/hot")
+    suspend fun getSearchHot(): SearchHotResponse
+
+    // 搜索建议（歌曲 / 歌手 / 专辑等）
+    @GET("search/suggest")
+    suspend fun getSearchSuggest(
+        @Query("keywords") keywords: String
+    ): SearchSuggestResponse
 
     // 获取歌曲播放地址；br 为可选码率（bps），不传则由服务端默认最高可用
     @GET("song/url")

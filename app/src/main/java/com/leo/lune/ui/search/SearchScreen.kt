@@ -28,11 +28,13 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.Close
@@ -57,15 +59,21 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.leo.lune.domain.model.SearchSuggestion
+import com.leo.lune.domain.model.SearchSuggestionType
 import com.leo.lune.domain.model.Song
 import com.leo.lune.ui.home.HomeRecentItem
 import com.leo.lune.util.ClearFocusOnImeHidden
@@ -112,6 +120,8 @@ fun SearchScreen(
     }
 
     val showResults = uiState.activeKeyword.isNotBlank()
+    // 有输入但未确认搜索时，展示匹配建议；空输入展示最近搜索 + 热搜榜
+    val showSuggestions = !showResults && uiState.query.isNotBlank()
 
     Box(
         modifier = Modifier
@@ -171,18 +181,55 @@ fun SearchScreen(
                         )
                     }
 
-                    else -> {
-                        RecentSearchSection(
-                            recents = uiState.recentSearches,
+                    showSuggestions -> {
+                        SearchSuggestionsSection(
+                            query = uiState.query,
+                            suggestions = uiState.suggestions,
+                            isLoading = uiState.isSuggestLoading,
                             themeStyle = themeStyle,
                             mountedAlpha = mounted.value,
-                            onRecentClick = {
-                                viewModel.onRecentSearchClick(it)
+                            onSuggestionClick = {
+                                viewModel.onSuggestionClick(it)
                                 dismissKeyboard()
-                            },
-                            onRemoveRecent = viewModel::removeRecentSearch,
-                            onClearAll = viewModel::clearRecentSearches
+                            }
                         )
+                    }
+
+                    else -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = mounted.value
+                                    translationY = (1f - mounted.value) * 12f
+                                }
+                                .verticalScroll(rememberScrollState())
+                                .padding(top = 20.dp, bottom = 32.dp + MiniPlayerBottomInset)
+                        ) {
+                            RecentSearchSection(
+                                recents = uiState.recentSearches,
+                                themeStyle = themeStyle,
+                                mountedAlpha = mounted.value,
+                                onRecentClick = {
+                                    viewModel.onRecentSearchClick(it)
+                                    dismissKeyboard()
+                                },
+                                onRemoveRecent = viewModel::removeRecentSearch,
+                                onClearAll = viewModel::clearRecentSearches
+                            )
+                            if (uiState.hotSearches.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(28.dp))
+                                HotSearchSection(
+                                    hotSearches = uiState.hotSearches,
+                                    themeStyle = themeStyle,
+                                    mountedAlpha = mounted.value,
+                                    onHotClick = {
+                                        viewModel.onHotSearchClick(it)
+                                        dismissKeyboard()
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -488,15 +535,7 @@ private fun RecentSearchSection(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .graphicsLayer {
-                alpha = mountedAlpha
-                translationY = (1f - mountedAlpha) * 12f
-            }
-            .padding(top = 20.dp, bottom = 32.dp + MiniPlayerBottomInset)
-    ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -740,4 +779,172 @@ private fun SearchEmptyResults(
             letterSpacing = 1.sp
         )
     }
+}
+
+// ─── 热搜 / 建议 ─────────────────────────────────────────────────────────────
+
+private fun SearchSuggestionType.label(): String = when (this) {
+    SearchSuggestionType.Song -> "歌曲"
+    SearchSuggestionType.Artist -> "歌手"
+    SearchSuggestionType.Album -> "专辑"
+}
+
+// 热搜：与「最近搜索」同款 Chip 流式排布
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HotSearchSection(
+    hotSearches: List<String>,
+    themeStyle: SearchThemeStyle,
+    mountedAlpha: Float,
+    onHotClick: (String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = "热搜",
+            color = themeStyle.sectionLabelColor,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Medium,
+            letterSpacing = 2.5.sp,
+            modifier = Modifier.padding(bottom = 14.dp)
+        )
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(9.dp),
+            verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
+            hotSearches.forEachIndexed { index, term ->
+                RecentSearchChip(
+                    term = term,
+                    themeStyle = themeStyle,
+                    animationDelayMs = index * 40,
+                    mountedAlpha = mountedAlpha,
+                    showRemove = false,
+                    onSelect = { onHotClick(term) },
+                    onRemove = {}
+                )
+            }
+        }
+    }
+}
+
+// 搜索词匹配建议：轻列表，无面板边框
+@Composable
+private fun SearchSuggestionsSection(
+    query: String,
+    suggestions: List<SearchSuggestion>,
+    isLoading: Boolean,
+    themeStyle: SearchThemeStyle,
+    mountedAlpha: Float,
+    onSuggestionClick: (SearchSuggestion) -> Unit
+) {
+    val trimmed = query.trim()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                alpha = mountedAlpha
+                translationY = (1f - mountedAlpha) * 12f
+            }
+            .verticalScroll(rememberScrollState())
+            .padding(top = 12.dp, bottom = 32.dp + MiniPlayerBottomInset)
+    ) {
+        when {
+            suggestions.isNotEmpty() -> {
+                suggestions.forEach { item ->
+                    SearchSuggestionRow(
+                        item = item,
+                        query = trimmed,
+                        themeStyle = themeStyle,
+                        onClick = { onSuggestionClick(item) }
+                    )
+                }
+            }
+            !isLoading -> {
+                Text(
+                    text = "无相关结果",
+                    color = themeStyle.emptyTextColor,
+                    fontSize = 13.sp,
+                    letterSpacing = 1.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 32.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchSuggestionRow(
+    item: SearchSuggestion,
+    query: String,
+    themeStyle: SearchThemeStyle,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onClick
+            )
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Search,
+            contentDescription = null,
+            tint = themeStyle.sectionLabelColor,
+            modifier = Modifier.size(14.dp)
+        )
+        Text(
+            text = highlightedSuggestionText(
+                text = item.text,
+                query = query,
+                mutedColor = themeStyle.chipTextColor,
+                highlightColor = themeStyle.inputTextColor
+            ),
+            fontSize = 13.5.sp,
+            letterSpacing = 0.5.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = item.type.label(),
+            color = themeStyle.sectionLabelColor,
+            fontSize = 11.sp,
+            letterSpacing = 1.sp
+        )
+    }
+}
+
+// 将建议文案中与当前输入匹配的片段用高亮色标出，其余用弱化色
+private fun highlightedSuggestionText(
+    text: String,
+    query: String,
+    mutedColor: Color,
+    highlightColor: Color
+) = buildAnnotatedString {
+    // 无输入：整段弱化色
+    if (query.isEmpty()) {
+        withStyle(SpanStyle(color = mutedColor)) { append(text) }
+        return@buildAnnotatedString
+    }
+    // 找不到匹配：整段弱化色
+    val idx = text.indexOf(query, ignoreCase = true)
+    if (idx < 0) {
+        withStyle(SpanStyle(color = mutedColor)) { append(text) }
+        return@buildAnnotatedString
+    }
+    // 匹配前 / 匹配段（高亮） / 匹配后
+    withStyle(SpanStyle(color = mutedColor)) { append(text.substring(0, idx)) }
+    withStyle(SpanStyle(color = highlightColor, fontWeight = FontWeight.Medium)) {
+        append(text.substring(idx, idx + query.length))
+    }
+    withStyle(SpanStyle(color = mutedColor)) { append(text.substring(idx + query.length)) }
 }
