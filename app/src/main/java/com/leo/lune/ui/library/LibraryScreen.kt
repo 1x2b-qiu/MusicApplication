@@ -130,6 +130,7 @@ private val GuessYouLikePageHeight = 72.dp * GuessYouLikePageSize + 6.dp * (Gues
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun LibraryScreen(
+    onDailyMixClick: () -> Unit,
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -156,6 +157,7 @@ fun LibraryScreen(
                 playingSongId = playingSongId,
                 isDailyRecommendPlaying = uiState.isDailyRecommendPlaying,
                 onDailyRecommendPlayClick = viewModel::onDailyRecommendPlayClick,
+                onDailyMixClick = onDailyMixClick,
                 onGuessYouLikePlay = { id ->
                     playingSongId = id
                     viewModel.onGuessYouLikePlay(id)
@@ -205,7 +207,8 @@ private fun DailyRecommendSection(
     isDailyRecommendPlaying: Boolean,
     // 播放 / 暂停每日推荐
     onDailyRecommendPlayClick: () -> Unit,
-    // 点击猜你喜欢单曲播放
+    // Banner 整块点击进入每日推荐页
+    onDailyMixClick: () -> Unit,
     onGuessYouLikePlay: (Long) -> Unit
 ) {
     // 猜你喜欢：15 首切成 5 页，每页 3 首
@@ -227,6 +230,7 @@ private fun DailyRecommendSection(
                 dateLabel = dateLabel,
                 isPlayingThis = isDailyRecommendPlaying,
                 onPlayClick = onDailyRecommendPlayClick,
+                onBannerClick = onDailyMixClick,
             )
         }
         // 猜你喜欢
@@ -314,6 +318,8 @@ private fun DailyMixBanner(
     isPlayingThis: Boolean,
     // 播放 / 暂停
     onPlayClick: () -> Unit,
+    // Banner 整块点击
+    onBannerClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -330,6 +336,11 @@ private fun DailyMixBanner(
             .fillMaxWidth()
             .clip(CardShape)
             .border(1.dp, colorScheme.surfaceDim, CardShape)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = onBannerClick
+            )
     ) {
         // 第一首封面铺满背景
         if (firstCoverUrl.isNotEmpty()) {

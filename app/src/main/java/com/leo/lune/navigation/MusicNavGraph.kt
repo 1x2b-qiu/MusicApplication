@@ -38,6 +38,7 @@ import com.leo.lune.ui.component.minplayer.MiniPlayerBar
 import com.leo.lune.ui.component.sidebar.AppSidebar
 import com.leo.lune.ui.component.toast.FavoriteToastHost
 import com.leo.lune.ui.library.LibraryScreen
+import com.leo.lune.ui.dailymix.DailyMixScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
 import com.leo.lune.permission.PermissionCoordinator
 import com.leo.lune.ui.home.HomeScreen
@@ -106,6 +107,7 @@ private fun MusicNavHost(
     val showMiniPlayerBar = showBottomTabBar ||
             currentDestination?.hasRoute<MusicRoute.Search>() == true ||
             currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
+            currentDestination?.hasRoute<MusicRoute.DailyMix>() == true ||
             currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
             currentDestination?.hasRoute<MusicRoute.Downloads>() == true
 
@@ -179,7 +181,11 @@ private fun MusicNavHost(
                 }
 
                 composable<MusicRoute.Library> {
-                    LibraryScreen()
+                    LibraryScreen(
+                        onDailyMixClick = {
+                            navController.navigateSingleTopTo(MusicRoute.DailyMix)
+                        }
+                    )
                 }
 
                 composable<MusicRoute.Settings> {
@@ -233,6 +239,14 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.Liked> {
                     LikedScreen(
+                        onBack = { navController.popBackStack() },
+                        darkTheme = darkTheme,
+                        hazeState = hazeState
+                    )
+                }
+
+                composable<MusicRoute.DailyMix> {
+                    DailyMixScreen(
                         onBack = { navController.popBackStack() },
                         darkTheme = darkTheme,
                         hazeState = hazeState
