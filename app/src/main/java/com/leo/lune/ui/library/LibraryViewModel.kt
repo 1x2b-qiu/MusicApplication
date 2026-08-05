@@ -296,8 +296,6 @@ class LibraryViewModel @Inject constructor(
     // 甄选歌单：进入详情（暂留空）
     fun onPlaylistClick(playlistId: Long) = Unit
 
-    fun onFeaturedPlaylistsAllClick() = Unit
-
     // 排行榜：点击前三首中的某一首，以该榜预览列表为队列播放
     @RequiresApi(Build.VERSION_CODES.O)
     fun onChartSongClick(chartId: Long, songId: Long) {

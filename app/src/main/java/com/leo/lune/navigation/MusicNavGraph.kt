@@ -39,6 +39,7 @@ import com.leo.lune.ui.component.sidebar.AppSidebar
 import com.leo.lune.ui.component.toast.FavoriteToastHost
 import com.leo.lune.ui.library.LibraryScreen
 import com.leo.lune.ui.dailymix.DailyMixScreen
+import com.leo.lune.ui.playlistplaza.PlaylistPlazaScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
 import com.leo.lune.permission.PermissionCoordinator
 import com.leo.lune.ui.home.HomeScreen
@@ -108,6 +109,7 @@ private fun MusicNavHost(
             currentDestination?.hasRoute<MusicRoute.Search>() == true ||
             currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
             currentDestination?.hasRoute<MusicRoute.DailyMix>() == true ||
+            currentDestination?.hasRoute<MusicRoute.PlaylistPlaza>() == true ||
             currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
             currentDestination?.hasRoute<MusicRoute.Downloads>() == true
 
@@ -184,6 +186,9 @@ private fun MusicNavHost(
                     LibraryScreen(
                         onDailyMixClick = {
                             navController.navigateSingleTopTo(MusicRoute.DailyMix)
+                        },
+                        onPlaylistPlazaClick = {
+                            navController.navigateSingleTopTo(MusicRoute.PlaylistPlaza)
                         }
                     )
                 }
@@ -250,6 +255,12 @@ private fun MusicNavHost(
                         onBack = { navController.popBackStack() },
                         darkTheme = darkTheme,
                         hazeState = hazeState
+                    )
+                }
+
+                composable<MusicRoute.PlaylistPlaza> {
+                    PlaylistPlazaScreen(
+                        onBack = { navController.popBackStack() }
                     )
                 }
 
