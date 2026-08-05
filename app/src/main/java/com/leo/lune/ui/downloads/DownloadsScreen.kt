@@ -3,7 +3,6 @@ package com.leo.lune.ui.downloads
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -66,16 +65,13 @@ import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.formatFileSize
 import com.leo.lune.util.rememberCoverRequest
 
-// 封面缩略图圆角
-private val CoverShape = RoundedCornerShape(12.dp)
+// 封面缩略图圆角（与 HomeRecentItem 一致）
+private val CoverShape = RoundedCornerShape(14.dp)
 
-// 下载列表外层卡片圆角
-private val CardShape = RoundedCornerShape(24.dp)
+// 单曲卡片圆角（与 HomeRecentItem 一致）
+private val ItemCardShape = RoundedCornerShape(16.dp)
 
-// 空态图标容器圆角
-private val EmptyIconShape = RoundedCornerShape(28.dp)
-
-// 本地下载页：顶栏居中标题；下载中 / 已下载圆角卡片；全空时空态
+// 本地下载页：顶栏居中标题；下载中 / 已下载单曲卡片；全空时空态
 @Composable
 fun DownloadsScreen(
     onBack: () -> Unit,
@@ -117,19 +113,18 @@ fun DownloadsScreen(
                         title = "正在下载",
                         trailing = "${uiState.activeTasks.size} 首"
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    DownloadsCard {
-                        uiState.activeTasks.forEach { task ->
-                            ActiveDownloadRow(
-                                task = task,
-                                onTogglePause = {
-                                    viewModel.togglePauseDownload(task.songId, task.quality)
-                                },
-                                onCancel = {
-                                    viewModel.cancelDownload(task.songId, task.quality)
-                                }
-                            )
-                        }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    uiState.activeTasks.forEach { task ->
+                        ActiveDownloadRow(
+                            task = task,
+                            onTogglePause = {
+                                viewModel.togglePauseDownload(task.songId, task.quality)
+                            },
+                            onCancel = {
+                                viewModel.cancelDownload(task.songId, task.quality)
+                            },
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
                     }
                 }
 
@@ -142,15 +137,14 @@ fun DownloadsScreen(
                         title = "已下载",
                         trailing = "${uiState.downloadedSongs.size} 首 · ${formatFileSize(uiState.totalSizeBytes)}"
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    DownloadsCard {
-                        uiState.downloadedSongs.forEach { song ->
-                            DownloadedSongRow(
-                                song = song,
-                                onClick = { viewModel.playSong(song) },
-                                onDelete = { viewModel.deleteDownload(song) }
-                            )
-                        }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    uiState.downloadedSongs.forEach { song ->
+                        DownloadedSongRow(
+                            song = song,
+                            onClick = { viewModel.playSong(song) },
+                            onDelete = { viewModel.deleteDownload(song) },
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
                     }
                 }
             }
@@ -249,29 +243,13 @@ private fun SectionHeader(
     }
 }
 
-// 列表外层卡片外壳（surfaceVariant + 细描边）
-@Composable
-private fun DownloadsCard(
-    content: @Composable () -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(0.67.dp, colorScheme.outlineVariant, CardShape)
-    ) {
-        content()
-    }
-}
-
-// 进行中下载单行：封面 + 暂停/继续 + 删除；进度条在下方（与设计稿一致）
+// 进行中下载单曲卡：封面 + 暂停/继续；进度条在下方（卡片样式对齐 HomeRecentItem）
 @Composable
 private fun ActiveDownloadRow(
     task: ActiveDownloadTask,
     onTogglePause: () -> Unit,
-    onCancel: () -> Unit
+    onCancel: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val progressPercent = (task.progress * 100f).toInt().coerceIn(0, 100)
@@ -280,9 +258,12 @@ private fun ActiveDownloadRow(
     }
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .padding(14.dp)
+            .clip(ItemCardShape)
+            .background(colorScheme.surfaceVariant)
+            .border(1.dp, colorScheme.surfaceDim, ItemCardShape)
+            .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -317,6 +298,7 @@ private fun ActiveDownloadRow(
                     color = colorScheme.onBackground,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
+                    lineHeight = 21.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -332,6 +314,8 @@ private fun ActiveDownloadRow(
                         modifier = Modifier.weight(1f, fill = false),
                         color = colorScheme.onSurfaceVariant,
                         fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        lineHeight = 18.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -340,6 +324,8 @@ private fun ActiveDownloadRow(
                             text = " · ${formatSongDuration(task.durationMs)}",
                             color = colorScheme.onSurfaceVariant,
                             fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 18.sp,
                             maxLines = 1,
                             softWrap = false
                         )
@@ -441,40 +427,42 @@ private fun ActiveDownloadRow(
     }
 }
 
+// 已下载单曲卡：布局/描边对齐 HomeRecentItem，右侧保留音质与更多菜单
 @Composable
 private fun DownloadedSongRow(
     song: DownloadedSong,
     onClick: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
     var menuOpen by remember(song.songId) { mutableStateOf(false) }
 
     Box(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
-            .clickable(
-                onClick = onClick
-            ),
+            .clip(ItemCardShape)
+            .background(colorScheme.surfaceVariant)
+            .border(1.dp, colorScheme.surfaceDim, ItemCardShape)
+            .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(
-                modifier = Modifier
-                    .weight(1f),
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 AsyncImage(
-                    model = rememberCoverRequest(song.coverUrl, 44.dp),
+                    model = rememberCoverRequest(song.coverUrl, 48.dp),
                     contentDescription = "${song.name} 封面",
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(48.dp)
                         .clip(CoverShape),
                     contentScale = ContentScale.Crop
                 )
@@ -484,6 +472,7 @@ private fun DownloadedSongRow(
                         color = colorScheme.onBackground,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
+                        lineHeight = 21.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -499,6 +488,8 @@ private fun DownloadedSongRow(
                             modifier = Modifier.weight(1f, fill = false),
                             color = colorScheme.onSurfaceVariant,
                             fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium,
+                            lineHeight = 18.sp,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -507,6 +498,8 @@ private fun DownloadedSongRow(
                                 text = " · ${formatSongDuration(song.durationMs)}",
                                 color = colorScheme.onSurfaceVariant,
                                 fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 18.sp,
                                 maxLines = 1,
                                 softWrap = false
                             )
