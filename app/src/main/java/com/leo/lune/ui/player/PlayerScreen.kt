@@ -19,9 +19,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
+import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.DownloadDone
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
@@ -78,6 +81,7 @@ import com.leo.lune.controller.PlayerPlayMode
 import com.leo.lune.domain.model.Song
 import com.leo.lune.ui.component.download.DownloadQualityBottomSheet
 import com.leo.lune.ui.component.player.PlayerQueueBottomSheet
+import com.leo.lune.ui.component.player.SleepTimerBottomSheet
 import com.leo.lune.ui.home.formatSongDuration
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
@@ -107,6 +111,7 @@ fun PlayerScreen(
     var queueSheetOpen by remember { mutableStateOf(false) }
     var immersiveMode by remember { mutableStateOf(false) }
     var downloadSheetOpen by remember { mutableStateOf(false) }
+    var sleepTimerSheetOpen by remember { mutableStateOf(false) }
 
     // 沉浸聆听：全屏歌词，与常规布局互斥
     if (immersiveMode) {
@@ -142,6 +147,7 @@ fun PlayerScreen(
                     isDownloaded = uiState.isDownloaded,
                     isDownloading = uiState.isDownloading,
                     downloadProgress = uiState.downloadProgress,
+                    onSleepTimerClick = { sleepTimerSheetOpen = true },
                     onDownloadClick = {
                         when {
                             // 下载中或三档齐全：去本地下载页；否则打开音质弹层补下其它档
@@ -267,16 +273,27 @@ fun PlayerScreen(
                 }
             )
         }
+
+        if (sleepTimerSheetOpen) {
+            SleepTimerBottomSheet(
+                onDismiss = { sleepTimerSheetOpen = false },
+                onConfirm = { _, _ ->
+                    // 功能未接：仅关闭弹层
+                    sleepTimerSheetOpen = false
+                }
+            )
+        }
     }
 }
 
-// 顶栏：收起 + 下载 + 进入沉浸聆听
+// 顶栏：收起 + 定时关闭 + 下载 + 进入沉浸聆听
 @Composable
 private fun PlayerTopBar(
     onBack: () -> Unit,
     isDownloaded: Boolean,
     isDownloading: Boolean,
     downloadProgress: Float,
+    onSleepTimerClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onImmersiveClick: () -> Unit
 ) {
@@ -301,6 +318,15 @@ private fun PlayerTopBar(
         }
 
         Spacer(modifier = Modifier.weight(1f))
+
+        PlayerIconButton(onClick = onSleepTimerClick) {
+            Icon(
+                imageVector = Icons.Outlined.Alarm,
+                contentDescription = "定时关闭",
+                tint = colorScheme.onBackground,
+                modifier = Modifier.size(18.dp)
+            )
+        }
 
         PlayerDownloadButton(
             isDownloaded = isDownloaded,
@@ -359,21 +385,21 @@ private fun PlayerDownloadButton(
                 imageVector = Icons.Outlined.Download,
                 contentDescription = "下载中，查看本地下载",
                 tint = colorScheme.onBackground,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(18.dp)
             )
         } else if (isDownloaded) {
             Icon(
                 imageVector = Icons.Outlined.DownloadDone,
                 contentDescription = "已下载，查看本地下载",
                 tint = colorScheme.onBackground,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(18.dp)
             )
         } else {
             Icon(
                 imageVector = Icons.Outlined.Download,
                 contentDescription = "下载",
                 tint = colorScheme.onBackground,
-                modifier = Modifier.size(16.dp)
+                modifier = Modifier.size(18.dp)
             )
         }
     }
@@ -814,11 +840,15 @@ private fun PlayerProgressBar(
     val colorScheme = MaterialTheme.colorScheme
     val fraction = progress.coerceIn(0f, 1f)
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    // 高度固定为进度条触控区（12.dp）；音质标签溢出绘制，不撑高布局
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(12.dp)
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                // 扩大触控高度，视觉仍是 6dp 细条
                 .height(12.dp)
                 .pointerInput(Unit) {
                     detectHorizontalDragGestures(
@@ -867,8 +897,9 @@ private fun PlayerProgressBar(
                 maxLines = 1,
                 softWrap = false,
                 modifier = Modifier
-                    .align(Alignment.End)
-                    .padding(top = 4.dp)
+                    .align(Alignment.TopEnd)
+                    .wrapContentHeight(unbounded = true, align = Alignment.Top)
+                    .offset(y = 16.dp) // 12.dp 条高 + 4.dp 间距，不参与测量
             )
         }
     }
