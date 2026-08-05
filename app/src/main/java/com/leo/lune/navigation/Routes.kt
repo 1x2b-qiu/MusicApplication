@@ -12,7 +12,7 @@ sealed interface MusicRoute {
     data object Radio : MusicRoute
 
     @Serializable
-    data object Category : MusicRoute
+    data object Library : MusicRoute
 
     @Serializable
     data object Settings : MusicRoute
@@ -28,6 +28,9 @@ sealed interface MusicRoute {
 
     @Serializable
     data object Liked : MusicRoute
+
+    @Serializable
+    data object DailyMix : MusicRoute
 
     @Serializable
     data object Recent : MusicRoute

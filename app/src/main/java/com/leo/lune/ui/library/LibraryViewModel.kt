@@ -1,4 +1,4 @@
-package com.leo.lune.ui.category
+package com.leo.lune.ui.library
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -67,7 +67,7 @@ data class GenreItem(
 )
 
 // 曲库页 UI 状态：曲库各区块均为真实数据
-data class CategoryUiState(
+data class LibraryUiState(
     // 每日推荐（Banner）
     val dailyRecommendSongs: List<DailyRecommendSongItem> = emptyList(),
     // 猜你喜欢（推荐新音乐）
@@ -84,14 +84,14 @@ data class CategoryUiState(
 
 // 曲库页 ViewModel：曲库各区块走网易云接口
 @HiltViewModel
-class CategoryViewModel @Inject constructor(
+class LibraryViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val authRepository: AuthRepository,
     private val playerController: MusicPlayerController
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(sampleCategoryUiState())
-    val uiState: StateFlow<CategoryUiState> = _uiState.asStateFlow()
+    private val _uiState = MutableStateFlow(sampleLibraryUiState())
+    val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
 
     // 每日推荐原始队列，供播放器用
     private var dailyRecommendQueue: List<Song> = emptyList()
@@ -379,4 +379,4 @@ private val FixedCharts = listOf(
 )
 
 // 初始空态：各区块由接口填充
-private fun sampleCategoryUiState(): CategoryUiState = CategoryUiState()
+private fun sampleLibraryUiState(): LibraryUiState = LibraryUiState()

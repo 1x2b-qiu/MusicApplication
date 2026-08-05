@@ -1,5 +1,6 @@
 package com.leo.lune.ui.player
 
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -52,11 +53,13 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -93,6 +96,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 // 底部浮层控制区预留高度：控制卡 + 间距 + 工具栏 + 底边距
 private val PlayerBottomControlsInset = 240.dp
@@ -751,6 +755,9 @@ private fun PlayerControlsCard(
     // 拖动中用本地进度，松手后再 seek；切歌时重置
     var dragFraction by remember(uiState.songId) { mutableFloatStateOf(0f) }
     var isDragging by remember { mutableStateOf(false) }
+    val playInteraction = remember { MutableInteractionSource() }
+    val playScope = rememberCoroutineScope()
+    val playScale = remember { Animatable(1f) }
 
     val progressFraction = when {
         isDragging -> dragFraction
@@ -847,12 +854,19 @@ private fun PlayerControlsCard(
                 Box(
                     modifier = Modifier
                         .size(53.dp)
+                        .scale(playScale.value)
                         .clip(CircleShape)
                         .background(colorScheme.primary)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
+                            interactionSource = playInteraction,
                             indication = null,
-                            onClick = onTogglePlayPause
+                            onClick = {
+                                playScope.launch {
+                                    playScale.animateTo(0.9f, tween(60))
+                                    playScale.animateTo(1f, tween(100))
+                                }
+                                onTogglePlayPause()
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {

@@ -1,5 +1,7 @@
 package com.leo.lune.ui.component.minplayer
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -22,9 +24,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -42,6 +46,7 @@ import com.leo.lune.util.rememberCoverRequest
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import kotlinx.coroutines.launch
 
 @Composable
 fun MiniPlayerBar(
@@ -54,6 +59,9 @@ fun MiniPlayerBar(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val song = uiState.song ?: return
     val barShape = RoundedCornerShape(16.dp)
+    val playInteraction = remember { MutableInteractionSource() }
+    val playScope = rememberCoroutineScope()
+    val playScale = remember { Animatable(1f) }
 
     Column(modifier = modifier) {
         Box(
@@ -164,12 +172,19 @@ fun MiniPlayerBar(
                 Box(
                     modifier = Modifier
                         .size(40.dp)
+                        .scale(playScale.value)
                         .clip(CircleShape)
                         .background(colorScheme.primary)
                         .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
+                            interactionSource = playInteraction,
                             indication = null,
-                            onClick = viewModel::togglePlayPause
+                            onClick = {
+                                playScope.launch {
+                                    playScale.animateTo(0.9f, tween(60))
+                                    playScale.animateTo(1f, tween(100))
+                                }
+                                viewModel.togglePlayPause()
+                            }
                         ),
                     contentAlignment = Alignment.Center
                 ) {

@@ -1,4 +1,4 @@
-package com.leo.lune.ui.category
+package com.leo.lune.ui.library
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -129,8 +129,8 @@ private val GuessYouLikePageHeight = 72.dp * GuessYouLikePageSize + 6.dp * (Gues
 // 曲库页：每日推荐 / 甄选歌单 / 排行榜 / 风格分类
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun CategoryScreen(
-    viewModel: CategoryViewModel = hiltViewModel()
+fun LibraryScreen(
+    viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val colorScheme = MaterialTheme.colorScheme

@@ -37,7 +37,7 @@ import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeader
 import com.leo.lune.ui.component.minplayer.MiniPlayerBar
 import com.leo.lune.ui.component.sidebar.AppSidebar
 import com.leo.lune.ui.component.toast.FavoriteToastHost
-import com.leo.lune.ui.category.CategoryScreen
+import com.leo.lune.ui.library.LibraryScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
 import com.leo.lune.permission.PermissionCoordinator
 import com.leo.lune.ui.home.HomeScreen
@@ -97,12 +97,12 @@ private fun MusicNavHost(
     val selectedTab = when {
         currentDestination?.hasRoute<MusicRoute.Home>() == true -> MainTab.Home
         currentDestination?.hasRoute<MusicRoute.Radio>() == true -> MainTab.Radio
-        currentDestination?.hasRoute<MusicRoute.Category>() == true -> MainTab.Category
+        currentDestination?.hasRoute<MusicRoute.Library>() == true -> MainTab.Library
         else -> MainTab.Home
     }
     val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
             currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Category>() == true
+            currentDestination?.hasRoute<MusicRoute.Library>() == true
     val showMiniPlayerBar = showBottomTabBar ||
             currentDestination?.hasRoute<MusicRoute.Search>() == true ||
             currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
@@ -178,8 +178,8 @@ private fun MusicNavHost(
                     RadioScreen()
                 }
 
-                composable<MusicRoute.Category> {
-                    CategoryScreen()
+                composable<MusicRoute.Library> {
+                    LibraryScreen()
                 }
 
                 composable<MusicRoute.Settings> {
