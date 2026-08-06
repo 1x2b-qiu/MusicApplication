@@ -1,11 +1,14 @@
 package com.leo.lune.ui.component.player
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,8 +42,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -104,7 +107,6 @@ fun SleepTimerBottomSheet(
     onConfirm: (SleepTimerOption, customMinutes: Int?) -> Unit = { _, _ -> }
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val darkTheme = colorScheme.background.luminance() < 0.5f
     // 禁止半展开，避免列表高度抖动
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     // 默认选中 15 分钟；自定义不可选中，仅开拨轮
@@ -145,9 +147,8 @@ fun SleepTimerBottomSheet(
                     letterSpacing = (-0.3).sp,
                     modifier = Modifier.weight(1f)
                 )
-                SleepTimerToggle(
+                SleepTimerSwitch(
                     checked = active,
-                    darkTheme = darkTheme,
                     onCheckedChange = { enabled ->
                         // 拨开：仅按当前预设档启动，不关弹层；自定义不可选中故无需处理
                         if (enabled) onStart(selected, null)
@@ -209,60 +210,54 @@ fun SleepTimerBottomSheet(
     }
 }
 
-// 对齐播放设置页的自定义开关（50×24）
+// 标题旁启停开关：主题色轨道 + 白滑块（相对旧黑白硬开关更轻）
 @Composable
-private fun SleepTimerToggle(
+private fun SleepTimerSwitch(
     checked: Boolean,
-    darkTheme: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    // 轨道 44×22，滑块 16，左右各留 3dp 边距
     val thumbOffset by animateDpAsState(
-        targetValue = if (checked) 26.dp else 1.dp,
-        label = "sleepTimerToggleThumb"
+        targetValue = if (checked) 25.dp else 3.dp,
+        animationSpec = tween(180),
+        label = "sleepTimerSwitchThumb"
     )
-    val trackColor = when {
-        checked && darkTheme -> Color.White
-        checked -> Color.Black
-        darkTheme -> Color.White.copy(alpha = 0.12f)
-        else -> Color.Black.copy(alpha = 0.1f)
-    }
-    val thumbColor = when {
-        checked && darkTheme -> Color.Black
-        checked -> Color.White
-        darkTheme -> Color.White.copy(alpha = 0.55f)
-        else -> Color.Black.copy(alpha = 0.28f)
-    }
+    val trackColor by animateColorAsState(
+        targetValue = if (checked) {
+            colorScheme.primary
+        } else {
+            colorScheme.onSurface.copy(alpha = 0.12f)
+        },
+        animationSpec = tween(180),
+        label = "sleepTimerSwitchTrack"
+    )
 
     Box(
         modifier = Modifier
-            .width(50.dp)
-            .height(24.dp)
+            .width(44.dp)
+            .height(22.dp)
             .clip(CircleShape)
             .background(trackColor)
-            .then(
-                if (checked) {
-                    Modifier
-                } else {
-                    Modifier.border(
-                        width = 1.dp,
-                        color = if (darkTheme) {
-                            Color.White.copy(alpha = 0.1f)
-                        } else {
-                            Color.Black.copy(alpha = 0.1f)
-                        },
-                        shape = CircleShape
-                    )
-                }
-            )
-            .clickable { onCheckedChange(!checked) },
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onCheckedChange(!checked) }
+            ),
         contentAlignment = Alignment.CenterStart
     ) {
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset)
-                .size(24.dp)
+                .size(16.dp)
+                .shadow(
+                    elevation = 2.dp,
+                    shape = CircleShape,
+                    ambientColor = Color.Black.copy(alpha = 0.18f),
+                    spotColor = Color.Black.copy(alpha = 0.22f)
+                )
                 .clip(CircleShape)
-                .background(thumbColor)
+                .background(Color.White)
         )
     }
 }

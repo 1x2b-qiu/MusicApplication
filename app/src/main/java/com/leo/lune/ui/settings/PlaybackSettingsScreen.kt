@@ -1,9 +1,12 @@
 package com.leo.lune.ui.settings
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,9 +31,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -95,7 +100,6 @@ fun PlaybackSettingsScreen(
             PlaybackSettingsCard {
                 MixWithOthersRow(
                     enabled = uiState.mixWithOthers,
-                    darkTheme = darkTheme,
                     onCheckedChange = viewModel::setMixWithOthers
                 )
             }
@@ -253,7 +257,6 @@ private fun PlaybackQualityOptionRow(
 @Composable
 private fun MixWithOthersRow(
     enabled: Boolean,
-    darkTheme: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -274,74 +277,62 @@ private fun MixWithOthersRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(Modifier.weight(1f))
+        Spacer(modifier.weight(1f))
         PlaybackToggle(
             checked = enabled,
-            darkTheme = darkTheme,
             onCheckedChange = onCheckedChange
         )
     }
 }
 
-// 对齐设计稿 50×30 自定义开关（开启：主色轨道 + 反色滑块；关闭：浅色轨道 + 描边）
+// 与定时关闭弹层开关一致：主题色轨道 + 白滑块（44×22）
 @Composable
 private fun PlaybackToggle(
     checked: Boolean,
-    darkTheme: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
-    // 滑块左右位：关 3dp / 开 23dp（轨道宽 50、滑块 24）
+    val colorScheme = MaterialTheme.colorScheme
+    // 轨道 44×22，滑块 16，左右各留 3dp 边距
     val thumbOffset by animateDpAsState(
-        targetValue = if (checked) 26.dp else 1.dp,
+        targetValue = if (checked) 25.dp else 3.dp,
+        animationSpec = tween(180),
         label = "playbackToggleThumb"
     )
-    // 轨道：开=前景实色，关=低透明底
-    val trackColor = when {
-        checked && darkTheme -> Color.White
-        checked -> Color.Black
-        darkTheme -> Color.White.copy(alpha = 0.12f)
-        else -> Color.Black.copy(alpha = 0.1f)
-    }
-    // 滑块：开=与轨道反色，关=半透明灰
-    val thumbColor = when {
-        checked && darkTheme -> Color.Black
-        checked -> Color.White
-        darkTheme -> Color.White.copy(alpha = 0.55f)
-        else -> Color.Black.copy(alpha = 0.28f)
-    }
+    val trackColor by animateColorAsState(
+        targetValue = if (checked) {
+            colorScheme.primary
+        } else {
+            colorScheme.onSurface.copy(alpha = 0.12f)
+        },
+        animationSpec = tween(180),
+        label = "playbackToggleTrack"
+    )
 
-    // 轨道容器；关闭态额外描边，开启态无边框
     Box(
         modifier = Modifier
-            .width(50.dp)
-            .height(24.dp)
+            .width(44.dp)
+            .height(22.dp)
             .clip(CircleShape)
             .background(trackColor)
-            .then(
-                if (checked) {
-                    Modifier
-                } else {
-                    Modifier.border(
-                        width = 1.dp,
-                        color = if (darkTheme) {
-                            Color.White.copy(alpha = 0.1f)
-                        } else {
-                            Color.Black.copy(alpha = 0.1f)
-                        },
-                        shape = CircleShape
-                    )
-                }
-            )
-            .clickable { onCheckedChange(!checked) },
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = { onCheckedChange(!checked) }
+            ),
         contentAlignment = Alignment.CenterStart
     ) {
-        // 圆形滑块，水平 offset 随 checked 动画
         Box(
             modifier = Modifier
                 .offset(x = thumbOffset)
-                .size(24.dp)
+                .size(16.dp)
+                .shadow(
+                    elevation = 2.dp,
+                    shape = CircleShape,
+                    ambientColor = Color.Black.copy(alpha = 0.18f),
+                    spotColor = Color.Black.copy(alpha = 0.22f)
+                )
                 .clip(CircleShape)
-                .background(thumbColor)
+                .background(Color.White)
         )
     }
 }
