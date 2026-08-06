@@ -1,5 +1,11 @@
 package com.leo.lune.ui.login
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -41,8 +47,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
@@ -66,6 +78,7 @@ import com.leo.lune.util.ClearFocusOnImeHidden
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.dismissKeyboardOnTap
 import com.leo.lune.util.rememberDismissKeyboard
+import kotlin.math.sqrt
 
 // 登录页
 // UI 按设计稿重制：启动 logo + 验证码 / 密码登录
@@ -102,19 +115,14 @@ fun LoginScreen(
                 .padding(bottom = 240.dp)
                 .dismissKeyboardOnTap()
         ) {
-            // 中间启动 logo（无边框）
+            // 中间启动 logo（无边框）+ 对角线高光扫光
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_logo),
-                    contentDescription = "Lune",
-                    modifier = Modifier.size(240.dp),
-                    tint = Color.Unspecified
-                )
+                LuneStartupLogo(modifier = Modifier.size(240.dp))
             }
 
             LoginForm(
@@ -617,6 +625,64 @@ private fun LoginThirdPartyIcon(
             painter = painterResource(id = iconRes),
             contentDescription = contentDescription,
             modifier = Modifier.size(25.dp),
+            tint = Color.Unspecified
+        )
+    }
+}
+
+// 启动 Logo：在 ic_logo 之上叠加一道周期性对角扫过的高光带
+@Composable
+private fun LuneStartupLogo(
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "luneShimmer")
+    val progress by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2600, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerProgress"
+    )
+
+    Box(
+        modifier = modifier
+            // 离屏层：让 SrcAtop 只针对 Logo（透明背景）合成，
+            // 避免父容器不透明背景导致高光铺满整个方形区域
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                val w = size.width
+                val h = size.height
+                if (w == 0f || h == 0f) return@drawWithContent
+                val diag = sqrt(w * w + h * h)
+                val dirX = w / diag
+                val dirY = h / diag
+                val bandLen = diag * 0.5f
+                val half = bandLen / 2f
+                // 中心从 -0.4 → 1.4，越界段形成扫光间的天然停顿
+                val cx = (-0.4f + 1.8f * progress) * w
+                val cy = (-0.4f + 1.8f * progress) * h
+                val start = Offset(cx - half * dirX, cy - half * dirY)
+                val end = Offset(cx + half * dirX, cy + half * dirY)
+                val brush = Brush.linearGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        Color.White.copy(alpha = 0.6f),
+                        Color.Transparent
+                    ),
+                    start = start,
+                    end = end
+                )
+                // SrcAtop：保留黑底 Logo，高光只叠加在 Logo 不透明形状内
+                drawRect(brush = brush, blendMode = BlendMode.SrcAtop)
+            }
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.ic_logo),
+            contentDescription = "Lune",
+            modifier = Modifier.fillMaxSize(),
             tint = Color.Unspecified
         )
     }

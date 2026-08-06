@@ -748,27 +748,9 @@ private fun PlayerControlsCard(
     onSkipNext: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    // 高频进度仅在本卡片内订阅，重组范围被限制在这里，不波及歌词/封面
-    val playbackPosition by positionState.collectAsStateWithLifecycle()
-    // 播放器时长优先；未就绪时退回 Song 元数据时长
-    val durationMs = playbackPosition.durationMs.takeIf { it > 0L } ?: uiState.durationMs
-    // 拖动中用本地进度，松手后再 seek；切歌时重置
-    var dragFraction by remember(uiState.songId) { mutableFloatStateOf(0f) }
-    var isDragging by remember { mutableStateOf(false) }
     val playInteraction = remember { MutableInteractionSource() }
     val playScope = rememberCoroutineScope()
     val playScale = remember { Animatable(1f) }
-
-    val progressFraction = when {
-        isDragging -> dragFraction
-        durationMs > 0L -> (playbackPosition.positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
-        else -> 0f
-    }
-    val displayPositionMs = if (isDragging && durationMs > 0L) {
-        (dragFraction * durationMs).toLong()
-    } else {
-        playbackPosition.positionMs
-    }
 
     PlayerGlassSurface(hazeState = hazeState) {
         Column(
@@ -776,54 +758,17 @@ private fun PlayerControlsCard(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            // 当前时间 / 总时长，与进度条左右对齐
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = formatSongDuration(displayPositionMs),
-                    color = colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-                Text(
-                    text = formatSongDuration(durationMs),
-                    color = colorScheme.onSurfaceVariant,
-                    fontSize = 10.sp,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-
-            when {
-                uiState.error != null || uiState.downloadError != null -> {
-                    Text(
-                        text = uiState.error ?: uiState.downloadError.orEmpty(),
-                        color = colorScheme.primary,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                else -> {
-                    // 细圆角进度条，无拇指；拖动结束再回调 onSeek；音质在条右下角
-                    PlayerProgressBar(
-                        progress = progressFraction.coerceIn(0f, 1f),
-                        qualityLabel = uiState.qualityLabel,
-                        onProgressChange = { fraction ->
-                            isDragging = true
-                            dragFraction = fraction
-                        },
-                        onProgressChangeFinished = {
-                            isDragging = false
-                            if (durationMs > 0L) {
-                                onSeek((dragFraction * durationMs).toLong())
-                            }
-                        }
-                    )
-                }
-            }
+            // 进度条区域独立订阅高频 StateFlow，每 200ms 仅重组此区域
+            // 按钮区不持有进度状态，只在 uiState（低频）变化时重组
+            PlayerProgressSection(
+                positionState = positionState,
+                songId = uiState.songId,
+                fallbackDurationMs = uiState.durationMs,
+                error = uiState.error,
+                downloadError = uiState.downloadError,
+                qualityLabel = uiState.qualityLabel,
+                onSeek = onSeek
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -899,6 +844,87 @@ private fun PlayerControlsCard(
                     )
                 }
             }
+        }
+    }
+}
+
+// 进度条 + 时间文本区域：独立订阅高频 positionState，每 200ms 仅重组此区域
+// 父级 PlayerControlsCard 不持有进度状态，播放/跳曲按钮不受高频更新影响
+@Composable
+private fun PlayerProgressSection(
+    positionState: StateFlow<PlaybackPosition>,
+    songId: Long,
+    fallbackDurationMs: Long,
+    error: String?,
+    downloadError: String?,
+    qualityLabel: String,
+    onSeek: (Long) -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    // 只有这个小组件订阅高频 StateFlow，每 200ms 仅重组时间文本 + 进度条
+    val playbackPosition by positionState.collectAsStateWithLifecycle()
+    // 播放器时长优先；未就绪时退回 Song 元数据时长
+    val durationMs = playbackPosition.durationMs.takeIf { it > 0L } ?: fallbackDurationMs
+    // 拖动中用本地进度，松手后再 seek；切歌时重置
+    var dragFraction by remember(songId) { mutableFloatStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+
+    val progressFraction = when {
+        isDragging -> dragFraction
+        durationMs > 0L -> (playbackPosition.positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+        else -> 0f
+    }
+    val displayPositionMs = if (isDragging && durationMs > 0L) {
+        (dragFraction * durationMs).toLong()
+    } else {
+        playbackPosition.positionMs
+    }
+
+    // 当前时间 / 总时长，与进度条左右对齐
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = formatSongDuration(displayPositionMs),
+            color = colorScheme.onSurfaceVariant,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace
+        )
+        Text(
+            text = formatSongDuration(durationMs),
+            color = colorScheme.onSurfaceVariant,
+            fontSize = 10.sp,
+            fontFamily = FontFamily.Monospace
+        )
+    }
+
+    when {
+        error != null || downloadError != null -> {
+            Text(
+                text = error ?: downloadError.orEmpty(),
+                color = colorScheme.primary,
+                fontSize = 12.sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+        else -> {
+            // 细圆角进度条，无拇指；拖动结束再回调 onSeek；音质在条右下角
+            PlayerProgressBar(
+                progress = progressFraction.coerceIn(0f, 1f),
+                qualityLabel = qualityLabel,
+                onProgressChange = { fraction ->
+                    isDragging = true
+                    dragFraction = fraction
+                },
+                onProgressChangeFinished = {
+                    isDragging = false
+                    if (durationMs > 0L) {
+                        onSeek((dragFraction * durationMs).toLong())
+                    }
+                }
+            )
         }
     }
 }
