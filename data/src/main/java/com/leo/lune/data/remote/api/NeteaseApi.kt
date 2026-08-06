@@ -115,7 +115,7 @@ interface NeteaseApi {
     @GET("playlist/hot")
     suspend fun getPlaylistHot(): PlaylistHotResponse
 
-    // 按分类获取网友精选碟歌单（用于取封面）
+    // 按分类获取网友精选碟歌单
     @GET("top/playlist")
     suspend fun getTopPlaylist(
         @Query("cat") cat: String,

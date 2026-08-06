@@ -60,7 +60,7 @@ import kotlinx.coroutines.launch
 
 private val CoverShape = RoundedCornerShape(14.dp)
 
-// 歌单广场：Downloads 式顶栏 + 文字分类 Tab + 双列歌单网格（暂假数据）
+// 歌单广场：Downloads 式顶栏 + 文字分类 Tab + 双列歌单网格
 @Composable
 fun PlaylistPlazaScreen(
     onBack: () -> Unit,
@@ -70,6 +70,12 @@ fun PlaylistPlazaScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // 底部留白：迷你播放栏 66dp + 导航层间距 12dp
     val miniPlayerBottomInset = 78.dp
+    val statusMessage = when {
+        uiState.isLoading && uiState.playlists.isEmpty() -> "加载中…"
+        uiState.error != null && uiState.playlists.isEmpty() -> uiState.error
+        !uiState.isLoading && uiState.playlists.isEmpty() -> "暂无歌单"
+        else -> null
+    }
 
     Column(
         modifier = Modifier
@@ -89,21 +95,32 @@ fun PlaylistPlazaScreen(
             modifier = Modifier.padding(top = 10.dp, bottom = 12.dp)
         )
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 24.dp)
-        ) {
-            items(uiState.playlists, key = { it.id }) { playlist ->
-                PlaylistPlazaCard(
-                    playlist = playlist,
-                    onOpenClick = { viewModel.onPlaylistClick(playlist.id) },
-                    onPlayClick = { viewModel.onPlaylistPlayClick(playlist.id) }
-                )
+        if (statusMessage != null) {
+            PlaylistPlazaStatusText(
+                text = statusMessage,
+                actionLabel = "重试".takeIf { uiState.error != null },
+                onAction = viewModel::onRetry.takeIf { uiState.error != null },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            )
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(bottom = 24.dp)
+            ) {
+                items(uiState.playlists, key = { it.id }) { playlist ->
+                    PlaylistPlazaCard(
+                        playlist = playlist,
+                        onOpenClick = { viewModel.onPlaylistClick(playlist.id) },
+                        onPlayClick = { viewModel.onPlaylistPlayClick(playlist.id) }
+                    )
+                }
             }
         }
     }
@@ -290,6 +307,38 @@ private fun PlaylistPlazaCard(
                 fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlaylistPlazaStatusText(
+    text: String,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    Column(
+        modifier = modifier.padding(vertical = 40.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = text,
+            color = colorScheme.onSurfaceVariant,
+            fontSize = 13.sp
+        )
+        if (actionLabel != null && onAction != null) {
+            Text(
+                text = actionLabel,
+                color = colorScheme.onBackground,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .padding(top = 12.dp)
+                    .clickable(onClick = onAction)
             )
         }
     }

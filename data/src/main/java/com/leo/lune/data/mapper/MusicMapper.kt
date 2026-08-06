@@ -2,10 +2,13 @@ package com.leo.lune.data.mapper
 
 import com.leo.lune.data.remote.response.PersonalizedPlaylistDto
 import com.leo.lune.data.remote.response.PlaylistDto
+import com.leo.lune.data.remote.response.PlaylistHotTagDto
 import com.leo.lune.data.remote.response.SongDto
 import com.leo.lune.data.remote.response.SongUrlDto
+import com.leo.lune.data.remote.response.TopPlaylistDto
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.PersonalizedPlaylist
+import com.leo.lune.domain.model.PlaylistCategory
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
@@ -65,6 +68,28 @@ fun PersonalizedPlaylistDto.toPersonalizedPlaylist(): PersonalizedPlaylist? {
         name = name.orEmpty(),
         copywriter = copywriter?.takeIf { it.isNotBlank() },
         coverUrl = normalizeCoverUrl(picUrl),
+        trackCount = trackCount ?: 0,
+        playCount = playCount?.toLong() ?: 0L
+    )
+}
+
+// 热门歌单分类标签 DTO → 领域模型（不含封面）
+fun PlaylistHotTagDto.toPlaylistCategory(): PlaylistCategory? {
+    val tagId = id ?: return null
+    val tagName = name?.takeIf { it.isNotBlank() } ?: return null
+    return PlaylistCategory(id = tagId, name = tagName)
+}
+
+// 分类歌单 DTO → 领域模型（与推荐歌单共用 PersonalizedPlaylist）
+fun TopPlaylistDto.toPersonalizedPlaylist(): PersonalizedPlaylist? {
+    val playlistId = id ?: return null
+    // 去掉 imageView/watermark 参数，避免封面上叠分类字样
+    val cleanCover = coverImgUrl?.substringBefore('?')
+    return PersonalizedPlaylist(
+        id = playlistId,
+        name = name.orEmpty(),
+        copywriter = null,
+        coverUrl = normalizeCoverUrl(cleanCover),
         trackCount = trackCount ?: 0,
         playCount = playCount?.toLong() ?: 0L
     )
