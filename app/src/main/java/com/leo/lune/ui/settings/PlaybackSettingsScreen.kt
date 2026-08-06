@@ -277,7 +277,7 @@ private fun MixWithOthersRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
-        Spacer(modifier.weight(1f))
+        Spacer(Modifier.weight(1f))
         PlaybackToggle(
             checked = enabled,
             onCheckedChange = onCheckedChange
