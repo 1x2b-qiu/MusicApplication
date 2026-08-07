@@ -91,30 +91,6 @@ private val HotBadgeShape = RoundedCornerShape(4.dp)
 // 封面缩略图圆角
 private val ThumbnailCoverShape = RoundedCornerShape(8.dp)
 
-// 点击缩放动画 Modifier：封装 Animatable + InteractionSource + CoroutineScope
-// 减少 LazyRow 列表项中重复的 remember 槽位分配
-@Composable
-private fun Modifier.pressScaleClickable(
-    pressedScale: Float,
-    onClick: () -> Unit
-): Modifier {
-    val interaction = remember { MutableInteractionSource() }
-    val scope = rememberCoroutineScope()
-    val scale = remember { Animatable(1f) }
-    return this
-        .scale(scale.value)
-        .clickable(
-            interactionSource = interaction,
-            indication = null,
-            onClick = {
-                scope.launch {
-                    scale.animateTo(pressedScale, tween(60))
-                    scale.animateTo(1f, tween(100))
-                }
-                onClick()
-            }
-        )
-}
 // DailyMix 播放钮外轮廓：大圆减去偏右小圆，形成开口朝右的弯月
 private val CrescentMoonShape = object : Shape {
     override fun createOutline(
@@ -159,7 +135,7 @@ private const val GuessYouLikeSongCount = GuessYouLikePageSize * GuessYouLikePag
 // 单页高度：3 行 (72dp) + 2 个间距 (6dp)
 private val GuessYouLikePageHeight = 72.dp * GuessYouLikePageSize + 6.dp * (GuessYouLikePageSize - 1)
 
-// 曲库页：每日推荐 / 甄选歌单 / 排行榜 / 风格分类
+// 曲库页：每日推荐 / 猜你喜欢 / 甄选歌单 / 排行榜 / 风格分类
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun LibraryScreen(
@@ -194,12 +170,9 @@ fun LibraryScreen(
         item {
             DailyRecommendSection(
                 dailySongs = uiState.dailyRecommendSongs,
-                guessYouLikeSongs = uiState.guessYouLikeSongs,
-                playingSongId = playingSongIdState.value,
                 isDailyRecommendPlaying = uiState.isDailyRecommendPlaying,
                 onDailyRecommendPlayClick = viewModel::onDailyRecommendPlayClick,
-                onDailyMixClick = onDailyMixClick,
-                onGuessYouLikePlay = onGuessYouLikePlay
+                onDailyMixClick = onDailyMixClick
             )
         }
 
@@ -223,6 +196,14 @@ fun LibraryScreen(
         }
 
         item {
+            GuessYouLikeSection(
+                songs = uiState.guessYouLikeSongs,
+                playingSongId = playingSongIdState.value,
+                onPlay = onGuessYouLikePlay
+            )
+        }
+
+        item {
             GenresSection(
                 genres = uiState.genres,
                 onGenreClick = viewModel::onGenreClick
@@ -231,81 +212,85 @@ fun LibraryScreen(
     }
 }
 
-// 每日推荐 Banner + 猜你喜欢分页列表
+// 每日推荐 Banner
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 private fun DailyRecommendSection(
     // 每日推荐（真实数据，供 Banner）
     dailySongs: List<DailyRecommendSongItem>,
-    // 猜你喜欢（推荐新音乐）
-    guessYouLikeSongs: List<DailyRecommendSongItem>,
-    // 当前高亮播放的猜你喜欢歌曲 id，null 表示无选中
-    playingSongId: Long?,
     // 每日推荐 Banner 是否正在播放
     isDailyRecommendPlaying: Boolean,
     // 播放 / 暂停每日推荐
     onDailyRecommendPlayClick: () -> Unit,
     // Banner 整块点击进入每日推荐页
-    onDailyMixClick: () -> Unit,
-    onGuessYouLikePlay: (Long) -> Unit
+    onDailyMixClick: () -> Unit
 ) {
-    // 猜你喜欢：15 首切成 5 页，每页 3 首
-    val guessPages = remember(guessYouLikeSongs) {
-        guessYouLikeSongs.take(GuessYouLikeSongCount).chunked(GuessYouLikePageSize)
-    }
-    val pagerState = rememberPagerState(pageCount = { guessPages.size.coerceAtLeast(1) })
-    val pagerScope = rememberCoroutineScope()
+    if (dailySongs.isEmpty()) return
+
     // Banner 日期文案
     val dateLabel = remember {
         LocalDate.now().format(DateTimeFormatter.ofPattern("M月d日", Locale.CHINA))
     }
 
-    Column(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
-        // 有数据时才展示每日推荐 Banner
-        if (dailySongs.isNotEmpty()) {
-            DailyMixBanner(
-                songs = dailySongs,
-                dateLabel = dateLabel,
-                isPlayingThis = isDailyRecommendPlaying,
-                onPlayClick = onDailyRecommendPlayClick,
-                onBannerClick = onDailyMixClick,
-            )
-        }
-        // 猜你喜欢
-        if (guessPages.isNotEmpty()) {
-            HomeSectionHeader(
-                title = "猜你喜欢",
-                iconRes = R.drawable.ic_section_sparkles,
-                iconTint = Color(0xFFFFB020)
-            )
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(GuessYouLikePageHeight)
-            ) { page ->
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    guessPages.getOrNull(page).orEmpty().forEach { song ->
-                        DailySongRow(
-                            song = song,
-                            playing = playingSongId == song.id,
-                            onPlay = onGuessYouLikePlay
-                        )
-                    }
+    Box(modifier = Modifier.fillMaxWidth().padding(top = 16.dp)) {
+        DailyMixBanner(
+            songs = dailySongs,
+            dateLabel = dateLabel,
+            isPlayingThis = isDailyRecommendPlaying,
+            onPlayClick = onDailyRecommendPlayClick,
+            onBannerClick = onDailyMixClick,
+        )
+    }
+}
+
+// 猜你喜欢：15 首切成 5 页，每页 3 首
+@Composable
+private fun GuessYouLikeSection(
+    songs: List<DailyRecommendSongItem>,
+    // 当前高亮播放的歌曲 id，null 表示无选中
+    playingSongId: Long?,
+    onPlay: (Long) -> Unit
+) {
+    val pages = remember(songs) {
+        songs.take(GuessYouLikeSongCount).chunked(GuessYouLikePageSize)
+    }
+    if (pages.isEmpty()) return
+
+    val pagerState = rememberPagerState(pageCount = { pages.size })
+    val pagerScope = rememberCoroutineScope()
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HomeSectionHeader(
+            title = "猜你喜欢",
+            iconRes = R.drawable.ic_section_sparkles,
+            iconTint = Color(0xFFFFB020)
+        )
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(GuessYouLikePageHeight)
+        ) { page ->
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                pages.getOrNull(page).orEmpty().forEach { song ->
+                    DailySongRow(
+                        song = song,
+                        playing = playingSongId == song.id,
+                        onPlay = onPlay
+                    )
                 }
             }
-            // 圆点指示器
-            GuessYouLikePageIndicator(
-                pageCount = guessPages.size,
-                currentPage = pagerState.currentPage,
-                onDotClick = { index ->
-                    pagerScope.launch { pagerState.animateScrollToPage(index) }
-                },
-                modifier = Modifier
-                    .align(Alignment.CenterHorizontally)
-                    .padding(top = 12.dp)
-            )
         }
+        GuessYouLikePageIndicator(
+            pageCount = pages.size,
+            currentPage = pagerState.currentPage,
+            onDotClick = { index ->
+                pagerScope.launch { pagerState.animateScrollToPage(index) }
+            },
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .padding(top = 12.dp)
+        )
     }
 }
 
@@ -976,4 +961,30 @@ private fun Modifier.cardSurface(shape: RoundedCornerShape): Modifier {
         .clip(shape)
         .background(colorScheme.surfaceVariant)
         .border(1.dp, colorScheme.surfaceDim, shape)
+}
+
+
+// 点击缩放动画 Modifier：封装 Animatable + InteractionSource + CoroutineScope
+// 减少 LazyRow 列表项中重复的 remember 槽位分配
+@Composable
+private fun Modifier.pressScaleClickable(
+    pressedScale: Float,
+    onClick: () -> Unit
+): Modifier {
+    val interaction = remember { MutableInteractionSource() }
+    val scope = rememberCoroutineScope()
+    val scale = remember { Animatable(1f) }
+    return this
+        .scale(scale.value)
+        .clickable(
+            interactionSource = interaction,
+            indication = null,
+            onClick = {
+                scope.launch {
+                    scale.animateTo(pressedScale, tween(60))
+                    scale.animateTo(1f, tween(100))
+                }
+                onClick()
+            }
+        )
 }
