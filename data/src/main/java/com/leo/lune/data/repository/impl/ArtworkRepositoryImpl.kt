@@ -1,12 +1,13 @@
-package com.leo.lune.audio
+package com.leo.lune.data.repository.impl
 
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.util.LruCache
-import coil.ImageLoader
+import coil.imageLoader
 import coil.request.ImageRequest
 import coil.size.Size
+import com.leo.lune.domain.repository.ArtworkRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,18 +16,16 @@ import java.io.ByteArrayOutputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// 封面加载器（Hilt 单例）
+// 封面加载仓储实现（data 层 Hilt 单例）
 // 职责：下载歌曲封面并压缩为适合系统通知栏/锁屏的 JPEG 字节；
 // 内嵌 artworkData 代替远程 artworkUri，避免系统 UI 自行拉取失败导致封面不显示
 @Singleton
-class ArtworkLoader @Inject constructor(
+class ArtworkRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context
-) {
-    private val imageLoader by lazy {
-        ImageLoader.Builder(context)
-            .crossfade(false)
-            .build()
-    }
+) : ArtworkRepository {
+
+    // 使用全局 Coil 单例（MusicApp 中配置的内存/磁盘缓存）
+    private val imageLoader get() = context.imageLoader
 
     // 简单 LRU 内存缓存：coverUrl → 压缩后的 JPEG 字节
     private val cache = object : LruCache<String, ByteArray>(8) {}
@@ -40,7 +39,7 @@ class ArtworkLoader @Inject constructor(
     }
 
     // 加载封面并压缩为 JPEG 字节；失败或超时返回 null（调用方回退到 artworkUri）
-    suspend fun loadArtworkBytes(coverUrl: String?): ByteArray? {
+    override suspend fun loadArtworkBytes(coverUrl: String?): ByteArray? {
         if (coverUrl.isNullOrBlank()) return null
         cache.get(coverUrl)?.let { return it }
 

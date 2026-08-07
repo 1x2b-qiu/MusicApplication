@@ -1,5 +1,6 @@
 package com.leo.lune.di
 
+import com.leo.lune.data.repository.impl.ArtworkRepositoryImpl
 import com.leo.lune.data.repository.impl.AuthRepositoryImpl
 import com.leo.lune.data.repository.impl.CacheRepositoryImpl
 import com.leo.lune.data.repository.impl.DownloadRepositoryImpl
@@ -11,6 +12,7 @@ import com.leo.lune.data.repository.impl.PlaybackSnapshotRepositoryImpl
 import com.leo.lune.data.repository.impl.SearchHistoryRepositoryImpl
 import com.leo.lune.data.repository.impl.SettingsRepositoryImpl
 import com.leo.lune.data.repository.impl.ThemeRepositoryImpl
+import com.leo.lune.domain.repository.ArtworkRepository
 import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.CacheRepository
 import com.leo.lune.domain.repository.DownloadRepository
@@ -109,4 +111,11 @@ abstract class RepositoryModule {
     abstract fun bindCacheRepository(
         cacheRepositoryImpl: CacheRepositoryImpl
     ): CacheRepository
+
+    @Binds
+    @Singleton
+    // 封面加载仓储（下载并压缩封面供通知栏/锁屏内嵌）
+    abstract fun bindArtworkRepository(
+        artworkRepositoryImpl: ArtworkRepositoryImpl
+    ): ArtworkRepository
 }

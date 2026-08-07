@@ -13,13 +13,11 @@ import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.LyricLine
-import com.leo.lune.domain.model.PlaybackQuality
+import com.leo.lune.domain.model.PlaybackSource
 import com.leo.lune.domain.model.SettingKeys
 import com.leo.lune.domain.model.Song
-import com.leo.lune.domain.repository.DownloadRepository
-import com.leo.lune.domain.repository.MusicRepository
 import com.leo.lune.domain.repository.SettingsRepository
-import com.leo.lune.audio.ArtworkLoader
+import com.leo.lune.domain.usecase.playback.PreparePlaybackUseCase
 import com.leo.lune.manager.FavoriteManager
 import com.leo.lune.manager.LyricManager
 import com.leo.lune.manager.PlayStatsRecorderManager
@@ -33,7 +31,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,10 +102,6 @@ data class PlaybackPosition(
 class MusicPlayerController @Inject constructor(
     // Application Context：创建 ExoPlayer、启动 MusicPlaybackService
     @ApplicationContext private val context: Context,
-    // 按歌曲 id 拉取可播流媒体 URL
-    private val musicRepository: MusicRepository,
-    // 已下载时返回本地文件路径
-    private val downloadRepository: DownloadRepository,
     // 播放设置（默认音质 / 音频焦点策略）
     private val settingsRepository: SettingsRepository,
     // 歌词管理器（加载 / 匹配 / 展示文案）
@@ -123,8 +116,8 @@ class MusicPlayerController @Inject constructor(
     private val sleepTimerManager: SleepTimerManager,
     // 播放快照持久化（进程级恢复）
     private val snapshotManager: PlaybackSnapshotManager,
-    // 封面加载器：下载并压缩封面供系统通知栏内嵌显示
-    private val artworkLoader: ArtworkLoader
+    // 播放准备 UseCase：URL 解析 + 封面加载并行编排
+    private val preparePlaybackUseCase: PreparePlaybackUseCase
 ) {
     // 是否由 ExoPlayer 处理音频焦点；与「同时播放」开关相反，创建前可读到缓存值
     @Volatile
@@ -332,50 +325,31 @@ class MusicPlayerController @Inject constructor(
         favoriteManager.syncForSong(song.id)
 
         val requestSongId = song.id
-        val requestQuality = localQuality
         urlJob = scope.launch {
             try {
-                // 封面下载与播放地址获取并行，互不阻塞
-                val artworkDeferred = async { artworkLoader.loadArtworkBytes(song.coverUrl) }
+                // UseCase 并行执行 URL 解析 + 封面加载（本地文件优先，封面失败降级）
+                val preparation = preparePlaybackUseCase(song, localQuality)
 
-                // 已下载优先播本地文件（可指定音质），否则按设置页默认音质拉在线流
-                val local = downloadRepository.getLocalPlayback(requestSongId, requestQuality)
-                val qualityLabel: String
-                val playUri = if (local != null) {
-                    qualityLabel = local.second.label
-                    localPathToPlayUri(local.first)
-                } else {
-                    val bitrate = resolveStreamBitrate()
-                    val songUrl = musicRepository.getSongUrl(requestSongId, bitrate)
-                    qualityLabel = PlaybackQuality.fromBitrate(songUrl.bitrate).label
-                    songUrl.url
-                }
                 // 用户已切到别的歌：丢弃本次结果
                 if (_playbackState.value.currentSong?.id != requestSongId) return@launch
 
-                if (playUri.isNullOrBlank()) {
-                    _playbackState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = "该歌曲暂无播放权限"
-                        )
-                    }
-                } else {
-                    _playbackState.update {
-                        it.copy(
-                            isLoading = false,
-                            playUrl = playUri,
-                            qualityLabel = qualityLabel,
-                            error = null
-                        )
-                    }
-                    playStatsRecorderManager.recordPlayStats(song)
-                    saveSnapshot()
-                    val artworkBytes = artworkDeferred.await()
-                    player.setMediaItem(buildMediaItem(song, playUri, artworkBytes))
-                    player.prepare()
-                    player.playWhenReady = true
+                _playbackState.update {
+                    it.copy(
+                        isLoading = false,
+                        playUrl = preparation.source.rawUri,
+                        qualityLabel = preparation.source.qualityLabel,
+                        error = null
+                    )
                 }
+                playStatsRecorderManager.recordPlayStats(song)
+                saveSnapshot()
+
+                // URI 转换是 Android 特有操作（Uri.fromFile / content://），保留在 Controller
+                val playUri = toPlayUri(preparation.source)
+                player.setMediaItem(buildMediaItem(song, playUri, preparation.artworkBytes))
+                player.prepare()
+                player.playWhenReady = true
+
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (throwable: Throwable) {
@@ -605,35 +579,18 @@ class MusicPlayerController @Inject constructor(
         val originSongId = state.currentSong?.id ?: return
         val nextSong = state.queue[queueManager.resolveNextIndex(state.queue, state.queueIndex)]
         prefetchJob = scope.launch {
-            try {
-                // 封面与播放地址并行加载
-                val artworkDeferred = async { artworkLoader.loadArtworkBytes(nextSong.coverUrl) }
+            // 预取失败静默忽略：播完仍走 onPlaybackEnded → skipToNext 全量拉取
+            val preparation = runCatching { preparePlaybackUseCase(nextSong) }.getOrNull()
+                ?: return@launch
 
-                // 已下载优先用本地文件，否则按设置页默认音质拉在线流
-                val local = downloadRepository.getLocalPlayback(nextSong.id)
-                val qualityLabel: String
-                val playUri = if (local != null) {
-                    qualityLabel = local.second.label
-                    localPathToPlayUri(local.first)
-                } else {
-                    val songUrl = musicRepository.getSongUrl(nextSong.id, resolveStreamBitrate())
-                    qualityLabel = PlaybackQuality.fromBitrate(songUrl.bitrate).label
-                    songUrl.url
-                }
-                if (playUri.isNullOrBlank()) return@launch
-                if (_playbackState.value.currentSong?.id != originSongId) return@launch
-                if (prefetchedNextSongId != null) return@launch
-                val artworkBytes = artworkDeferred.await()
-                player.addMediaItem(buildMediaItem(nextSong, playUri, artworkBytes))
-                prefetchedNextSongId = nextSong.id
-                prefetchedNextQualityLabel = qualityLabel
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (throwable: Throwable) {
-                // 预取失败静默忽略：播完仍走 onPlaybackEnded → skipToNext 全量拉取
-            } finally {
-                prefetchJob = null
-            }
+            if (_playbackState.value.currentSong?.id != originSongId) return@launch
+            if (prefetchedNextSongId != null) return@launch
+
+            val playUri = toPlayUri(preparation.source)
+            player.addMediaItem(buildMediaItem(nextSong, playUri, preparation.artworkBytes))
+            prefetchedNextSongId = nextSong.id
+            prefetchedNextQualityLabel = preparation.source.qualityLabel
+            prefetchJob = null
         }
     }
 
@@ -711,20 +668,16 @@ class MusicPlayerController @Inject constructor(
         context.startForegroundService(intent)
     }
 
-    // 本地路径转播放 URI：SAF content URI 原样使用，私有文件路径转 file://
-    private fun localPathToPlayUri(localPath: String): String {
-        return if (localPath.startsWith("content:", ignoreCase = true)) {
-            localPath
-        } else {
-            Uri.fromFile(File(localPath)).toString()
+    // PlaybackSource → Android 可播放 URI 字符串
+    // 本地文件：SAF content URI 原样使用；私有目录绝对路径转 file://
+    // 远端流媒体：URL 直接使用
+    private fun toPlayUri(source: PlaybackSource): String = when (source) {
+        is PlaybackSource.LocalFile -> {
+            val path = source.path
+            if (path.startsWith("content:", ignoreCase = true)) path
+            else Uri.fromFile(File(path)).toString()
         }
-    }
-
-    // 读取设置页默认流媒体音质对应的码率（bps）；未配置时回退 PlaybackQuality.Default
-    private suspend fun resolveStreamBitrate(): Int {
-        val raw = settingsRepository.getValue(SettingKeys.PLAYBACK_DEFAULT_QUALITY)
-        val bitrate = raw?.toIntOrNull() ?: return PlaybackQuality.Default.bitrate
-        return PlaybackQuality.fromBitrate(bitrate).bitrate
+        is PlaybackSource.RemoteStream -> source.url
     }
 
     // 将当前播放状态快照持久化到 Room，供进程被杀后恢复
