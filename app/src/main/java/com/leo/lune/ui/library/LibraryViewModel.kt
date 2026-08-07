@@ -106,7 +106,9 @@ class LibraryViewModel @Inject constructor(
         loadCharts()
         loadGenres()
         viewModelScope.launch {
-            authRepository.observeLoginState().collect { loginState ->
+            authRepository.observeLoginState()
+                .distinctUntilChanged { old, new -> old.isLoggedIn == new.isLoggedIn }
+                .collect { loginState ->
                 if (loginState.isLoggedIn) {
                     loadDailyRecommend()
                     loadGuessYouLike()

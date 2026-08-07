@@ -36,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -85,6 +84,37 @@ private val PlaylistCoverShape = RoundedCornerShape(12.dp)
 private val ChartShape = RoundedCornerShape(16.dp)
 // 风格分类格子圆角
 private val GenreShape = RoundedCornerShape(16.dp)
+// 猜你喜欢单曲行封面圆角
+private val DailySongCoverShape = RoundedCornerShape(14.dp)
+// HOT 标签圆角
+private val HotBadgeShape = RoundedCornerShape(4.dp)
+// 封面缩略图圆角
+private val ThumbnailCoverShape = RoundedCornerShape(8.dp)
+
+// 点击缩放动画 Modifier：封装 Animatable + InteractionSource + CoroutineScope
+// 减少 LazyRow 列表项中重复的 remember 槽位分配
+@Composable
+private fun Modifier.pressScaleClickable(
+    pressedScale: Float,
+    onClick: () -> Unit
+): Modifier {
+    val interaction = remember { MutableInteractionSource() }
+    val scope = rememberCoroutineScope()
+    val scale = remember { Animatable(1f) }
+    return this
+        .scale(scale.value)
+        .clickable(
+            interactionSource = interaction,
+            indication = null,
+            onClick = {
+                scope.launch {
+                    scale.animateTo(pressedScale, tween(60))
+                    scale.animateTo(1f, tween(100))
+                }
+                onClick()
+            }
+        )
+}
 // DailyMix 播放钮外轮廓：大圆减去偏右小圆，形成开口朝右的弯月
 private val CrescentMoonShape = object : Shape {
     override fun createOutline(
@@ -142,7 +172,14 @@ fun LibraryScreen(
 
 
     // 当前高亮的猜你喜欢曲目；null 表示无选中
-    var playingSongId by remember { mutableStateOf<Long?>(null) }
+    val playingSongIdState = remember { mutableStateOf<Long?>(null) }
+    // 稳定 lambda 引用，避免每次重组生成新实例导致 DailySongRow 无法 skip
+    val onGuessYouLikePlay = remember {
+        { id: Long ->
+            playingSongIdState.value = id
+            viewModel.onGuessYouLikePlay(id)
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -158,14 +195,11 @@ fun LibraryScreen(
             DailyRecommendSection(
                 dailySongs = uiState.dailyRecommendSongs,
                 guessYouLikeSongs = uiState.guessYouLikeSongs,
-                playingSongId = playingSongId,
+                playingSongId = playingSongIdState.value,
                 isDailyRecommendPlaying = uiState.isDailyRecommendPlaying,
                 onDailyRecommendPlayClick = viewModel::onDailyRecommendPlayClick,
                 onDailyMixClick = onDailyMixClick,
-                onGuessYouLikePlay = { id ->
-                    playingSongId = id
-                    viewModel.onGuessYouLikePlay(id)
-                }
+                onGuessYouLikePlay = onGuessYouLikePlay
             )
         }
 
@@ -255,7 +289,7 @@ private fun DailyRecommendSection(
                         DailySongRow(
                             song = song,
                             playing = playingSongId == song.id,
-                            onPlay = { onGuessYouLikePlay(song.id) }
+                            onPlay = onGuessYouLikePlay
                         )
                     }
                 }
@@ -392,14 +426,9 @@ private fun DailyMixBanner(
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
-                // 播放按钮：白天圆日 / 夜晚弯月；未播放白色，播放中用对应天体色
-                val isDaytime = isDailyMixDaytime()
-                val celestialShape = if (isDaytime) CrescentMoonShape else CrescentMoonShape
-                val celestialColor = if (isPlayingThis) {
-                    if (isDaytime) MoonColor else MoonColor
-                } else {
-                    Color.White
-                }
+                // 播放按钮：弯月形；未播放白色，播放中月亮色
+                val celestialShape = CrescentMoonShape
+                val celestialColor = if (isPlayingThis) MoonColor else Color.White
                 Box(
                     modifier = Modifier
                         .size(48.dp)
@@ -435,7 +464,7 @@ private fun DailyMixBanner(
                         contentDescription = song.title,
                         modifier = Modifier
                             .size(36.dp)
-                            .clip(RoundedCornerShape(8.dp)),
+                            .clip(ThumbnailCoverShape),
                         contentScale = ContentScale.Crop
                     )
                 }
@@ -449,16 +478,15 @@ private fun DailyMixBanner(
 private fun DailySongRow(
     song: DailyRecommendSongItem,
     playing: Boolean,
-    onPlay: () -> Unit
+    onPlay: (Long) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val coverShape = RoundedCornerShape(14.dp)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .cardSurface(CardShape)
-            .clickable(onClick = onPlay)
+            .clickable(onClick = { onPlay(song.id) })
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -469,7 +497,7 @@ private fun DailySongRow(
                 contentDescription = song.title,
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(coverShape),
+                    .clip(DailySongCoverShape),
                 contentScale = ContentScale.Crop
             )
             // 播放中：封面叠半透明层 + 暂停图标
@@ -477,7 +505,7 @@ private fun DailySongRow(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(coverShape)
+                        .clip(DailySongCoverShape)
                         .background(Color.Black.copy(alpha = 0.5f)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -520,7 +548,7 @@ private fun DailySongRow(
                 lineHeight = 10.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(HotBadgeShape)
                     .background(Color(0x33EF4444))
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             )
@@ -580,32 +608,18 @@ private fun FeaturedPlaylistCard(
     onPlayClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val interaction = remember { MutableInteractionSource() }
-    val clickScope = rememberCoroutineScope()
-    val scale = remember { Animatable(1f) }
     val playInteraction = remember { MutableInteractionSource() }
     val playScope = rememberCoroutineScope()
     val playScale = remember { Animatable(1f) }
     val coverSize = 128.dp
     // 深色底上黑阴影几乎不可见，改用浅色散射；浅色底仍用黑影
-    val isDarkBg = colorScheme.background.luminance() < 0.5f
+    val isDarkBg = remember(colorScheme) { colorScheme.background.luminance() < 0.5f }
     val shadowBase = if (isDarkBg) Color.White else Color.Black
 
     Column(
         modifier = Modifier
             .width(coverSize)
-            .scale(scale.value)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = {
-                    clickScope.launch {
-                        scale.animateTo(0.95f, tween(60))
-                        scale.animateTo(1f, tween(100))
-                    }
-                    onOpenClick()
-                }
-            ),
+            .pressScaleClickable(0.95f) { onOpenClick() },
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Box(modifier = Modifier.size(coverSize)) {
@@ -743,9 +757,6 @@ private fun ChartCard(
     onSongClick: (Long) -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val interaction = remember { MutableInteractionSource() }
-    val clickScope = rememberCoroutineScope()
-    val scale = remember { Animatable(1f) }
     val topCoverUrl = chart.songs.firstOrNull()?.coverUrl.orEmpty()
     val previewSongs = chart.songs.take(3)
     // 叠放宽度：首张 28dp + 后续每张露出 16dp
@@ -759,20 +770,9 @@ private fun ChartCard(
         modifier = Modifier
             .width(148.dp)
             .height(188.dp)
-            .scale(scale.value)
             .clip(ChartShape)
             .border(1.dp, colorScheme.surfaceDim, ChartShape)
-            .clickable(
-                interactionSource = interaction,
-                indication = null,
-                onClick = {
-                    clickScope.launch {
-                        scale.animateTo(0.95f, tween(60))
-                        scale.animateTo(1f, tween(100))
-                    }
-                    onClick()
-                }
-            )
+            .pressScaleClickable(0.95f) { onClick() }
     ) {
         if (topCoverUrl.isNotEmpty()) {
             AsyncImage(
@@ -835,11 +835,11 @@ private fun ChartCard(
                                 .offset(x = (index * 16).dp)
                                 .zIndex((previewSongs.size - index).toFloat())
                                 .size(28.dp)
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(ThumbnailCoverShape)
                                 .border(
                                     1.5.dp,
                                     Color.White.copy(alpha = 0.85f),
-                                    RoundedCornerShape(8.dp)
+                                    ThumbnailCoverShape
                                 )
                                 .clickable { onSongClick(song.id) }
                         ) {
