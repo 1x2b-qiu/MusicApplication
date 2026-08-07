@@ -49,13 +49,11 @@ data class ChartSongPreview(
     val coverUrl: String
 )
 
-// 排行榜卡片；headerGradient 为 ARGB Long，由 UI 转为 Color
+// 排行榜卡片；封面由 songs 首曲提供
 data class ChartItem(
     val id: Long,
     val title: String,
     val subtitle: String,
-    val headerGradient: List<Long>,
-    val glowColor: Long,
     val songs: List<ChartSongPreview>
 )
 
@@ -216,8 +214,6 @@ class LibraryViewModel @Inject constructor(
                     id = spec.id,
                     title = spec.title,
                     subtitle = spec.subtitle,
-                    headerGradient = spec.headerGradient,
-                    glowColor = spec.glowColor,
                     songs = songs.map { song ->
                         ChartSongPreview(
                             id = song.id,
@@ -360,20 +356,18 @@ private fun PlaylistGenre.toGenreItem(): GenreItem = GenreItem(
     coverUrl = coverUrl.orEmpty()
 )
 
-// 固定四个榜单：id 来自网易云官方榜，样式沿用原 UI 配色
+// 固定四个榜单：id 来自网易云官方榜
 private data class ChartSpec(
     val id: Long,
     val title: String,
-    val subtitle: String,
-    val headerGradient: List<Long>,
-    val glowColor: Long
+    val subtitle: String
 )
 
 private val FixedCharts = listOf(
-    ChartSpec(3778678, "热歌榜", "实时热门", listOf(0xFFF97316L, 0xFFEF4444L), 0x40EF4444L),
-    ChartSpec(3779629, "新歌榜", "每周更新", listOf(0xFF34D399L, 0xFF06B6D4L), 0x4022D3EEL),
-    ChartSpec(6723173524, "网络热歌榜", "全网爆款", listOf(0xFF60A5FAL, 0xFF8B5CF6L), 0x408B5CF6L),
-    ChartSpec(6688069460, "听歌识曲榜", "听歌识曲热榜", listOf(0xFFEC4899L, 0xFFFB7185L), 0x40EC4899L)
+    ChartSpec(3778678, "热歌榜", "实时热门"),
+    ChartSpec(3779629, "新歌榜", "每周更新"),
+    ChartSpec(6723173524, "网络热歌榜", "全网爆款"),
+    ChartSpec(6688069460, "听歌识曲榜", "听歌识曲热榜")
 )
 
 // 初始空态：各区块由接口填充

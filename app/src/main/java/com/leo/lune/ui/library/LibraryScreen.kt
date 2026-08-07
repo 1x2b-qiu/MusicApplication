@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,6 +61,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -665,7 +667,7 @@ private fun FeaturedPlaylistCard(
     }
 }
 
-// 排行榜：横向滚动，卡片含渐变顶栏与歌曲预览
+// 排行榜：横向滚动封面磁贴
 @Composable
 private fun ChartsSection(
     charts: List<ChartItem>,
@@ -691,7 +693,7 @@ private fun ChartsSection(
     }
 }
 
-// 排行榜卡片：彩色顶栏标题 + 前三名封面预览；glowColor 用于外发光阴影
+// 排行榜磁贴：Top1 封面铺底 + 榜名遮罩 + 前三封面叠放可点播
 @Composable
 private fun ChartCard(
     chart: ChartItem,
@@ -701,16 +703,23 @@ private fun ChartCard(
     val colorScheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val clickScope = rememberCoroutineScope()
-    // 点击时主动播缩小再回弹，避免短按看不到 isPressed 缩放
     val scale = remember { Animatable(1f) }
-    // headerGradient 存的是 ARGB Long，转为 Compose Color
-    val headerColors = chart.headerGradient.map { Color(it.toInt()) }
+    val topCoverUrl = chart.songs.firstOrNull()?.coverUrl.orEmpty()
+    val previewSongs = chart.songs.take(3)
+    // 叠放宽度：首张 28dp + 后续每张露出 16dp
+    val stackWidth = if (previewSongs.isEmpty()) {
+        0.dp
+    } else {
+        28.dp + 16.dp * (previewSongs.size - 1)
+    }
 
-    Column(
+    Box(
         modifier = Modifier
-            .width(160.dp)
+            .width(148.dp)
+            .height(188.dp)
             .scale(scale.value)
-            .cardSurface(ChartShape)
+            .clip(ChartShape)
+            .border(1.dp, colorScheme.surfaceDim, ChartShape)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -723,58 +732,102 @@ private fun ChartCard(
                 }
             )
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Brush.horizontalGradient(headerColors))
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-        ) {
-            Text(
-                text = chart.title,
-                color = Color.White,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.SemiBold
+        if (topCoverUrl.isNotEmpty()) {
+            AsyncImage(
+                model = rememberCoverRequest(topCoverUrl, 148.dp),
+                contentDescription = chart.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colorScheme.surfaceVariant)
             )
         }
+
+        // 自下而上遮罩，保证白字与叠放封面可读
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0.0f to Color.Black.copy(alpha = 0.08f),
+                            0.45f to Color.Transparent,
+                            0.72f to Color.Black.copy(alpha = 0.45f),
+                            1.0f to Color.Black.copy(alpha = 0.78f)
+                        )
+                    )
+                )
+        )
+
+        Text(
+            text = "1",
+            color = Color.White.copy(alpha = 0.22f),
+            fontSize = 88.sp,
+            fontWeight = FontWeight.Bold,
+            lineHeight = 88.sp,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(start = 8.dp, top = 0.dp)
+        )
+
         Column(
-            // 外边距下放到行上，保证点击层相对内容区有内缩，且歌曲视觉位置不变
-            modifier = Modifier.padding(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            chart.songs.forEachIndexed { index, song ->
-                Row(
+            if (previewSongs.isNotEmpty()) {
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 6.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = { onSongClick(song.id) })
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        .width(stackWidth)
+                        .height(28.dp)
                 ) {
-                    Text(
-                        text = "${index + 1}",
-                        color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        fontSize = 11.sp,
-                        modifier = Modifier.width(8.dp)
-                    )
-                    AsyncImage(
-                        model = rememberCoverRequest(song.coverUrl, 28.dp),
-                        contentDescription = song.title,
-                        modifier = Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp)),
-                        contentScale = ContentScale.Crop
-                    )
-                    Text(
-                        text = song.title,
-                        color = colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
+                    previewSongs.forEachIndexed { index, song ->
+                        Box(
+                            modifier = Modifier
+                                .offset(x = (index * 16).dp)
+                                .zIndex((previewSongs.size - index).toFloat())
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .border(
+                                    1.5.dp,
+                                    Color.White.copy(alpha = 0.85f),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .clickable { onSongClick(song.id) }
+                        ) {
+                            AsyncImage(
+                                model = rememberCoverRequest(song.coverUrl, 28.dp),
+                                contentDescription = song.title,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop
+                            )
+                        }
+                    }
                 }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = chart.title,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = chart.subtitle,
+                    color = Color.White.copy(alpha = 0.72f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
