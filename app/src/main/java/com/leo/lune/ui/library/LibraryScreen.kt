@@ -51,6 +51,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -555,6 +556,8 @@ private fun FeaturedPlaylistsSection(
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            // 给封面投影留出上下溢出空间，避免被列表裁切
+            contentPadding = PaddingValues(vertical = 4.dp),
         ) {
             items(playlists, key = { it.id }) { playlist ->
                 FeaturedPlaylistCard(
@@ -568,7 +571,7 @@ private fun FeaturedPlaylistsSection(
     }
 }
 
-// 甄选歌单卡片：封面播放钮 + 标题副标题
+// 甄选歌单卡片：浮起投影封面 + 播放钮 + 标题副标题（无玻璃容器）
 @Composable
 private fun FeaturedPlaylistCard(
     playlist: FeaturedPlaylistItem,
@@ -579,17 +582,19 @@ private fun FeaturedPlaylistCard(
     val colorScheme = MaterialTheme.colorScheme
     val interaction = remember { MutableInteractionSource() }
     val clickScope = rememberCoroutineScope()
-    // 点击时主动播缩小再回弹，避免短按看不到 isPressed 缩放
     val scale = remember { Animatable(1f) }
     val playInteraction = remember { MutableInteractionSource() }
     val playScope = rememberCoroutineScope()
     val playScale = remember { Animatable(1f) }
+    val coverSize = 128.dp
+    // 深色底上黑阴影几乎不可见，改用浅色散射；浅色底仍用黑影
+    val isDarkBg = colorScheme.background.luminance() < 0.5f
+    val shadowBase = if (isDarkBg) Color.White else Color.Black
 
     Column(
         modifier = Modifier
-            .width(140.dp)
+            .width(coverSize)
             .scale(scale.value)
-            .cardSurface(CardShape)
             .clickable(
                 interactionSource = interaction,
                 indication = null,
@@ -600,59 +605,96 @@ private fun FeaturedPlaylistCard(
                     }
                     onOpenClick()
                 }
-            )
-            .padding(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+            ),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(124.dp)
-                .clip(PlaylistCoverShape)
-        ) {
-            AsyncImage(
-                model = rememberCoverRequest(playlist.coverUrl, 124.dp),
-                contentDescription = playlist.title,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            // 右下角播放钮（样式与 DailyMixBanner 一致，尺寸更小）
+        Box(modifier = Modifier.size(coverSize)) {
+            // 下层软投影：向下错位，在封面与标题之间露出一截
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(6.dp)
-                    .size(32.dp)
-                    .scale(playScale.value)
-                    .shadow(8.dp, CircleShape, spotColor = colorScheme.primary)
-                    .clip(CircleShape)
-                    .background(Color(0xFFF4F2FB))
-                    .clickable(
-                        interactionSource = playInteraction,
-                        indication = null,
-                        onClick = {
-                            playScope.launch {
-                                playScale.animateTo(0.9f, tween(60))
-                                playScale.animateTo(1f, tween(100))
-                            }
-                            onPlayClick()
+                    .matchParentSize()
+                    .offset(y = 10.dp)
+                    .padding(horizontal = 10.dp)
+                    .clip(PlaylistCoverShape)
+                    .background(shadowBase.copy(alpha = if (isDarkBg) 0.06f else 0.08f))
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(y = 6.dp)
+                    .padding(horizontal = 5.dp)
+                    .clip(PlaylistCoverShape)
+                    .background(shadowBase.copy(alpha = if (isDarkBg) 0.10f else 0.12f))
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(y = 3.dp)
+                    .clip(PlaylistCoverShape)
+                    .background(shadowBase.copy(alpha = if (isDarkBg) 0.14f else 0.16f))
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(coverSize)
+                    .clip(PlaylistCoverShape)
+                    .then(
+                        if (isDarkBg) {
+                            Modifier.border(
+                                1.dp,
+                                Color.White.copy(alpha = 0.1f),
+                                PlaylistCoverShape
+                            )
+                        } else {
+                            Modifier
                         }
-                    ),
-                contentAlignment = Alignment.Center
+                    )
             ) {
-                Image(
-                    painter = painterResource(
-                        if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
-                    ),
-                    contentDescription = if (isPlayingThis) "暂停" else "播放歌单",
-                    colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
-                    modifier = Modifier.size(18.dp)
+                AsyncImage(
+                    model = rememberCoverRequest(playlist.coverUrl, coverSize),
+                    contentDescription = playlist.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(32.dp)
+                        .scale(playScale.value)
+                        .shadow(8.dp, CircleShape, spotColor = colorScheme.primary)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF4F2FB))
+                        .clickable(
+                            interactionSource = playInteraction,
+                            indication = null,
+                            onClick = {
+                                playScope.launch {
+                                    playScale.animateTo(0.9f, tween(60))
+                                    playScale.animateTo(1f, tween(100))
+                                }
+                                onPlayClick()
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(
+                            if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
+                        ),
+                        contentDescription = if (isPlayingThis) "暂停" else "播放歌单",
+                        colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
-        Column(modifier = Modifier.padding(horizontal = 2.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = playlist.title,
                 color = colorScheme.onBackground,
                 fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
