@@ -33,3 +33,7 @@
 
 # Haze
 -dontwarn dev.chrisbanes.haze.**
+
+# SceneView / Filament（3D 电台 CRT 场景；Step 1 占位，后续随集成补充）
+-dontwarn com.google.android.filament.**
+-dontwarn io.github.sceneview.**

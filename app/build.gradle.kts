@@ -1,8 +1,8 @@
 import java.io.FileInputStream
 import java.util.Properties
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
-plugins {
-    alias(libs.plugins.android.application)
+plugins {    alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
@@ -61,21 +61,22 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 
-    kotlinOptions {
-        jvmTarget = "11"
-    }
-
     buildFeatures {
         compose = true
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_11
     }
 }
 
 composeCompiler {
     // 稳定性配置：将 List/Set/Map 接口及 HazeState 声明为稳定类型，
     // 使以它们为参数的 composable 可跳过（项目内集合均为 StateFlow 不可变快照，承诺成立）
-    stabilityConfigurationFile.set(file("compose-stability.conf"))
+    stabilityConfigurationFiles.add(layout.projectDirectory.file("compose-stability.conf"))
 }
-
 dependencies {
     implementation(project(":domain"))
     implementation(project(":data"))
@@ -98,6 +99,7 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
     ksp(libs.hilt.compiler)
+    ksp(libs.kotlin.metadata.jvm)
 
     implementation(libs.coil.compose)
     implementation(libs.media3.exoplayer)
@@ -108,6 +110,7 @@ dependencies {
 
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.profileinstaller)
+    implementation(libs.sceneview)
     baselineProfile(project(":baselineprofile"))
 
     testImplementation(libs.junit)

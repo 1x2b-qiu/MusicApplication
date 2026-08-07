@@ -74,10 +74,12 @@ class FavoriteManager @Inject constructor(
             return
         }
 
-        val targetFavorite = !_isFavorite.value
-        // 乐观更新
-        _isFavorite.value = targetFavorite
+        // 以本地红心集合为准，避免预览曲与播放器当前曲不一致时取反错误
+        val targetFavorite = songId !in likedSongIds
         likedSongIds = if (targetFavorite) likedSongIds + songId else likedSongIds - songId
+        if (currentSongId == null || currentSongId == songId) {
+            _isFavorite.value = targetFavorite
+        }
 
         scope.launch {
             runCatching {
@@ -93,6 +95,9 @@ class FavoriteManager @Inject constructor(
             }
         }
     }
+
+    // 查询某首歌是否在本地红心缓存中（不改动当前展示态）
+    fun isFavoriteSong(songId: Long): Boolean = songId in likedSongIds
 
     // 切歌 / 预览曲变化时调用：用本地缓存即时同步收藏态
     fun syncForSong(songId: Long?) {
@@ -140,7 +145,9 @@ class FavoriteManager @Inject constructor(
     // 收藏请求失败时回滚本地缓存与状态
     private fun revert(songId: Long, attemptedFavorite: Boolean, message: String) {
         likedSongIds = if (attemptedFavorite) likedSongIds - songId else likedSongIds + songId
-        _isFavorite.value = !attemptedFavorite
+        if (currentSongId == songId) {
+            _isFavorite.value = !attemptedFavorite
+        }
         _results.tryEmit(FavoriteResult.Failure(message))
     }
 
