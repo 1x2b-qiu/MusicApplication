@@ -7,9 +7,9 @@ enum class MainTab(
     val label: String,
     @DrawableRes val iconRes: Int
 ) {
-    Home("首页", R.drawable.ic_tab_home),
+    Library("曲库", R.drawable.ic_tab_library),
     Radio("电台", R.drawable.ic_tab_radio),
-    Library("曲库", R.drawable.ic_tab_library)
+    Home("我的", R.drawable.ic_tab_home)
 }
 
 fun MainTab.toRoute(): MusicRoute = when (this) {

@@ -7,19 +7,19 @@ import androidx.test.uiautomator.Until
 
 const val PACKAGE_NAME = "com.leo.lune"
 
-/** 冷启动 → 首页/登录 → Tab 切换 → 搜索，覆盖主要导航。 */
+/** 冷启动 → 曲库/登录 → Tab 切换 → 搜索，覆盖主要导航。 */
 fun MacrobenchmarkScope.musicAppJourney(startActivity: Boolean = true) {
     if (startActivity) {
         startActivityAndWait()
     }
 
-    // 会话恢复后直接进首页或登录页
-    val ready = device.wait(Until.hasObject(By.text("首页")), 20_000) ||
+    // 会话恢复后直接进曲库或登录页
+    val ready = device.wait(Until.hasObject(By.text("曲库")), 20_000) ||
         device.wait(Until.hasObject(By.text("登录")), 5_000)
     if (!ready) return
 
-    if (device.findObject(By.text("首页")) != null) {
-        // 首页列表滑动
+    if (device.findObject(By.text("曲库")) != null) {
+        // 曲库列表滑动
         device.findObject(By.scrollable(true))?.also { list ->
             list.setGestureMargin(device.displayWidth / 5)
             list.fling(Direction.DOWN)
@@ -28,13 +28,13 @@ fun MacrobenchmarkScope.musicAppJourney(startActivity: Boolean = true) {
             device.waitForIdle()
         }
 
-        // 底部 Tab：电台 / 曲库 / 回首页
+        // 底部 Tab：电台 / 我的 / 回曲库
         clickTextIfExists("电台")
         device.wait(Until.hasObject(By.text("电台")), 5_000)
+        clickTextIfExists("我的")
+        device.wait(Until.hasObject(By.text("我的")), 5_000)
         clickTextIfExists("曲库")
         device.wait(Until.hasObject(By.text("曲库")), 5_000)
-        clickTextIfExists("首页")
-        device.wait(Until.hasObject(By.text("首页")), 5_000)
 
         // 进搜索页再返回
         device.findObject(By.desc("搜索"))?.click()

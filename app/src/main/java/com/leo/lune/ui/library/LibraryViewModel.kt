@@ -5,7 +5,6 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
-import com.leo.lune.controller.PlaybackState
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.Song
@@ -13,6 +12,8 @@ import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.MusicRepository
 import com.leo.lune.ui.home.formatSongDuration
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -127,20 +128,26 @@ class LibraryViewModel @Inject constructor(
             }
         }
         // 同步每日推荐与甄选歌单播放按钮状态
+        // 仅提取基本类型做 distinctUntilChanged，避免每次 emit 都做 O(n) 推导
         viewModelScope.launch {
             playerController.playbackState
                 .map { state ->
-                    Pair(
-                        isPlayingDailyRecommend(state),
-                        resolvePlayingFeaturedPlaylistId(state)
+                    Triple(
+                        state.isPlaying,
+                        state.queue.firstOrNull()?.id,
+                        state.currentSong?.id
                     )
                 }
                 .distinctUntilChanged()
-                .collect { (isDailyPlaying, playingFeaturedId) ->
+                .collect { (isPlaying, queueFirstId, currentSongId) ->
                     _uiState.update {
                         it.copy(
-                            isDailyRecommendPlaying = isDailyPlaying,
-                            playingFeaturedPlaylistId = playingFeaturedId
+                            isDailyRecommendPlaying = isPlayingDailyRecommend(
+                                isPlaying, queueFirstId, currentSongId
+                            ),
+                            playingFeaturedPlaylistId = resolvePlayingFeaturedPlaylistId(
+                                isPlaying, queueFirstId, currentSongId
+                            )
                         )
                     }
                 }
@@ -153,11 +160,14 @@ class LibraryViewModel @Inject constructor(
             runCatching { musicRepository.getDailyRecommendSongs() }
                 .onSuccess { songs ->
                     dailyRecommendQueue = songs
+                    val playback = playerController.playbackState.value
                     _uiState.update {
                         it.copy(
                             dailyRecommendSongs = songs.map { song -> song.toDailyRecommendItem() },
                             isDailyRecommendPlaying = isPlayingDailyRecommend(
-                                playerController.playbackState.value
+                                playback.isPlaying,
+                                playback.queue.firstOrNull()?.id,
+                                playback.currentSong?.id
                             )
                         )
                     }
@@ -202,13 +212,20 @@ class LibraryViewModel @Inject constructor(
     }
 
     // 拉取固定四个榜单前 3 首预览（复用 playlist/track/all）
+    // 四个榜单并行请求，整体加载时间从串行叠加降为单次请求耗时
     private fun loadCharts() {
         viewModelScope.launch {
+            val results = FixedCharts.map { spec ->
+                async {
+                    val songs = runCatching {
+                        musicRepository.getPlaylistSongs(spec.id, limit = 3)
+                    }.getOrElse { emptyList() }
+                    spec to songs
+                }
+            }.awaitAll()
+
             val nextQueues = mutableMapOf<Long, List<Song>>()
-            val charts = FixedCharts.map { spec ->
-                val songs = runCatching {
-                    musicRepository.getPlaylistSongs(spec.id, limit = 3)
-                }.getOrElse { emptyList() }
+            val charts = results.map { (spec, songs) ->
                 nextQueues[spec.id] = songs
                 ChartItem(
                     id = spec.id,
@@ -308,20 +325,25 @@ class LibraryViewModel @Inject constructor(
     fun onGenreClick(genreId: Long) = Unit
 
     // 当前是否正在播放每日推荐队列
-    private fun isPlayingDailyRecommend(state: PlaybackState): Boolean {
+    private fun isPlayingDailyRecommend(
+        isPlaying: Boolean,
+        queueFirstId: Long?,
+        currentSongId: Long?
+    ): Boolean {
         val queue = dailyRecommendQueue
-        if (queue.isEmpty() || !state.isPlaying) return false
+        if (queue.isEmpty() || !isPlaying || currentSongId == null) return false
         val dailyFirstId = queue.first().id
-        val currentSongId = state.currentSong?.id ?: return false
-        return state.queue.firstOrNull()?.id == dailyFirstId &&
+        return queueFirstId == dailyFirstId &&
             queue.any { it.id == currentSongId }
     }
 
     // 返回当前正在播放的甄选歌单 id；无则为 null
-    private fun resolvePlayingFeaturedPlaylistId(state: PlaybackState): Long? {
-        if (!state.isPlaying) return null
-        val currentSongId = state.currentSong?.id ?: return null
-        val queueFirstId = state.queue.firstOrNull()?.id ?: return null
+    private fun resolvePlayingFeaturedPlaylistId(
+        isPlaying: Boolean,
+        queueFirstId: Long?,
+        currentSongId: Long?
+    ): Long? {
+        if (!isPlaying || currentSongId == null || queueFirstId == null) return null
         return featuredPlaylistMarkers.entries.firstOrNull { (_, marker) ->
             marker.firstSongId == queueFirstId && currentSongId in marker.songIds
         }?.key

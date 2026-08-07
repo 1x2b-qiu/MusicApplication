@@ -100,7 +100,7 @@ private fun MusicNavHost(
         currentDestination?.hasRoute<MusicRoute.Home>() == true -> MainTab.Home
         currentDestination?.hasRoute<MusicRoute.Radio>() == true -> MainTab.Radio
         currentDestination?.hasRoute<MusicRoute.Library>() == true -> MainTab.Library
-        else -> MainTab.Home
+        else -> MainTab.Library
     }
     val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
             currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
@@ -130,7 +130,7 @@ private fun MusicNavHost(
                         darkTheme = darkTheme,
                         onSearchClick = {
                             navController.navigate(MusicRoute.Search) {
-                                popUpTo(MusicRoute.Home) { saveState = true }
+                                popUpTo(MusicRoute.Library) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
@@ -158,7 +158,7 @@ private fun MusicNavHost(
                             }
                         },
                         onLoginSuccess = {
-                            navController.navigate(MusicRoute.Home) {
+                            navController.navigate(MusicRoute.Library) {
                                 popUpTo(navController.graph.startDestinationId) { inclusive = true }
                                 launchSingleTop = true
                             }
@@ -334,7 +334,7 @@ private fun MusicNavHost(
                         selectedTab = selectedTab,
                         onTabSelected = { tab ->
                             navController.navigate(tab.toRoute()) {
-                                popUpTo(MusicRoute.Home) { saveState = true }
+                                popUpTo(MusicRoute.Library) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
