@@ -150,8 +150,7 @@ private fun MusicNavHost(
                         },
                         onRecentClick = {
                             navController.navigateSingleTopTo(MusicRoute.Recent)
-                        },
-                        darkTheme = darkTheme
+                        }
                     )
                 }
 

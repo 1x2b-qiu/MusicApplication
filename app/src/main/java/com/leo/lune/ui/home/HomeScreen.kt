@@ -72,7 +72,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -99,10 +98,8 @@ private const val FavoritesAutoCarouselEnabled = false
 private const val FavoritesAutoCarouselIntervalMs = 4_000L
 // 用户无操作后恢复自动轮播的等待时长
 private const val FavoritesAutoCarouselResumeDelayMs = 5_000L
-// 「我喜欢的」主卡圆角
-private val FavoritesCardShape = RoundedCornerShape(26.dp)
-// 主卡内封面图圆角
-private val CoverShape = RoundedCornerShape(16.dp)
+// 「我喜欢的」主卡圆角（与 DailyMixBanner / CardShape 一致）
+private val FavoritesCardShape = RoundedCornerShape(16.dp)
 // 底部缩略图圆角
 private val ThumbShape = RoundedCornerShape(16.dp)
 // 缩略图外层占位尺寸，为选中放大预留空间
@@ -131,29 +128,12 @@ private val favoritesTitleExitTransition = slideOutVertically(
     targetOffsetY = { -it / 3 }
 ) + fadeOut(tween(FavoritesTitleTransitionMs, easing = FastOutSlowInEasing))
 
-// 「我喜欢的」主卡在不同主题下的视觉参数（无模糊）
-private data class FavoritesCardStyle(
-    // 半透明表面叠层
-    val surfaceOverlay: Color,
-    // 卡片描边颜色
-    val borderColor: Color,
-    // 顶部高光线中心透明度
-    val highlightCenterAlpha: Float,
-    // 卡片阴影高度
-    val shadowElevation: Dp,
-    // 主阴影颜色
-    val spotColor: Color,
-    // 环境阴影颜色
-    val ambientColor: Color
-)
-
 // 首页：可滚动内容区（顶栏由 MusicNavHost 统一挂载）
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
     onLikedClick: () -> Unit,
     onRecentClick: () -> Unit,
-    darkTheme: Boolean = true,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -182,7 +162,6 @@ fun HomeScreen(
                         item {
                             HomeFavoritesSection(
                                 songs = uiState.likedSongs,
-                                darkTheme = darkTheme,
                                 isPlaying = uiState.isPlaying,
                                 currentSongId = uiState.currentSongId,
                                 onPlaySong = viewModel::playSong,
@@ -341,7 +320,6 @@ fun HomeRecentItem(
 @Composable
 private fun HomeFavoritesSection(
     songs: List<Song>,
-    darkTheme: Boolean,
     isPlaying: Boolean,
     currentSongId: Long?,
     onPlaySong: (Song, List<Song>) -> Unit,
@@ -428,7 +406,6 @@ private fun HomeFavoritesSection(
         FavoritesMainCard(
             selectedSongId = selectedSong.id,
             songById = songById,
-            darkTheme = darkTheme,
             isPlayingThis = isPlaying && currentSongId == selectedSong.id,
             onPlayClick = {
                 onUserInteraction()
@@ -463,17 +440,15 @@ private fun HomeFavoritesSection(
     }
 }
 
-// 「我喜欢的」主卡：封面/歌名动画层 + 固定渐变与播放按钮
+// 「我喜欢的」主卡：封面铺满 + 底部文案/播放按钮（风格与 DailyMixBanner 一致）
 @Composable
 private fun FavoritesMainCard(
     selectedSongId: Long,
     songById: Map<Long, Song>,
-    darkTheme: Boolean,
     isPlayingThis: Boolean,
     onPlayClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
-    val cardStyle = rememberFavoritesCardStyle(darkTheme)
     val coverDecodeWidth = LocalConfiguration.current.screenWidthDp.dp
     val playInteraction = remember { MutableInteractionSource() }
     val playScope = rememberCoroutineScope()
@@ -483,148 +458,117 @@ private fun FavoritesMainCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = cardStyle.shadowElevation,
-                shape = FavoritesCardShape,
-                spotColor = cardStyle.spotColor,
-                ambientColor = cardStyle.ambientColor
-            )
+            .height(208.dp)
             .clip(FavoritesCardShape)
-            .background(cardStyle.surfaceOverlay)
-            .border(0.67.dp, cardStyle.borderColor, FavoritesCardShape)
-            .padding(12.dp)
+            .border(1.dp, colorScheme.surfaceDim, FavoritesCardShape)
     ) {
+        // 仅封面图参与切换动画；lambda 必须用 songId 查歌，保证退出层显示旧封面
+        AnimatedContent(
+            targetState = selectedSongId,
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+            transitionSpec = {
+                favoritesCoverEnterTransition togetherWith favoritesCoverExitTransition
+            },
+            label = "favorites_cover"
+        ) { songId ->
+            val song = songById[songId] ?: return@AnimatedContent
+            AsyncImage(
+                model = rememberCoverRequest(song.coverUrl, coverDecodeWidth, 208.dp),
+                contentDescription = song.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+
         Box(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp)
-                .height(1.dp)
+                .fillMaxSize()
                 .background(
-                    Brush.horizontalGradient(
+                    Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.White.copy(alpha = cardStyle.highlightCenterAlpha),
-                            Color.Transparent
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.7f)
                         )
                     )
                 )
         )
 
-        Box(
+        Row(
             modifier = Modifier
+                .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .height(208.dp)
-                .clip(CoverShape)
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
         ) {
-            // 仅封面图参与切换动画；lambda 必须用 songId 查歌，保证退出层显示旧封面
-            AnimatedContent(
-                targetState = selectedSongId,
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-                transitionSpec = {
-                    favoritesCoverEnterTransition togetherWith favoritesCoverExitTransition
-                },
-                label = "favorites_cover"
-            ) { songId ->
-                val song = songById[songId] ?: return@AnimatedContent
-                AsyncImage(
-                    model = rememberCoverRequest(song.coverUrl, coverDecodeWidth, 208.dp),
-                    contentDescription = song.name,
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp)
+            ) {
+                // 歌名/艺人单独动画；播放按钮固定在外层 Row，不参与切换
+                AnimatedContent(
+                    targetState = selectedSongId,
                     modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
+                    contentAlignment = Alignment.BottomStart,
+                    transitionSpec = {
+                        favoritesTitleEnterTransition togetherWith favoritesTitleExitTransition
+                    },
+                    label = "favorites_title"
+                ) { songId ->
+                    val song = songById[songId] ?: return@AnimatedContent
+                    Column(modifier = Modifier.padding(end = 12.dp)) {
+                        Text(
+                            text = song.name,
+                            color = Color(0xFFF4F2FB),
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 25.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = song.artists,
+                            color = Color.White.copy(alpha = 0.7f),
+                            fontSize = 13.sp,
+                            lineHeight = 19.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
             }
 
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.7f)
-                            )
-                        )
-                    )
-            )
-
-            Row(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Bottom
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(48.dp)
-                ) {
-                    // 歌名/艺人单独动画；播放按钮固定在外层 Row，不参与切换
-                    AnimatedContent(
-                        targetState = selectedSongId,
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.BottomStart,
-                        transitionSpec = {
-                            favoritesTitleEnterTransition togetherWith favoritesTitleExitTransition
-                        },
-                        label = "favorites_title"
-                    ) { songId ->
-                        val song = songById[songId] ?: return@AnimatedContent
-                        Column(modifier = Modifier.padding(end = 12.dp)) {
-                            Text(
-                                text = song.name,
-                                color = Color(0xFFF4F2FB),
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold,
-                                lineHeight = 25.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = song.artists,
-                                color = Color.White.copy(alpha = 0.7f),
-                                fontSize = 13.sp,
-                                lineHeight = 19.5.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-                }
-
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .scale(playScale.value)
-                        .shadow(12.dp, CircleShape, spotColor = colorScheme.primary)
-                        .clip(CircleShape)
-                        .background(Color(0xFFF4F2FB))
-                        .clickable(
-                            interactionSource = playInteraction,
-                            indication = null,
-                            onClick = {
-                                playScope.launch {
-                                    playScale.animateTo(0.9f, tween(60))
-                                    playScale.animateTo(1f, tween(100))
-                                }
-                                onPlayClick()
+                    .size(48.dp)
+                    .scale(playScale.value)
+                    .shadow(12.dp, CircleShape, spotColor = colorScheme.primary)
+                    .clip(CircleShape)
+                    .background(Color(0xFFF4F2FB))
+                    .clickable(
+                        interactionSource = playInteraction,
+                        indication = null,
+                        onClick = {
+                            playScope.launch {
+                                playScale.animateTo(0.9f, tween(60))
+                                playScale.animateTo(1f, tween(100))
                             }
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = painterResource(
-                            if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
-                        ),
-                        contentDescription = if (isPlayingThis) "暂停" else "播放",
-                        colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
+                            onPlayClick()
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(
+                        if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
+                    ),
+                    contentDescription = if (isPlayingThis) "暂停" else "播放",
+                    colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
+                    modifier = Modifier.size(28.dp)
+                )
             }
         }
     }
@@ -703,30 +647,3 @@ private fun FavoritesThumbnailItem(
     }
 }
 
-// 按深/浅主题返回对应的主卡样式（无模糊）
-@Composable
-private fun rememberFavoritesCardStyle(darkTheme: Boolean): FavoritesCardStyle {
-    return remember(darkTheme) {
-        if (darkTheme) {
-            // 深色主题：暗底 + 白色描边/高光
-            FavoritesCardStyle(
-                surfaceOverlay = Color.White.copy(alpha = 0.06f),
-                borderColor = Color.White.copy(alpha = 0.18f),
-                highlightCenterAlpha = 0.5f,
-                shadowElevation = 24.dp,
-                spotColor = Color(0x807B5CFF),
-                ambientColor = Color(0x407B5CFF)
-            )
-        } else {
-            // 浅色主题：乳白底 + 黑色描边，提高对比度
-            FavoritesCardStyle(
-                surfaceOverlay = Color.White.copy(alpha = 0.62f),
-                borderColor = Color.Black.copy(alpha = 0.18f),
-                highlightCenterAlpha = 0.85f,
-                shadowElevation = 20.dp,
-                spotColor = Color(0x667B5CFF),
-                ambientColor = Color(0x26000000)
-            )
-        }
-    }
-}
