@@ -108,8 +108,10 @@ fun CrtTvSceneView(
                 centerOrigin = Position(0f, 0f, 0f),
                 position = VinylPosition,
                 rotation = VinylRotation,
-                // 此模型无内嵌动画
-                autoAnimate = false
+                // GLB 内嵌 Spin 动画（约 6 秒一圈），循环播放
+                autoAnimate = true,
+                animationName = "Spin",
+                animationLoop = true
             )
         }
     }
