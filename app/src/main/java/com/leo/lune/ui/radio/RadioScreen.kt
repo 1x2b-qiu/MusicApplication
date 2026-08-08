@@ -490,7 +490,7 @@ private val VinylRotation = Rotation(x = 15f, y = -20f, z = -10f)
  * - 越小：唱片越小
  * 约 1.0～1.2 时，全屏下大致接近占屏宽六成（还受体位远近影响）。
  */
-private const val VinylScaleToUnits = 1.05f
+private const val VinylScaleToUnits = 1.15f
 
 /**
  * 主光强度（无量纲，SceneView/Filament）。
