@@ -6,6 +6,7 @@ import com.leo.lune.data.remote.response.LikelistResponse
 import com.leo.lune.data.remote.response.LoginResponse
 import com.leo.lune.data.remote.response.LoginStatusResponse
 import com.leo.lune.data.remote.response.LyricResponse
+import com.leo.lune.data.remote.response.PersonalFmResponse
 import com.leo.lune.data.remote.response.PersonalizedNewsongResponse
 import com.leo.lune.data.remote.response.PersonalizedPlaylistResponse
 import com.leo.lune.data.remote.response.PlaylistHotResponse
@@ -92,6 +93,10 @@ interface NeteaseApi {
         @Query("limit") limit: Int? = null,
         @Query("offset") offset: Int = 0
     ): PlaylistTrackAllResponse
+
+    // 获取私人 FM 一批歌曲（需登录）；可重复调用以续拉
+    @GET("personal_fm")
+    suspend fun getPersonalFm(): PersonalFmResponse
 
     // 获取每日推荐歌曲（需登录）；afresh 为 true 时刷新当日推荐
     @GET("recommend/songs")

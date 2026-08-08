@@ -470,6 +470,16 @@ class MusicPlayerController @Inject constructor(
         playSong(state.queue[index], state.queue)
     }
 
+    // 向当前队列末尾追加歌曲（按 id 去重），不中断当前播放；供私人 FM 续拉
+    fun appendToQueue(songs: List<Song>) {
+        if (songs.isEmpty()) return
+        _playbackState.update { state ->
+            val existingIds = state.queue.mapTo(HashSet()) { it.id }
+            val toAdd = songs.filter { it.id !in existingIds }
+            if (toAdd.isEmpty()) state else state.copy(queue = state.queue + toAdd)
+        }
+    }
+
     // 从播放队列移除指定下标；删当前曲则续播相邻项，清空则停播
     @RequiresApi(Build.VERSION_CODES.O)
     fun removeFromQueue(index: Int) {

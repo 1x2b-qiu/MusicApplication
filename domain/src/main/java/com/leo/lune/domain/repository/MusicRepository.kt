@@ -40,6 +40,8 @@ interface MusicRepository {
         limit: Int? = null,
         offset: Int = 0
     ): List<Song>
+    // 获取私人 FM 一批歌曲（需登录）；可重复调用以续拉
+    suspend fun getPersonalFmSongs(): List<Song>
     // 获取每日推荐歌曲（需登录）；afresh 为 true 时刷新当日推荐
     suspend fun getDailyRecommendSongs(afresh: Boolean = false): List<Song>
     // 获取推荐新音乐（猜你喜欢）

@@ -160,6 +160,15 @@ class MusicRepositoryImpl @Inject constructor(
         return response.songs.orEmpty().map { it.toSong() }
     }
 
+    // 获取私人 FM 一批歌曲
+    override suspend fun getPersonalFmSongs(): List<Song> {
+        val response = neteaseApi.getPersonalFm()
+        if (response.code != 200) {
+            throw IllegalStateException("Get personal FM failed with code ${response.code}")
+        }
+        return response.data.orEmpty().map { it.toSong() }
+    }
+
     // 获取每日推荐歌曲列表
     override suspend fun getDailyRecommendSongs(afresh: Boolean): List<Song> {
         val response = neteaseApi.getRecommendSongs(afresh = afresh)
