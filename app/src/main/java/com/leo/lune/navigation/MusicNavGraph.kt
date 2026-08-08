@@ -104,7 +104,9 @@ private fun MusicNavHost(
     val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
             currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
             currentDestination?.hasRoute<MusicRoute.Library>() == true
-    val showMiniPlayerBar = showBottomTabBar ||
+    val isRadioTab = currentDestination?.hasRoute<MusicRoute.Radio>() == true
+    // 电台页不展示迷你播放条（仍保留底部 Tab）
+    val showMiniPlayerBar = (showBottomTabBar && !isRadioTab) ||
             currentDestination?.hasRoute<MusicRoute.Search>() == true ||
             currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
             currentDestination?.hasRoute<MusicRoute.DailyMix>() == true ||
@@ -303,7 +305,7 @@ private fun MusicNavHost(
             }
         }
 
-        if (showMiniPlayerBar) {
+        if (showMiniPlayerBar || showBottomTabBar) {
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -316,12 +318,14 @@ private fun MusicNavHost(
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 12.dp)
             ) {
-                MiniPlayerBar(
-                    hazeState = hazeState,
-                    onPlayerClick = {
-                        navController.navigateSingleTopTo(MusicRoute.Player)
-                    }
-                )
+                if (showMiniPlayerBar) {
+                    MiniPlayerBar(
+                        hazeState = hazeState,
+                        onPlayerClick = {
+                            navController.navigateSingleTopTo(MusicRoute.Player)
+                        }
+                    )
+                }
                 if (showBottomTabBar) {
                     BottomTabBar(
                         hazeState = hazeState,

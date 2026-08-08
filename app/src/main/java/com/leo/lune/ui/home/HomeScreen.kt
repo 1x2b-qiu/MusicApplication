@@ -193,14 +193,16 @@ fun HomeScreen(
     }
 }
 
-// 区块标题行：左侧可选图标 + 标题，右侧可选「全部」
+// 区块标题行：左侧可选图标 + 标题，右侧可选操作文案（默认「全部」）
 @Composable
 fun HomeSectionHeader(
     title: String,
     // 传 null 时不显示图标；彩色 PNG 请保持 iconTint 默认 Unspecified
     @DrawableRes iconRes: Int? = null,
     iconTint: Color = Color.Unspecified,
-    // 传 null 时不显示「全部」
+    // 右侧操作文案；仅在 onViewAllClick 非空时显示
+    actionLabel: String = "全部",
+    // 传 null 时不显示右侧操作
     onViewAllClick: (() -> Unit)? = null
 ) {
     Row(
@@ -243,7 +245,7 @@ fun HomeSectionHeader(
                 horizontalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
-                    text = "全部",
+                    text = actionLabel,
                     color = colorScheme.onSurfaceVariant,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,

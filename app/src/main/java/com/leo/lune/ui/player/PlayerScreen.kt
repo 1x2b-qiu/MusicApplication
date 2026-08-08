@@ -602,12 +602,22 @@ private fun PlayerLyricsSection(
 }
 
 // 与 MiniPlayerBar 同款磨砂玻璃容器：阴影 + haze + 顶边高光
+// false = 暂时隐藏玻璃效果（PlayerControlsCard / PlayerToolBar 共用）
+private const val EnablePlayerGlassSurface = false
+
 @Composable
 private fun PlayerGlassSurface(
     hazeState: HazeState,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    if (!EnablePlayerGlassSurface) {
+        Box(modifier = modifier.fillMaxWidth()) {
+            content()
+        }
+        return
+    }
+
     val colorScheme = MaterialTheme.colorScheme
     val cardShape = RoundedCornerShape(16.dp)
 
@@ -711,7 +721,7 @@ private fun PlayerToolBar(
                     imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
                     contentDescription = "打开播放队列",
                     tint = colorScheme.onBackground,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }
@@ -723,13 +733,14 @@ private fun PlayerToolButton(
     onClick: () -> Unit,
     content: @Composable () -> Unit
 ) {
+    val colorScheme = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
-            .size(32.dp)
+            .size(36.dp)
             .clip(CircleShape)
-            .clickable(
-                onClick = onClick
-            ),
+            .background(colorScheme.surfaceVariant)
+            .border(0.67.dp, colorScheme.outlineVariant, CircleShape)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
     ) {
         content()
