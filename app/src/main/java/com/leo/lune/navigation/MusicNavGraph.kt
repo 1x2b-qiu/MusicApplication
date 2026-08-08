@@ -10,7 +10,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -122,34 +121,12 @@ private fun MusicNavHost(
                 .fillMaxSize()
                 .hazeSource(state = hazeState)
         ) {
-            Column(
+            // NavHost 始终占满全屏；顶栏用叠层绘制，避免显隐时挤占高度导致页面内容跳动
+            NavHost(
+                navController = navController,
+                startDestination = startRoute,
                 modifier = Modifier.fillMaxSize()
             ) {
-                if (showBottomTabBar) {
-                    HomeLyricsHeader(
-                        darkTheme = darkTheme,
-                        onSearchClick = {
-                            navController.navigate(MusicRoute.Search) {
-                                popUpTo(MusicRoute.Library) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        onToggleTheme = onToggleTheme,
-                        onOpenSidebar = { sidebarOpen = true },
-                        modifier = Modifier
-                            .statusBarsPadding()
-                            .padding(horizontal = 16.dp)
-                    )
-                }
-
-                NavHost(
-                    navController = navController,
-                    startDestination = startRoute,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                ) {
                 composable<MusicRoute.Login> {
                     LoginScreen(
                         onBack = {
@@ -305,7 +282,25 @@ private fun MusicNavHost(
                         }
                     )
                 }
-                }
+            }
+
+            if (showBottomTabBar) {
+                HomeLyricsHeader(
+                    darkTheme = darkTheme,
+                    onSearchClick = {
+                        navController.navigate(MusicRoute.Search) {
+                            popUpTo(MusicRoute.Library) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    onToggleTheme = onToggleTheme,
+                    onOpenSidebar = { sidebarOpen = true },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp)
+                )
             }
         }
 

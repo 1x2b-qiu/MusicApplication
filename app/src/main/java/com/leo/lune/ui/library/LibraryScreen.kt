@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -66,6 +67,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.leo.lune.R
+import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeaderContentHeight
 import com.leo.lune.ui.home.HomeSectionHeader
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
@@ -160,8 +162,10 @@ fun LibraryScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
             .background(colorScheme.background)
+            .statusBarsPadding()
+            .padding(top = HomeLyricsHeaderContentHeight)
+            .padding(horizontal = 16.dp)
             .consumePointersUnlessResumed(),
         // 底部为 MiniPlayer + TabBar 预留空间
         contentPadding = PaddingValues(bottom = 161.dp),

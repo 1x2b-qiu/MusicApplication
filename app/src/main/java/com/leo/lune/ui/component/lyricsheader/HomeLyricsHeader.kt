@@ -69,6 +69,9 @@ private const val ThemeTransitionMs = 250
 // 播放中头像光环脉冲一圈的时长
 private const val PulseDurationMs = 1200
 
+// 顶栏内容区高度（不含 statusBars）：padding(top=14) + height(46)
+val HomeLyricsHeaderContentHeight = 60.dp
+
 // 主 Tab 顶栏：用户头像 + 实时歌词 + 搜索/主题切换
 @Composable
 fun HomeLyricsHeader(
