@@ -44,6 +44,7 @@ import com.leo.lune.permission.PermissionCoordinator
 import com.leo.lune.ui.identify.IdentifyScreen
 import com.leo.lune.ui.liked.LikedScreen
 import com.leo.lune.ui.login.LoginScreen
+import com.leo.lune.ui.main.MainScreen
 import com.leo.lune.ui.player.PlayerScreen
 import com.leo.lune.ui.recent.RecentScreen
 import com.leo.lune.ui.theme.DarkColorScheme
@@ -138,9 +139,22 @@ private fun MusicNavHost(
                     )
                 }
 
-                // 主壳占位：三个 Tab 内容下一步再接入
                 composable<MusicRoute.Main> {
-                    Box(modifier = Modifier.fillMaxSize())
+                    MainScreen(
+                        selectedTab = selectedTab,
+                        onLikedClick = {
+                            navController.navigateSingleTopTo(MusicRoute.Liked)
+                        },
+                        onRecentClick = {
+                            navController.navigateSingleTopTo(MusicRoute.Recent)
+                        },
+                        onDailyMixClick = {
+                            navController.navigateSingleTopTo(MusicRoute.DailyMix)
+                        },
+                        onPlaylistPlazaClick = {
+                            navController.navigateSingleTopTo(MusicRoute.PlaylistPlaza)
+                        }
+                    )
                 }
 
                 composable<MusicRoute.Settings> {
