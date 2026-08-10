@@ -12,17 +12,4 @@ enum class MainTab(
     Home("我的", R.drawable.ic_tab_home)
 }
 
-fun MainTab.toRoute(): MusicRoute = when (this) {
-    MainTab.Home -> MusicRoute.Home
-    MainTab.Radio -> MusicRoute.Radio
-    MainTab.Library -> MusicRoute.Library
-}
-
-fun MusicRoute.toMainTab(): MainTab? = when (this) {
-    MusicRoute.Home -> MainTab.Home
-    MusicRoute.Radio -> MainTab.Radio
-    MusicRoute.Library -> MainTab.Library
-    else -> null
-}
-
 val mainTabs: List<MainTab> = MainTab.entries

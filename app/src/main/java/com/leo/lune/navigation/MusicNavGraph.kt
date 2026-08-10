@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,17 +37,14 @@ import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeader
 import com.leo.lune.ui.component.minplayer.MiniPlayerBar
 import com.leo.lune.ui.component.sidebar.AppSidebar
 import com.leo.lune.ui.component.toast.FavoriteToastHost
-import com.leo.lune.ui.library.LibraryScreen
 import com.leo.lune.ui.dailymix.DailyMixScreen
 import com.leo.lune.ui.playlistplaza.PlaylistPlazaScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
 import com.leo.lune.permission.PermissionCoordinator
-import com.leo.lune.ui.home.HomeScreen
 import com.leo.lune.ui.identify.IdentifyScreen
 import com.leo.lune.ui.liked.LikedScreen
 import com.leo.lune.ui.login.LoginScreen
 import com.leo.lune.ui.player.PlayerScreen
-import com.leo.lune.ui.radio.RadioScreen
 import com.leo.lune.ui.recent.RecentScreen
 import com.leo.lune.ui.theme.DarkColorScheme
 import com.leo.lune.ui.search.SearchScreen
@@ -96,16 +94,10 @@ private fun MusicNavHost(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val selectedTab = when {
-        currentDestination?.hasRoute<MusicRoute.Home>() == true -> MainTab.Home
-        currentDestination?.hasRoute<MusicRoute.Radio>() == true -> MainTab.Radio
-        currentDestination?.hasRoute<MusicRoute.Library>() == true -> MainTab.Library
-        else -> MainTab.Library
-    }
-    val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Home>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Radio>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Library>() == true
-    val isRadioTab = currentDestination?.hasRoute<MusicRoute.Radio>() == true
+    // 主 Tab 在 Main 壳内用本地状态切换，不再对应独立 route
+    var selectedTab by rememberSaveable { mutableStateOf(MainTab.Library) }
+    val showBottomTabBar = currentDestination?.hasRoute<MusicRoute.Main>() == true
+    val isRadioTab = showBottomTabBar && selectedTab == MainTab.Radio
     // 电台页不展示迷你播放条（仍保留底部 Tab）
     val showMiniPlayerBar = (showBottomTabBar && !isRadioTab) ||
             currentDestination?.hasRoute<MusicRoute.Search>() == true ||
@@ -138,7 +130,7 @@ private fun MusicNavHost(
                             }
                         },
                         onLoginSuccess = {
-                            navController.navigate(MusicRoute.Library) {
+                            navController.navigate(MusicRoute.Main) {
                                 popUpTo(navController.graph.startDestinationId) { inclusive = true }
                                 launchSingleTop = true
                             }
@@ -146,30 +138,9 @@ private fun MusicNavHost(
                     )
                 }
 
-                composable<MusicRoute.Home> {
-                    HomeScreen(
-                        onLikedClick = {
-                            navController.navigateSingleTopTo(MusicRoute.Liked)
-                        },
-                        onRecentClick = {
-                            navController.navigateSingleTopTo(MusicRoute.Recent)
-                        }
-                    )
-                }
-
-                composable<MusicRoute.Radio> {
-                    RadioScreen()
-                }
-
-                composable<MusicRoute.Library> {
-                    LibraryScreen(
-                        onDailyMixClick = {
-                            navController.navigateSingleTopTo(MusicRoute.DailyMix)
-                        },
-                        onPlaylistPlazaClick = {
-                            navController.navigateSingleTopTo(MusicRoute.PlaylistPlaza)
-                        }
-                    )
+                // 主壳占位：三个 Tab 内容下一步再接入
+                composable<MusicRoute.Main> {
+                    Box(modifier = Modifier.fillMaxSize())
                 }
 
                 composable<MusicRoute.Settings> {
@@ -295,7 +266,7 @@ private fun MusicNavHost(
                         darkTheme = darkTheme,
                         onSearchClick = {
                             navController.navigate(MusicRoute.Search) {
-                                popUpTo(MusicRoute.Library) { saveState = true }
+                                popUpTo(MusicRoute.Main) { saveState = true }
                                 launchSingleTop = true
                                 restoreState = true
                             }
@@ -337,11 +308,7 @@ private fun MusicNavHost(
                         hazeState = hazeState,
                         selectedTab = selectedTab,
                         onTabSelected = { tab ->
-                            navController.navigate(tab.toRoute()) {
-                                popUpTo(MusicRoute.Library) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
+                            selectedTab = tab
                         }
                     )
                 }

@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-// 进 NavHost 前：恢复 Cookie，并决定 startDestination（Library / Login）
+// 进 NavHost 前：恢复 Cookie，并决定 startDestination（Main / Login）
 @HiltViewModel
 class SessionBootstrapViewModel @Inject constructor(
     private val authRepository: AuthRepository
@@ -26,7 +26,7 @@ class SessionBootstrapViewModel @Inject constructor(
         viewModelScope.launch {
             authRepository.restoreSession()
             val isLoggedIn = authRepository.observeLoginState().first().isLoggedIn
-            _startRoute.value = if (isLoggedIn) MusicRoute.Library else MusicRoute.Login
+            _startRoute.value = if (isLoggedIn) MusicRoute.Main else MusicRoute.Login
         }
     }
 }

@@ -5,14 +5,9 @@ import kotlinx.serialization.Serializable
 @Serializable
 sealed interface MusicRoute {
 
+    // 已登录主壳（曲库 / 电台 / 我的）
     @Serializable
-    data object Home : MusicRoute
-
-    @Serializable
-    data object Radio : MusicRoute
-
-    @Serializable
-    data object Library : MusicRoute
+    data object Main : MusicRoute
 
     @Serializable
     data object Settings : MusicRoute
