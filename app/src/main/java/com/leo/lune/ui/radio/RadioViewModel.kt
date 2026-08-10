@@ -44,7 +44,7 @@ data class RadioUiState(
 )
 
 // 私人 FM 电台 ViewModel
-// 拉 /personal_fm、续播追加队列；进入页/列表就绪后自动开播；播控委托 MusicPlayerController
+// 拉 /personal_fm、续播追加队列；播控委托 MusicPlayerController；不自动开播
 @RequiresApi(Build.VERSION_CODES.O)
 @HiltViewModel
 class RadioViewModel @Inject constructor(
@@ -151,14 +151,6 @@ class RadioViewModel @Inject constructor(
         }
     }
 
-    // 进入电台页：有列表且尚未在 FM 会话中则开播；已在会话中不打断（含暂停）
-    fun startFmPlaybackIfNeeded() {
-        val songs = _songs.value
-        if (songs.isEmpty()) return
-        if (isCurrentFmSession(songs)) return
-        playerController.playSong(songs.first(), songs)
-    }
-
     // 未开播：用当前 FM 列表 playSong；已在会话中：委托播放器暂停/继续
     fun togglePlayPause() {
         val state = _uiState.value
@@ -241,22 +233,11 @@ class RadioViewModel @Inject constructor(
                 _isLoading.value = false
                 _loadError.value = if (songs.isEmpty()) "暂时没有可播放的歌曲" else null
                 songs.firstOrNull()?.let { favoriteManager.syncForSong(it.id) }
-                // 首拉/重试成功后自动开播
-                if (songs.isNotEmpty()) startFmPlaybackIfNeeded()
             }.onFailure { throwable ->
                 _isLoading.value = false
                 _loadError.value = throwable.message ?: "加载私人 FM 失败"
             }
         }
-    }
-
-    // 播放器当前队列是否整段属于给定 FM 列表
-    private fun isCurrentFmSession(songs: List<Song>): Boolean {
-        val playback = playerController.playbackState.value
-        if (songs.isEmpty() || playback.queue.isEmpty()) return false
-        val fmIds = songs.mapTo(HashSet()) { it.id }
-        return playback.currentSong?.id in fmIds &&
-            playback.queue.all { it.id in fmIds }
     }
 
     // 距队尾不足 APPEND_THRESHOLD 时后台预拉

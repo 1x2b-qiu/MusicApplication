@@ -104,11 +104,6 @@ fun RadioScreen(
         val colorScheme = MaterialTheme.colorScheme
         val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-        // 进入电台页：已有列表则尝试开播（首拉完成也会在 ViewModel 内自动开播）
-        LaunchedEffect(Unit) {
-            viewModel.startFmPlaybackIfNeeded()
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
