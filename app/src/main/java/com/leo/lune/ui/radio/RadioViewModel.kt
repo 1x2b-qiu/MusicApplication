@@ -323,6 +323,6 @@ class RadioViewModel @Inject constructor(
         // 距队尾剩余曲目少于此值时预拉下一批
         private const val APPEND_THRESHOLD = 2
         // 点下一首时最多连续请求个人 FM 次数
-        private const val APPEND_MAX_ATTEMPTS = 3
+        private const val APPEND_MAX_ATTEMPTS = 1
     }
 }

@@ -95,8 +95,11 @@ interface NeteaseApi {
     ): PlaylistTrackAllResponse
 
     // 获取私人 FM 一批歌曲（需登录）；可重复调用以续拉
+    // timestamp：打穿代理对相同 URL 的短时缓存，避免连点下一首拿到同一批
     @GET("personal_fm")
-    suspend fun getPersonalFm(): PersonalFmResponse
+    suspend fun getPersonalFm(
+        @Query("timestamp") timestamp: Long = System.currentTimeMillis()
+    ): PersonalFmResponse
 
     // 获取每日推荐歌曲（需登录）；afresh 为 true 时刷新当日推荐
     @GET("recommend/songs")
