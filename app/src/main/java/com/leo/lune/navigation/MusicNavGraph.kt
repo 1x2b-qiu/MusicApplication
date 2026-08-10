@@ -48,6 +48,7 @@ import com.leo.lune.ui.login.LoginScreen
 import com.leo.lune.ui.player.PlayerScreen
 import com.leo.lune.ui.radio.RadioScreen
 import com.leo.lune.ui.recent.RecentScreen
+import com.leo.lune.ui.theme.DarkColorScheme
 import com.leo.lune.ui.search.SearchScreen
 import com.leo.lune.ui.settings.DownloadSettingsScreen
 import com.leo.lune.ui.settings.PlaybackSettingsScreen
@@ -286,22 +287,27 @@ private fun MusicNavHost(
             }
 
             if (showBottomTabBar) {
-                HomeLyricsHeader(
-                    darkTheme = darkTheme,
-                    onSearchClick = {
-                        navController.navigate(MusicRoute.Search) {
-                            popUpTo(MusicRoute.Library) { saveState = true }
-                            launchSingleTop = true
-                            restoreState = true
-                        }
-                    },
-                    onToggleTheme = onToggleTheme,
-                    onOpenSidebar = { sidebarOpen = true },
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp)
-                )
+                // 电台页顶栏随页面固定暗色；BottomTabBar 仍跟全局主题
+                MaterialTheme(
+                    colorScheme = if (isRadioTab) DarkColorScheme else MaterialTheme.colorScheme
+                ) {
+                    HomeLyricsHeader(
+                        darkTheme = darkTheme,
+                        onSearchClick = {
+                            navController.navigate(MusicRoute.Search) {
+                                popUpTo(MusicRoute.Library) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        onToggleTheme = onToggleTheme,
+                        onOpenSidebar = { sidebarOpen = true },
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp)
+                    )
+                }
             }
         }
 

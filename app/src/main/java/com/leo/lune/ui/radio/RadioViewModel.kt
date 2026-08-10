@@ -19,11 +19,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 
-// 私人 FM 电台页 UI 状态
+// 私人 FM 电台页 UI 状态（由 FM 源数据 + 播放器状态合成，供界面订阅）
 data class RadioUiState(
     // 已拉取的 FM 歌曲（含续拉追加）
     val songs: List<Song> = emptyList(),
@@ -33,17 +31,21 @@ data class RadioUiState(
     val coverUrl: String? = null,
     val songId: Long = 0L,
     val durationMs: Long = 0L,
+    // 仅 FM 会话中有值，来自播放器
     val qualityLabel: String = "",
     val isPlaying: Boolean = false,
     val isFavorite: Boolean = false,
-    // 是否已用私人 FM 队列开播（未开播时点播放才 playSong）
+    // 是否已用私人 FM 队列开播
     val isFmSession: Boolean = false,
+    // 是否正在请求 /personal_fm
     val isLoading: Boolean = false,
+    // 优先展示列表加载错误；会话中可回落到播放器错误
     val error: String? = null
 )
 
 // 私人 FM 电台 ViewModel
-// 拉 /personal_fm、续播追加队列；播控委托 MusicPlayerController；不自动开播
+// 拉 /personal_fm、续播追加队列；进入页/列表就绪后自动开播；播控委托 MusicPlayerController
+@RequiresApi(Build.VERSION_CODES.O)
 @HiltViewModel
 class RadioViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
@@ -52,22 +54,29 @@ class RadioViewModel @Inject constructor(
     private val favoriteManager: FavoriteManager
 ) : ViewModel() {
 
+    // —— FM 列表源数据（本页自有，与播放器无关）——
+    // 与 _uiState 分开：作为 combine 输入，避免「自己 combine 自己」和多处改同一份状态互相覆盖
+    // 已拉取的私人 FM 列表（含续拉追加）
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
+    // 列表加载/不可用提示；null 表示无错误
     private val _loadError = MutableStateFlow<String?>(null)
+    // 是否正在请求私人 FM（首拉或重置拉）
     private val _isLoading = MutableStateFlow(false)
 
+    // —— 对外 UI 快照：combine(播放器 + 上方三源) 写入 ——
     private val _uiState = MutableStateFlow(RadioUiState())
     val uiState: StateFlow<RadioUiState> = _uiState.asStateFlow()
 
-    // 高频进度；仅进度条区域订阅
+    // 高频进度；仅进度条区域订阅，避免整页随进度重绘
     val positionState: StateFlow<PlaybackPosition> = playerController.playbackPosition
 
+    // 首拉 / 重置拉任务；登录态变化或重试时会取消旧任务
     private var loadJob: Job? = null
+    // 后台预拉下一批；与「下一首」续拉共用 appendMoreAndAwait
     private var appendJob: Job? = null
-    // 串行化续拉，避免预拉与「下一首」同时打 personal_fm
-    private val appendMutex = Mutex()
 
     init {
+        // 登录后拉 FM；退出则清空列表并提示登录
         viewModelScope.launch {
             authRepository.observeLoginState().collect { loginState ->
                 if (loginState.isLoggedIn) {
@@ -81,6 +90,7 @@ class RadioViewModel @Inject constructor(
                 }
             }
         }
+        // 合成展示态；FM 会话中接近队尾时触发预拉
         viewModelScope.launch {
             combine(
                 playerController.playbackState,
@@ -89,6 +99,7 @@ class RadioViewModel @Inject constructor(
                 _loadError
             ) { playback, songs, isLoading, loadError ->
                 val fmIds = songs.mapTo(HashSet()) { it.id }
+                // 当前播放队列整段都属于本页 FM 列表，才算 FM 会话
                 val isFmSession = songs.isNotEmpty() &&
                     playback.currentSong?.id in fmIds &&
                     playback.queue.isNotEmpty() &&
@@ -127,6 +138,7 @@ class RadioViewModel @Inject constructor(
                     }
                 }
         }
+        // 未开播时收藏结果不走播放器，需单独刷新心形
         viewModelScope.launch {
             favoriteManager.results.collect {
                 val current = _uiState.value
@@ -139,7 +151,15 @@ class RadioViewModel @Inject constructor(
         }
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
+    // 进入电台页：有列表且尚未在 FM 会话中则开播；已在会话中不打断（含暂停）
+    fun startFmPlaybackIfNeeded() {
+        val songs = _songs.value
+        if (songs.isEmpty()) return
+        if (isCurrentFmSession(songs)) return
+        playerController.playSong(songs.first(), songs)
+    }
+
+    // 未开播：用当前 FM 列表 playSong；已在会话中：委托播放器暂停/继续
     fun togglePlayPause() {
         val state = _uiState.value
         val songs = state.songs
@@ -151,7 +171,7 @@ class RadioViewModel @Inject constructor(
         playerController.playSong(songs.first(), songs)
     }
 
-    @RequiresApi(Build.VERSION_CODES.O)
+    // 未开播：等同开播首曲；会话中：切下一首，队尾则续拉后再切
     fun skipToNext() {
         if (_uiState.value.songs.isEmpty()) return
         viewModelScope.launch {
@@ -167,7 +187,6 @@ class RadioViewModel @Inject constructor(
     }
 
     // 仅在已拉到的队列内回退；队首则回到曲头，不环形跳到末尾
-    @RequiresApi(Build.VERSION_CODES.O)
     fun skipToPrevious() {
         val state = _uiState.value
         if (state.songs.isEmpty() || !state.isFmSession) return
@@ -184,11 +203,13 @@ class RadioViewModel @Inject constructor(
         }
     }
 
+    // 仅 FM 会话中可拖进度
     fun seekTo(positionMs: Long) {
         if (!_uiState.value.isFmSession) return
         playerController.seekTo(positionMs)
     }
 
+    // 会话中走播放器收藏；未开播走 FavoriteManager 并立刻改 UI
     fun toggleFavorite() {
         val songId = _uiState.value.songId.takeIf { it != 0L } ?: return
         if (_uiState.value.isFmSession) {
@@ -201,10 +222,12 @@ class RadioViewModel @Inject constructor(
         }
     }
 
+    // 失败重试：清空后重新拉一批
     fun onRetry() {
         loadPersonalFm(reset = true)
     }
 
+    // 请求 /personal_fm；reset=true 时先清空本地列表
     private fun loadPersonalFm(reset: Boolean) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
@@ -218,6 +241,8 @@ class RadioViewModel @Inject constructor(
                 _isLoading.value = false
                 _loadError.value = if (songs.isEmpty()) "暂时没有可播放的歌曲" else null
                 songs.firstOrNull()?.let { favoriteManager.syncForSong(it.id) }
+                // 首拉/重试成功后自动开播
+                if (songs.isNotEmpty()) startFmPlaybackIfNeeded()
             }.onFailure { throwable ->
                 _isLoading.value = false
                 _loadError.value = throwable.message ?: "加载私人 FM 失败"
@@ -225,6 +250,16 @@ class RadioViewModel @Inject constructor(
         }
     }
 
+    // 播放器当前队列是否整段属于给定 FM 列表
+    private fun isCurrentFmSession(songs: List<Song>): Boolean {
+        val playback = playerController.playbackState.value
+        if (songs.isEmpty() || playback.queue.isEmpty()) return false
+        val fmIds = songs.mapTo(HashSet()) { it.id }
+        return playback.currentSong?.id in fmIds &&
+            playback.queue.all { it.id in fmIds }
+    }
+
+    // 距队尾不足 APPEND_THRESHOLD 时后台预拉
     private fun maybeAppendMore(queueIndex: Int, queueSize: Int) {
         if (queueSize - queueIndex > APPEND_THRESHOLD) return
         appendMore()
@@ -249,6 +284,7 @@ class RadioViewModel @Inject constructor(
         return null
     }
 
+    // 非阻塞预拉入口；已有续拉或首拉进行中则跳过
     private fun appendMore() {
         if (appendJob?.isActive == true) return
         if (_isLoading.value) return

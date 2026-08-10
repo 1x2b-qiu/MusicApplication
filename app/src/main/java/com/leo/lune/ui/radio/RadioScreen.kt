@@ -69,6 +69,7 @@ import com.google.android.filament.Texture
 import com.leo.lune.R
 import com.leo.lune.controller.PlaybackPosition
 import com.leo.lune.ui.home.formatSongDuration
+import com.leo.lune.ui.theme.DarkColorScheme
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
 import io.github.sceneview.RenderQuality
@@ -98,54 +99,62 @@ private val RadioControlsBottomInset = 78.dp
 fun RadioScreen(
     viewModel: RadioViewModel = hiltViewModel()
 ) {
-    val colorScheme = MaterialTheme.colorScheme
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // Radio 页固定暗色；BottomTabBar 在外层，仍跟全局主题
+    MaterialTheme(colorScheme = DarkColorScheme) {
+        val colorScheme = MaterialTheme.colorScheme
+        val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(colorScheme.background)
-            .consumePointersUnlessResumed()
-    ) {
-        // 当前曲封面虚化铺满，作氛围底；无封面时仍见主题色背景
-        if (!uiState.coverUrl.isNullOrBlank()) {
-            val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-            AsyncImage(
-                model = rememberCoverRequest(uiState.coverUrl, screenWidth),
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(16.dp),
-                contentScale = ContentScale.Crop
-            )
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colorScheme.background.copy(alpha = 0.45f))
-            )
+        // 进入电台页：已有列表则尝试开播（首拉完成也会在 ViewModel 内自动开播）
+        LaunchedEffect(Unit) {
+            viewModel.startFmPlaybackIfNeeded()
         }
 
-        CrtTvSceneView(
-            isPlaying = uiState.isPlaying,
-            coverUrl = uiState.coverUrl,
-            modifier = Modifier.fillMaxSize()
-        )
-
-        RadioPlayerControls(
-            uiState = uiState,
-            positionState = viewModel.positionState,
-            onSeek = viewModel::seekTo,
-            onTogglePlayPause = viewModel::togglePlayPause,
-            onSkipPrevious = viewModel::skipToPrevious,
-            onSkipNext = viewModel::skipToNext,
-            onToggleFavorite = viewModel::toggleFavorite,
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = RadioControlsBottomInset)
-        )
+                .fillMaxSize()
+                .background(colorScheme.background)
+                .consumePointersUnlessResumed()
+        ) {
+            // 当前曲封面虚化铺满，作氛围底；无封面时仍见主题色背景
+            if (!uiState.coverUrl.isNullOrBlank()) {
+                val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+                AsyncImage(
+                    model = rememberCoverRequest(uiState.coverUrl, screenWidth),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(16.dp),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colorScheme.background.copy(alpha = 0.45f))
+                )
+            }
+
+            CrtTvSceneView(
+                isPlaying = uiState.isPlaying,
+                coverUrl = uiState.coverUrl,
+                modifier = Modifier.fillMaxSize()
+            )
+
+            RadioPlayerControls(
+                uiState = uiState,
+                positionState = viewModel.positionState,
+                onSeek = viewModel::seekTo,
+                onTogglePlayPause = viewModel::togglePlayPause,
+                onSkipPrevious = viewModel::skipToPrevious,
+                onSkipNext = viewModel::skipToNext,
+                onToggleFavorite = viewModel::toggleFavorite,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = RadioControlsBottomInset)
+            )
+        }
     }
 }
 
