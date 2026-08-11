@@ -144,6 +144,7 @@ fun LibraryScreen(
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,
     onChartsClick: () -> Unit = {},
+    onChartClick: (Long) -> Unit = {},
     onPlaylistClick: (Long) -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
@@ -195,7 +196,7 @@ fun LibraryScreen(
         item {
             ChartsSection(
                 charts = uiState.charts,
-                onChartClick = onPlaylistClick,
+                onChartClick = onChartClick,
                 onChartSongClick = viewModel::onChartSongClick,
                 onViewAllClick = onChartsClick
             )

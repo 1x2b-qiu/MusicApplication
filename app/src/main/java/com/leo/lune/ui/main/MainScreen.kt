@@ -27,6 +27,7 @@ fun MainScreen(
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,
     onChartsClick: () -> Unit = {},
+    onChartClick: (Long) -> Unit = {},
     onPlaylistClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -59,6 +60,7 @@ fun MainScreen(
                 onDailyMixClick = onDailyMixClick,
                 onPlaylistPlazaClick = onPlaylistPlazaClick,
                 onChartsClick = onChartsClick,
+                onChartClick = onChartClick,
                 onPlaylistClick = onPlaylistClick
             )
         }

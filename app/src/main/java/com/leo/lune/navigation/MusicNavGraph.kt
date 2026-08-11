@@ -46,6 +46,7 @@ import com.leo.lune.ui.login.LoginScreen
 import com.leo.lune.ui.main.MainScreen
 import com.leo.lune.ui.player.PlayerScreen
 import com.leo.lune.ui.playlistdetail.PlaylistDetailScreen
+import com.leo.lune.ui.charts.ChartDetailScreen
 import com.leo.lune.ui.charts.ChartsScreen
 import com.leo.lune.ui.playlistplaza.PlaylistPlazaScreen
 import com.leo.lune.ui.recent.RecentScreen
@@ -108,6 +109,7 @@ private fun MusicNavHost(
             currentDestination?.hasRoute<MusicRoute.DailyMix>() == true ||
             currentDestination?.hasRoute<MusicRoute.PlaylistPlaza>() == true ||
             currentDestination?.hasRoute<MusicRoute.Charts>() == true ||
+            currentDestination?.hasRoute<MusicRoute.ChartDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.PlaylistDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
             currentDestination?.hasRoute<MusicRoute.Downloads>() == true
@@ -160,6 +162,11 @@ private fun MusicNavHost(
                         },
                         onChartsClick = {
                             navController.navigateSingleTopTo(MusicRoute.Charts)
+                        },
+                        onChartClick = { chartId ->
+                            navController.navigateSingleTopTo(
+                                MusicRoute.ChartDetail(chartId)
+                            )
                         },
                         onPlaylistClick = { playlistId ->
                             navController.navigateSingleTopTo(
@@ -250,9 +257,15 @@ private fun MusicNavHost(
                         onBack = { navController.popBackStack() },
                         onChartClick = { chartId ->
                             navController.navigateSingleTopTo(
-                                MusicRoute.PlaylistDetail(chartId)
+                                MusicRoute.ChartDetail(chartId)
                             )
                         }
+                    )
+                }
+
+                composable<MusicRoute.ChartDetail> {
+                    ChartDetailScreen(
+                        onBack = { navController.popBackStack() }
                     )
                 }
 
