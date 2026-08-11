@@ -14,5 +14,7 @@ data class PlaylistDetail(
     // 风格标签，可能为空
     val tags: List<String>,
     val creatorName: String?,
-    val creatorAvatarUrl: String?
+    val creatorAvatarUrl: String?,
+    // 当前登录用户是否已收藏；未登录时一般为 false
+    val subscribed: Boolean
 )

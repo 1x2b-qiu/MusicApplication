@@ -30,9 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -78,8 +76,6 @@ fun PlaylistDetailScreen(
     val miniPlayerBottomInset = 78.dp
     val playlist = uiState.playlist
 
-    var liked by remember { mutableStateOf(false) }
-
     val statusMessage = when {
         uiState.isLoading && uiState.songs.isEmpty() -> "加载中…"
         uiState.error != null && uiState.songs.isEmpty() -> uiState.error
@@ -103,9 +99,9 @@ fun PlaylistDetailScreen(
                 .padding(horizontal = 16.dp)
         ) {
             PlaylistDetailTopBar(
-                liked = liked,
+                liked = uiState.isSubscribed,
                 onBack = onBack,
-                onLikeClick = { liked = !liked }
+                onLikeClick = viewModel::onSubscribeClick
             )
 
             Column(

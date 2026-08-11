@@ -9,7 +9,10 @@ import androidx.navigation.toRoute
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.domain.model.PlaylistDetail
 import com.leo.lune.domain.model.Song
+import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.MusicRepository
+import com.leo.lune.manager.FavoriteManager
+import com.leo.lune.manager.FavoriteResult
 import com.leo.lune.navigation.MusicRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -19,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -37,7 +41,11 @@ data class PlaylistDetailUiState(
     // 是否正在播放，驱动主播放钮图标
     val isPlaying: Boolean = false,
     // 本页会话内是否已点过主播放钮；ViewModel 销毁后随状态重置
-    val hasStartedPlayAll: Boolean = false
+    val hasStartedPlayAll: Boolean = false,
+    // 当前用户是否已收藏该歌单；驱动右上角红心
+    val isSubscribed: Boolean = false,
+    // 收藏请求进行中，避免连点重复提交
+    val isSubscribeUpdating: Boolean = false
 )
 
 // 歌单详情页 ViewModel
@@ -45,6 +53,9 @@ data class PlaylistDetailUiState(
 @HiltViewModel
 class PlaylistDetailViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
+    private val authRepository: AuthRepository,
+    // 复用红心 Toast 通道，展示歌单收藏结果
+    private val favoriteManager: FavoriteManager,
     // 全局播放控制器，本页不直接持有 ExoPlayer
     private val playerController: MusicPlayerController,
     savedStateHandle: SavedStateHandle
@@ -60,6 +71,8 @@ class PlaylistDetailViewModel @Inject constructor(
 
     // 当前进行中的加载任务，重试时可取消旧任务
     private var loadJob: Job? = null
+    // 当前进行中的收藏任务
+    private var subscribeJob: Job? = null
 
     init {
         loadPlaylist()
@@ -96,6 +109,48 @@ class PlaylistDetailViewModel @Inject constructor(
         }
     }
 
+    // 右上角红心：收藏 / 取消收藏歌单（乐观更新，失败回滚）
+    fun onSubscribeClick() {
+        val state = _uiState.value
+        if (state.playlist == null || state.isSubscribeUpdating) return
+
+        subscribeJob?.cancel()
+        subscribeJob = viewModelScope.launch {
+            val loginState = authRepository.observeLoginState().first()
+            if (!loginState.isLoggedIn) {
+                favoriteManager.emitResult(FavoriteResult.Failure("请先登录后收藏"))
+                return@launch
+            }
+
+            val targetSubscribed = !state.isSubscribed
+            _uiState.update {
+                it.copy(
+                    isSubscribed = targetSubscribed,
+                    isSubscribeUpdating = true,
+                    playlist = it.playlist?.copy(subscribed = targetSubscribed)
+                )
+            }
+
+            runCatching {
+                musicRepository.subscribePlaylist(playlistId, subscribe = targetSubscribed)
+            }.onSuccess { result ->
+                if (!result.success) {
+                    revertSubscribe(targetSubscribed, "收藏操作失败")
+                } else {
+                    _uiState.update { it.copy(isSubscribeUpdating = false) }
+                    favoriteManager.emitResult(
+                        FavoriteResult.Success(
+                            liked = targetSubscribed,
+                            message = if (targetSubscribed) "已收藏歌单" else "已取消收藏"
+                        )
+                    )
+                }
+            }.onFailure { throwable ->
+                revertSubscribe(targetSubscribed, throwable.message ?: "收藏操作失败")
+            }
+        }
+    }
+
     // 加载失败后由 UI 触发重试
     fun onRetry() {
         loadPlaylist()
@@ -124,6 +179,8 @@ class PlaylistDetailViewModel @Inject constructor(
                         songs = songs,
                         isLoading = false,
                         error = null,
+                        isSubscribed = detail.subscribed,
+                        isSubscribeUpdating = false,
                         // 列表刷新后允许重新「首次播放」
                         hasStartedPlayAll = false
                     )
@@ -137,5 +194,18 @@ class PlaylistDetailViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    // 收藏请求失败时回滚红心态
+    private fun revertSubscribe(attemptedSubscribed: Boolean, message: String) {
+        val rolledBack = !attemptedSubscribed
+        _uiState.update {
+            it.copy(
+                isSubscribed = rolledBack,
+                isSubscribeUpdating = false,
+                playlist = it.playlist?.copy(subscribed = rolledBack)
+            )
+        }
+        favoriteManager.emitResult(FavoriteResult.Failure(message))
     }
 }

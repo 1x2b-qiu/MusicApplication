@@ -17,6 +17,8 @@ data class PlaylistDetailDto(
     @SerializedName("coverImgUrl") val coverImgUrl: String? = null,
     val trackCount: Int? = null,
     val tags: List<String>? = null,
+    // true 表示当前登录用户已收藏该歌单
+    val subscribed: Boolean? = null,
     val creator: PlaylistCreatorDto? = null
 )
 

@@ -13,6 +13,7 @@ import com.leo.lune.domain.model.PlaylistCategory
 import com.leo.lune.domain.model.PlaylistDetail
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
+import com.leo.lune.domain.model.SubscribePlaylistResult
 import com.leo.lune.domain.model.UserPlaylist
 
 // 网易云 API DTO → 领域模型映射
@@ -72,7 +73,8 @@ fun PlaylistDetailDto.toPlaylistDetail(): PlaylistDetail {
         trackCount = trackCount ?: 0,
         tags = tags.orEmpty().map { it.trim() }.filter { it.isNotEmpty() },
         creatorName = creator?.nickname?.trim()?.takeIf { it.isNotEmpty() },
-        creatorAvatarUrl = normalizeCoverUrl(creator?.avatarUrl)
+        creatorAvatarUrl = normalizeCoverUrl(creator?.avatarUrl),
+        subscribed = subscribed == true
     )
 }
 
@@ -114,6 +116,14 @@ fun TopPlaylistDto.toPersonalizedPlaylist(): PersonalizedPlaylist? {
 // 收藏接口状态码 → 领域结果
 fun Int.toLikeSongResult(): LikeSongResult {
     return LikeSongResult(
+        success = this == 200,
+        code = this
+    )
+}
+
+// 歌单收藏接口状态码 → 领域结果
+fun Int.toSubscribePlaylistResult(): SubscribePlaylistResult {
+    return SubscribePlaylistResult(
         success = this == 200,
         code = this
     )

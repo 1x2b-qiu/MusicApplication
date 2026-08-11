@@ -7,6 +7,7 @@ import com.leo.lune.data.mapper.toPlaylistCategory
 import com.leo.lune.data.mapper.toPlaylistDetail
 import com.leo.lune.data.mapper.toSong
 import com.leo.lune.data.mapper.toSongUrl
+import com.leo.lune.data.mapper.toSubscribePlaylistResult
 import com.leo.lune.data.mapper.toUserPlaylist
 import com.leo.lune.data.remote.api.NeteaseApi
 import com.leo.lune.data.remote.response.SuggestAlbumDto
@@ -23,6 +24,7 @@ import com.leo.lune.domain.model.SearchSuggestion
 import com.leo.lune.domain.model.SearchSuggestionType
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
+import com.leo.lune.domain.model.SubscribePlaylistResult
 import com.leo.lune.domain.model.UserPlaylist
 import com.leo.lune.domain.repository.MusicRepository
 import kotlinx.coroutines.async
@@ -109,6 +111,18 @@ class MusicRepositoryImpl @Inject constructor(
         return response.code.toLikeSongResult()
     }
 
+    // 收藏或取消收藏歌单；t=1 收藏，t=2 取消
+    override suspend fun subscribePlaylist(
+        playlistId: Long,
+        subscribe: Boolean
+    ): SubscribePlaylistResult {
+        val response = neteaseApi.subscribePlaylist(
+            action = if (subscribe) 1 else 2,
+            playlistId = playlistId
+        )
+        return response.code.toSubscribePlaylistResult()
+    }
+
     // 获取用户红心歌单中的歌曲 ID 列表
     override suspend fun getLikedSongIds(userId: Long): List<Long> {
         val response = neteaseApi.getLikelist(userId = userId)
@@ -145,7 +159,7 @@ class MusicRepositoryImpl @Inject constructor(
         return response.playlist.orEmpty().map { it.toUserPlaylist() }
     }
 
-    // 获取歌单详情元数据
+    // 获取歌单详情元数据（带 timestamp，打穿代理缓存以保证 subscribed 回显）
     override suspend fun getPlaylistDetail(playlistId: Long): PlaylistDetail {
         val response = neteaseApi.getPlaylistDetail(playlistId)
         if (response.code != 200) {

@@ -18,8 +18,12 @@ import javax.inject.Singleton
 
 // 收藏操作结果；UI 层据此展示 Toast
 sealed interface FavoriteResult {
-    // liked=true 表示已喜欢，false 表示已取消喜欢
-    data class Success(val liked: Boolean) : FavoriteResult
+        // liked=true 表示已喜欢/已收藏，false 表示已取消
+    // message 非空时 Toast 优先用自定义文案（如歌单收藏）
+    data class Success(
+        val liked: Boolean,
+        val message: String? = null
+    ) : FavoriteResult
     data class Failure(val message: String) : FavoriteResult
 }
 
@@ -107,6 +111,11 @@ class FavoriteManager @Inject constructor(
         if (_isFavorite.value != favorite) {
             _isFavorite.value = favorite
         }
+    }
+
+    // 供歌单收藏等非红心场景复用全局 Toast 通道
+    fun emitResult(result: FavoriteResult) {
+        _results.tryEmit(result)
     }
 
     // 从服务端刷新红心 id 集合，并同步当前曲收藏态

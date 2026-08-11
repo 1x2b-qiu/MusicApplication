@@ -40,7 +40,8 @@ class FavoriteToastViewModel @Inject constructor(
             favoriteManager.results.collect { result ->
                 _toast.value = when (result) {
                     is FavoriteResult.Success -> FavoriteToastUi(
-                        message = if (result.liked) "已添加到我喜欢的" else "已取消喜欢",
+                        message = result.message
+                            ?: if (result.liked) "已添加到我喜欢的" else "已取消喜欢",
                         type = AppToastType.Success,
                         key = System.nanoTime()
                     )
