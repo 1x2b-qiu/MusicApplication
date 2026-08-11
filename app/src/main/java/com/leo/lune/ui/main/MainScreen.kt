@@ -26,6 +26,7 @@ fun MainScreen(
     onRecentClick: () -> Unit,
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,
+    onChartsClick: () -> Unit = {},
     onPlaylistClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -57,6 +58,7 @@ fun MainScreen(
             LibraryScreen(
                 onDailyMixClick = onDailyMixClick,
                 onPlaylistPlazaClick = onPlaylistPlazaClick,
+                onChartsClick = onChartsClick,
                 onPlaylistClick = onPlaylistClick
             )
         }

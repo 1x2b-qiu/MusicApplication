@@ -31,6 +31,9 @@ sealed interface MusicRoute {
     data object PlaylistPlaza : MusicRoute
 
     @Serializable
+    data object Charts : MusicRoute
+
+    @Serializable
     data class PlaylistDetail(val playlistId: Long) : MusicRoute
 
     @Serializable

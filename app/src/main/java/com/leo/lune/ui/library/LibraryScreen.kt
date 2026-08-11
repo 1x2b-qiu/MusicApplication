@@ -143,6 +143,7 @@ private val GuessYouLikePageHeight = 72.dp * GuessYouLikePageSize + 6.dp * (Gues
 fun LibraryScreen(
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,
+    onChartsClick: () -> Unit = {},
     onPlaylistClick: (Long) -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
@@ -194,9 +195,9 @@ fun LibraryScreen(
         item {
             ChartsSection(
                 charts = uiState.charts,
-                onChartClick = viewModel::onChartClick,
+                onChartClick = onPlaylistClick,
                 onChartSongClick = viewModel::onChartSongClick,
-                onViewAllClick = viewModel::onChartsAllClick
+                onViewAllClick = onChartsClick
             )
         }
 
@@ -724,7 +725,10 @@ private fun ChartsSection(
     if (charts.isEmpty()) return
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        HomeSectionHeader(title = "排行榜")
+        HomeSectionHeader(
+            title = "排行榜",
+            onViewAllClick = onViewAllClick
+        )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {

@@ -319,11 +319,6 @@ class LibraryViewModel @Inject constructor(
         playerController.playSong(song, queue)
     }
 
-    // 排行榜：进入详情（暂留空）
-    fun onChartClick(chartId: Long) = Unit
-
-    fun onChartsAllClick() = Unit
-
     fun onGenreClick(genreId: Long) = Unit
 
     // 当前是否正在播放每日推荐队列
