@@ -118,6 +118,7 @@ fun PlaylistPlazaScreen(
                 items(uiState.playlists, key = { it.id }) { playlist ->
                     PlaylistPlazaCard(
                         playlist = playlist,
+                        isPlayingThis = uiState.playingPlaylistId == playlist.id,
                         onOpenClick = { onPlaylistClick(playlist.id) },
                         onPlayClick = { viewModel.onPlaylistPlayClick(playlist.id) }
                     )
@@ -219,6 +220,7 @@ private fun CategoryTab(
 @Composable
 private fun PlaylistPlazaCard(
     playlist: PlaylistPlazaItem,
+    isPlayingThis: Boolean,
     onOpenClick: () -> Unit,
     onPlayClick: () -> Unit
 ) {
@@ -286,8 +288,10 @@ private fun PlaylistPlazaCard(
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(R.drawable.ic_play),
-                    contentDescription = "播放歌单",
+                    painter = painterResource(
+                        if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
+                    ),
+                    contentDescription = if (isPlayingThis) "暂停" else "播放歌单",
                     colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
                     modifier = Modifier.size(18.dp)
                 )

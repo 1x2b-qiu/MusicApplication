@@ -2,6 +2,7 @@ package com.leo.lune.ui.playlistplaza
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.repository.MusicRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -11,6 +12,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -47,7 +50,9 @@ data class PlaylistPlazaUiState(
     // 是否正在拉取分类或歌单
     val isLoading: Boolean = false,
     // 加载失败时的错误信息；有列表数据时可不展示
-    val error: String? = null
+    val error: String? = null,
+    // 当前正在播放的歌单 id；无则为 null，驱动封面播放钮图标
+    val playingPlaylistId: Long? = null
 )
 
 // 歌单广场 ViewModel
@@ -55,7 +60,9 @@ data class PlaylistPlazaUiState(
 // 某分类歌单 → getTopPlaylists(cat = 分类名)
 @HiltViewModel
 class PlaylistPlazaViewModel @Inject constructor(
-    private val musicRepository: MusicRepository
+    private val musicRepository: MusicRepository,
+    // 全局播放控制器，本页不直接持有 ExoPlayer
+    private val playerController: MusicPlayerController
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlaylistPlazaUiState(isLoading = true))
@@ -64,9 +71,32 @@ class PlaylistPlazaViewModel @Inject constructor(
 
     // 当前进行中的加载任务；切 Tab / 重试时取消旧任务，避免乱序回写
     private var loadPlaylistsJob: Job? = null
+    // 歌单播放标记：用于判断当前播放是否来自某个广场歌单
+    private val playlistMarkers = mutableMapOf<Long, PlazaPlaylistMarker>()
 
     init {
         loadInitial()
+        // 同步封面播放钮播/停状态
+        viewModelScope.launch {
+            playerController.playbackState
+                .map { state ->
+                    Triple(
+                        state.isPlaying,
+                        state.queue.firstOrNull()?.id,
+                        state.currentSong?.id
+                    )
+                }
+                .distinctUntilChanged()
+                .collect { (isPlaying, queueFirstId, currentSongId) ->
+                    _uiState.update {
+                        it.copy(
+                            playingPlaylistId = resolvePlayingPlaylistId(
+                                isPlaying, queueFirstId, currentSongId
+                            )
+                        )
+                    }
+                }
+        }
     }
 
     // 切换分类 Tab：先清空列表再拉取，避免短暂展示上一分类数据
@@ -93,11 +123,28 @@ class PlaylistPlazaViewModel @Inject constructor(
         }
     }
 
-    // 进入歌单详情（暂留空）
-    fun onPlaylistClick(playlistId: Long) = Unit
+    // 封面播放钮：拉取歌单曲目并播放；若正在播该歌单则暂停
+    fun onPlaylistPlayClick(playlistId: Long) {
+        val playback = playerController.playbackState.value
+        val isPlayingThis = _uiState.value.playingPlaylistId == playlistId &&
+            playback.isPlaying
+        if (isPlayingThis) {
+            playerController.togglePlayPause()
+            return
+        }
 
-    // 播放歌单（暂留空）
-    fun onPlaylistPlayClick(playlistId: Long) = Unit
+        viewModelScope.launch {
+            runCatching { musicRepository.getPlaylistSongs(playlistId, limit = null) }
+                .onSuccess { songs ->
+                    if (songs.isEmpty()) return@onSuccess
+                    playlistMarkers[playlistId] = PlazaPlaylistMarker(
+                        firstSongId = songs.first().id,
+                        songIds = songs.map { it.id }.toSet()
+                    )
+                    playerController.playSong(songs.first(), songs)
+                }
+        }
+    }
 
     // 进页：并行拉分类标签 + 推荐歌单
     // 一侧失败仍尽量展示另一侧；两侧都失败才整页错误
@@ -189,6 +236,18 @@ class PlaylistPlazaViewModel @Inject constructor(
         }
     }
 
+    // 返回当前正在播放的广场歌单 id；无则为 null
+    private fun resolvePlayingPlaylistId(
+        isPlaying: Boolean,
+        queueFirstId: Long?,
+        currentSongId: Long?
+    ): Long? {
+        if (!isPlaying || currentSongId == null || queueFirstId == null) return null
+        return playlistMarkers.entries.firstOrNull { (_, marker) ->
+            marker.firstSongId == queueFirstId && currentSongId in marker.songIds
+        }?.key
+    }
+
     companion object {
         // 推荐 Tab 拉取条数
         private const val RecommendPlaylistLimit = 50
@@ -196,6 +255,12 @@ class PlaylistPlazaViewModel @Inject constructor(
         private const val CategoryPlaylistLimit = 50
     }
 }
+
+// 广场歌单播放标记：首曲 id + 队列歌曲集合，用于匹配全局播放状态
+private data class PlazaPlaylistMarker(
+    val firstSongId: Long,
+    val songIds: Set<Long>
+)
 
 // 领域歌单 → 广场网格 UI 模型
 private fun PersonalizedPlaylist.toPlazaItem(): PlaylistPlazaItem = PlaylistPlazaItem(
