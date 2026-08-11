@@ -136,6 +136,7 @@ fun PlaylistDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
+                            .padding(top = 8.dp)
                     ) {
                         itemsIndexed(
                             items = uiState.songs,
