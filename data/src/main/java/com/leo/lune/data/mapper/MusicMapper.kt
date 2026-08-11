@@ -1,6 +1,7 @@
 package com.leo.lune.data.mapper
 
 import com.leo.lune.data.remote.response.PersonalizedPlaylistDto
+import com.leo.lune.data.remote.response.PlaylistDetailDto
 import com.leo.lune.data.remote.response.PlaylistDto
 import com.leo.lune.data.remote.response.PlaylistHotTagDto
 import com.leo.lune.data.remote.response.SongDto
@@ -9,6 +10,7 @@ import com.leo.lune.data.remote.response.TopPlaylistDto
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.PlaylistCategory
+import com.leo.lune.domain.model.PlaylistDetail
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.UserPlaylist
@@ -57,6 +59,20 @@ fun PlaylistDto.toUserPlaylist(): UserPlaylist {
         coverUrl = coverImgUrl,
         specialType = specialType,
         subscribed = subscribed
+    )
+}
+
+// 歌单详情 DTO → 领域模型
+fun PlaylistDetailDto.toPlaylistDetail(): PlaylistDetail {
+    return PlaylistDetail(
+        id = id,
+        name = name.orEmpty(),
+        description = description?.trim()?.takeIf { it.isNotEmpty() },
+        coverUrl = normalizeCoverUrl(coverImgUrl),
+        trackCount = trackCount ?: 0,
+        tags = tags.orEmpty().map { it.trim() }.filter { it.isNotEmpty() },
+        creatorName = creator?.nickname?.trim()?.takeIf { it.isNotEmpty() },
+        creatorAvatarUrl = normalizeCoverUrl(creator?.avatarUrl)
     )
 }
 

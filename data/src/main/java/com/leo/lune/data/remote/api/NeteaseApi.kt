@@ -10,6 +10,7 @@ import com.leo.lune.data.remote.response.PersonalFmResponse
 import com.leo.lune.data.remote.response.PersonalizedNewsongResponse
 import com.leo.lune.data.remote.response.PersonalizedPlaylistResponse
 import com.leo.lune.data.remote.response.PlaylistHotResponse
+import com.leo.lune.data.remote.response.PlaylistDetailResponse
 import com.leo.lune.data.remote.response.PlaylistTrackAllResponse
 import com.leo.lune.data.remote.response.RecommendSongsResponse
 import com.leo.lune.data.remote.response.SearchHotResponse
@@ -93,6 +94,12 @@ interface NeteaseApi {
         @Query("limit") limit: Int? = null,
         @Query("offset") offset: Int = 0
     ): PlaylistTrackAllResponse
+
+    // 获取歌单详情（封面、创建者、简介、标签等）
+    @GET("playlist/detail")
+    suspend fun getPlaylistDetail(
+        @Query("id") playlistId: Long
+    ): PlaylistDetailResponse
 
     // 获取私人 FM 一批歌曲（需登录）；可重复调用以续拉
     // timestamp：打穿代理对相同 URL 的短时缓存，避免连点下一首拿到同一批

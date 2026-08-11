@@ -4,6 +4,7 @@ import com.leo.lune.data.mapper.normalizeCoverUrl
 import com.leo.lune.data.mapper.toLikeSongResult
 import com.leo.lune.data.mapper.toPersonalizedPlaylist
 import com.leo.lune.data.mapper.toPlaylistCategory
+import com.leo.lune.data.mapper.toPlaylistDetail
 import com.leo.lune.data.mapper.toSong
 import com.leo.lune.data.mapper.toSongUrl
 import com.leo.lune.data.mapper.toUserPlaylist
@@ -16,6 +17,7 @@ import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.PlaylistCategory
+import com.leo.lune.domain.model.PlaylistDetail
 import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.SearchSuggestion
 import com.leo.lune.domain.model.SearchSuggestionType
@@ -141,6 +143,17 @@ class MusicRepositoryImpl @Inject constructor(
             throw IllegalStateException("Get user playlists failed with code ${response.code}")
         }
         return response.playlist.orEmpty().map { it.toUserPlaylist() }
+    }
+
+    // 获取歌单详情元数据
+    override suspend fun getPlaylistDetail(playlistId: Long): PlaylistDetail {
+        val response = neteaseApi.getPlaylistDetail(playlistId)
+        if (response.code != 200) {
+            throw IllegalStateException("Get playlist detail failed with code ${response.code}")
+        }
+        val playlist = response.playlist
+            ?: throw IllegalStateException("Playlist detail missing for id $playlistId")
+        return playlist.toPlaylistDetail()
     }
 
     // 获取歌单内全部歌曲

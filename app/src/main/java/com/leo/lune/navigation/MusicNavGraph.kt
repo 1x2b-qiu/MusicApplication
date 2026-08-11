@@ -31,6 +31,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.leo.lune.permission.PermissionCoordinator
 import com.leo.lune.ui.component.bottombar.BottomTabBar
 import com.leo.lune.ui.component.dialog.AppConfirmDialogHost
 import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeader
@@ -38,21 +39,21 @@ import com.leo.lune.ui.component.minplayer.MiniPlayerBar
 import com.leo.lune.ui.component.sidebar.AppSidebar
 import com.leo.lune.ui.component.toast.FavoriteToastHost
 import com.leo.lune.ui.dailymix.DailyMixScreen
-import com.leo.lune.ui.playlistplaza.PlaylistPlazaScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
-import com.leo.lune.permission.PermissionCoordinator
 import com.leo.lune.ui.identify.IdentifyScreen
 import com.leo.lune.ui.liked.LikedScreen
 import com.leo.lune.ui.login.LoginScreen
 import com.leo.lune.ui.main.MainScreen
 import com.leo.lune.ui.player.PlayerScreen
+import com.leo.lune.ui.playlistdetail.PlaylistDetailScreen
+import com.leo.lune.ui.playlistplaza.PlaylistPlazaScreen
 import com.leo.lune.ui.recent.RecentScreen
-import com.leo.lune.ui.theme.DarkColorScheme
 import com.leo.lune.ui.search.SearchScreen
 import com.leo.lune.ui.settings.DownloadSettingsScreen
 import com.leo.lune.ui.settings.PlaybackSettingsScreen
 import com.leo.lune.ui.settings.SettingsScreen
 import com.leo.lune.ui.startup.SessionBootstrapViewModel
+import com.leo.lune.ui.theme.DarkColorScheme
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
 
@@ -105,6 +106,7 @@ private fun MusicNavHost(
             currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
             currentDestination?.hasRoute<MusicRoute.DailyMix>() == true ||
             currentDestination?.hasRoute<MusicRoute.PlaylistPlaza>() == true ||
+            currentDestination?.hasRoute<MusicRoute.PlaylistDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
             currentDestination?.hasRoute<MusicRoute.Downloads>() == true
 
@@ -153,6 +155,11 @@ private fun MusicNavHost(
                         },
                         onPlaylistPlazaClick = {
                             navController.navigateSingleTopTo(MusicRoute.PlaylistPlaza)
+                        },
+                        onPlaylistClick = { playlistId ->
+                            navController.navigateSingleTopTo(
+                                MusicRoute.PlaylistDetail(playlistId)
+                            )
                         }
                     )
                 }
@@ -224,6 +231,17 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.PlaylistPlaza> {
                     PlaylistPlazaScreen(
+                        onBack = { navController.popBackStack() },
+                        onPlaylistClick = { playlistId ->
+                            navController.navigateSingleTopTo(
+                                MusicRoute.PlaylistDetail(playlistId)
+                            )
+                        }
+                    )
+                }
+
+                composable<MusicRoute.PlaylistDetail> {
+                    PlaylistDetailScreen(
                         onBack = { navController.popBackStack() }
                     )
                 }

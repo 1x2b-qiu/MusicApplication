@@ -143,6 +143,7 @@ private val GuessYouLikePageHeight = 72.dp * GuessYouLikePageSize + 6.dp * (Gues
 fun LibraryScreen(
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,
+    onPlaylistClick: (Long) -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -184,7 +185,7 @@ fun LibraryScreen(
             FeaturedPlaylistsSection(
                 playlists = uiState.featuredPlaylists,
                 playingPlaylistId = uiState.playingFeaturedPlaylistId,
-                onPlaylistClick = viewModel::onPlaylistClick,
+                onPlaylistClick = onPlaylistClick,
                 onPlaylistPlayClick = viewModel::onPlaylistPlayClick,
                 onViewAllClick = onPlaylistPlazaClick
             )

@@ -26,6 +26,7 @@ fun MainScreen(
     onRecentClick: () -> Unit,
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,
+    onPlaylistClick: (Long) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -55,7 +56,8 @@ fun MainScreen(
         ) {
             LibraryScreen(
                 onDailyMixClick = onDailyMixClick,
-                onPlaylistPlazaClick = onPlaylistPlazaClick
+                onPlaylistPlazaClick = onPlaylistPlazaClick,
+                onPlaylistClick = onPlaylistClick
             )
         }
     }

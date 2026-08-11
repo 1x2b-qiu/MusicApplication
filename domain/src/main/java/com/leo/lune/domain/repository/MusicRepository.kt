@@ -4,6 +4,7 @@ import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.PlaylistCategory
+import com.leo.lune.domain.model.PlaylistDetail
 import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.SearchSuggestion
 import com.leo.lune.domain.model.Song
@@ -34,6 +35,8 @@ interface MusicRepository {
         limit: Int = 30,
         offset: Int = 0
     ): List<UserPlaylist>
+    // 获取歌单详情元数据
+    suspend fun getPlaylistDetail(playlistId: Long): PlaylistDetail
     // 获取歌单内的歌曲列表
     suspend fun getPlaylistSongs(
         playlistId: Long,
