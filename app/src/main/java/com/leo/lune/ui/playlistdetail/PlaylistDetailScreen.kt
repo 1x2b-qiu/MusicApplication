@@ -61,8 +61,8 @@ private val CoverShape = RoundedCornerShape(20.dp)
 private val PlaylistCoverSize = 108.dp
 
 /**
- * 歌单详情页：顶栏 + 封面信息 + 歌曲列表卡片。
- * 列表区视觉对齐 RecentLibraryCard / RecentTrackRow，本页单独实现。
+ * 歌单详情页：顶栏 + 封面信息 + 歌曲列表。
+ * 列表行视觉对齐 ChartDetailTrackRow，本页单独实现。
  */
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
@@ -117,34 +117,35 @@ fun PlaylistDetailScreen(
                     onPlayAllClick = viewModel::onPlayAllClick
                 )
 
-                PlaylistDetailLibraryCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(top = 16.dp)
-                ) {
-                    if (statusMessage != null) {
-                        PlaylistDetailStatusText(
-                            text = statusMessage,
-                            actionLabel = "重试".takeIf {
-                                uiState.error != null && uiState.songs.isEmpty()
-                            },
-                            onAction = viewModel::onRetry.takeIf {
-                                uiState.error != null && uiState.songs.isEmpty()
-                            }
-                        )
-                    } else {
-                        LazyColumn(modifier = Modifier.fillMaxSize()) {
-                            itemsIndexed(
-                                items = uiState.songs,
-                                key = { _, song -> song.id }
-                            ) { index, song ->
-                                PlaylistDetailTrackRow(
-                                    index = index,
-                                    song = song,
-                                    onClick = { viewModel.onSongClick(song) }
-                                )
-                            }
+                if (statusMessage != null) {
+                    PlaylistDetailStatusText(
+                        text = statusMessage,
+                        actionLabel = "重试".takeIf {
+                            uiState.error != null && uiState.songs.isEmpty()
+                        },
+                        onAction = viewModel::onRetry.takeIf {
+                            uiState.error != null && uiState.songs.isEmpty()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(top = 16.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        itemsIndexed(
+                            items = uiState.songs,
+                            key = { _, song -> song.id }
+                        ) { index, song ->
+                            PlaylistDetailTrackRow(
+                                index = index,
+                                song = song,
+                                onClick = { viewModel.onSongClick(song) }
+                            )
                         }
                     }
                 }
@@ -403,27 +404,7 @@ private fun PlaylistDetailHero(
     }
 }
 
-// 列表外层卡片外壳（视觉对齐 RecentLibraryCard）
-@Composable
-private fun PlaylistDetailLibraryCard(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    val libraryCardShape = RoundedCornerShape(16.dp)
-    val colorScheme = MaterialTheme.colorScheme
-
-    Column(
-        modifier = modifier
-            .clip(libraryCardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(1.dp, colorScheme.surfaceDim, libraryCardShape)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        content()
-    }
-}
-
-// 歌单列表单行：序号 + 封面 + 歌名/歌手专辑 + 时长（视觉对齐 RecentTrackRow）
+// 歌单列表单行：序号 + 封面 + 歌名/歌手专辑 + 时长（视觉对齐 ChartDetailTrackRow）
 @Composable
 private fun PlaylistDetailTrackRow(
     index: Int,
@@ -438,26 +419,31 @@ private fun PlaylistDetailTrackRow(
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = (index + 1).toString().padStart(2, '0'),
+            text = (index + 1).toString(),
             color = colorScheme.onSurfaceVariant,
-            fontSize = 10.sp,
-            letterSpacing = 0.3.sp,
-            modifier = Modifier.width(23.dp)
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Start,
+            modifier = Modifier.width(20.dp)
         )
         AsyncImage(
             model = rememberCoverRequest(song.coverUrl, 43.dp),
             contentDescription = song.name,
             modifier = Modifier
+                .padding(start = 4.dp)
                 .size(43.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(colorScheme.surfaceVariant),
             contentScale = ContentScale.Crop
         )
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 9.dp)
+        ) {
             Text(
                 text = song.name,
                 color = colorScheme.onBackground,
@@ -484,7 +470,8 @@ private fun PlaylistDetailTrackRow(
         Text(
             text = formatSongDuration(song.durationMs),
             color = colorScheme.onSurfaceVariant,
-            fontSize = 11.sp
+            fontSize = 11.sp,
+            modifier = Modifier.padding(start = 9.dp)
         )
     }
 }
@@ -493,13 +480,12 @@ private fun PlaylistDetailTrackRow(
 private fun PlaylistDetailStatusText(
     text: String,
     actionLabel: String? = null,
-    onAction: (() -> Unit)? = null
+    onAction: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
     val colorScheme = MaterialTheme.colorScheme
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(vertical = 40.dp),
+        modifier = modifier.padding(vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

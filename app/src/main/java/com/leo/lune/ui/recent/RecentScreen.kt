@@ -51,6 +51,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -140,31 +141,32 @@ fun RecentScreen(
                     viewModel.onPlayAllClick()
                 }
             )
-            // 单张卡片：内部列表滚动
-            RecentLibraryCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                if (statusMessage != null) {
-                    RecentStatusText(text = statusMessage)
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                    ) {
-                        itemsIndexed(
-                            items = uiState.filteredSongs,
-                            key = { _, song -> song.id }
-                        ) { index, song ->
-                            RecentTrackRow(
-                                index = index,
-                                song = song,
-                                onClick = {
-                                    dismissKeyboard()
-                                    viewModel.onSongClick(song)
-                                }
-                            )
-                        }
+            if (statusMessage != null) {
+                RecentStatusText(
+                    text = statusMessage,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(top = 16.dp)
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    itemsIndexed(
+                        items = uiState.filteredSongs,
+                        key = { _, song -> song.id }
+                    ) { index, song ->
+                        RecentTrackRow(
+                            index = index,
+                            song = song,
+                            onClick = {
+                                dismissKeyboard()
+                                viewModel.onSongClick(song)
+                            }
+                        )
                     }
                 }
             }
@@ -483,28 +485,7 @@ private fun RecentIdentityRow(
     }
 }
 
-// 列表外层卡片外壳（背景 / 描边与 HomeRecentItem 对齐）
-@Composable
-private fun RecentLibraryCard(
-    modifier: Modifier = Modifier,
-    content: @Composable () -> Unit
-) {
-    // 歌曲列表外层卡片圆角（与 HomeRecentItem 一致）
-    val libraryCardShape = RoundedCornerShape(16.dp)
-    val colorScheme = MaterialTheme.colorScheme
-
-    Column(
-        modifier = modifier
-            .clip(libraryCardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(1.dp, colorScheme.surfaceDim, libraryCardShape)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    ) {
-        content()
-    }
-}
-
-// 最近播放列表单行：序号 + 封面 + 歌名/歌手专辑 + 时长
+// 最近播放列表单行：序号 + 封面 + 歌名/歌手专辑 + 时长（视觉对齐 ChartDetailTrackRow）
 @Composable
 private fun RecentTrackRow(
     index: Int,
@@ -519,26 +500,31 @@ private fun RecentTrackRow(
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(vertical = 11.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(9.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = (index + 1).toString().padStart(2, '0'),
+            text = (index + 1).toString(),
             color = colorScheme.onSurfaceVariant,
-            fontSize = 10.sp,
-            letterSpacing = 0.3.sp,
-            modifier = Modifier.width(23.dp)
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Start,
+            modifier = Modifier.width(20.dp)
         )
         AsyncImage(
             model = rememberCoverRequest(song.coverUrl, 43.dp),
             contentDescription = song.name,
             modifier = Modifier
+                .padding(start = 4.dp)
                 .size(43.dp)
                 .clip(RoundedCornerShape(12.dp))
                 .background(colorScheme.surfaceVariant),
             contentScale = ContentScale.Crop
         )
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 9.dp)
+        ) {
             Text(
                 text = song.name,
                 color = colorScheme.onBackground,
@@ -565,19 +551,21 @@ private fun RecentTrackRow(
         Text(
             text = formatSongDuration(song.durationMs),
             color = colorScheme.onSurfaceVariant,
-            fontSize = 11.sp
+            fontSize = 11.sp,
+            modifier = Modifier.padding(start = 9.dp)
         )
     }
 }
 
-// 列表卡片内的空态文案
+// 列表区空态文案
 @Composable
-private fun RecentStatusText(text: String) {
+private fun RecentStatusText(
+    text: String,
+    modifier: Modifier = Modifier
+) {
     val colorScheme = MaterialTheme.colorScheme
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(vertical = 40.dp),
+        modifier = modifier.padding(vertical = 40.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
