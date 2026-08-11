@@ -45,9 +45,6 @@ import com.leo.lune.ui.component.dialog.ConfirmDialogRequest
 import com.leo.lune.ui.component.dialog.rememberConfirmDialogController
 import com.leo.lune.util.consumePointersUnlessResumed
 
-// 设置列表外层卡片圆角（对齐设计稿 rounded-[26px]）
-private val CardShape = RoundedCornerShape(26.dp)
-
 // 行内图标容器圆角（与 SidebarMenuRow 一致）
 private val IconBoxShape = RoundedCornerShape(12.dp)
 
@@ -65,7 +62,7 @@ private val SettingsItems = listOf(
     SettingsItem("about", "关于", Icons.Outlined.Info)
 )
 
-// 设置页：顶栏居中标题 + 圆角卡片列表；清理缓存接真实体积统计
+// 设置页：顶栏居中标题 + 设置列表；清理缓存接真实体积统计
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
@@ -94,7 +91,11 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            SettingsCard {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 16.dp)
+            ) {
                 SettingsItems.forEach { item ->
                     SettingsRow(
                         label = item.label,
@@ -154,25 +155,6 @@ private fun SettingsTopBar(onBack: () -> Unit) {
         )
         // 与左侧返回按钮等宽，保证标题视觉居中
         Spacer(modifier = Modifier.size(36.dp))
-    }
-}
-
-// 列表外层卡片外壳（surfaceVariant + 细描边）
-@Composable
-private fun SettingsCard(
-    content: @Composable () -> Unit
-) {
-    val colorScheme = MaterialTheme.colorScheme
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 16.dp)
-            .clip(CardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(0.67.dp, colorScheme.outlineVariant, CardShape)
-            .padding(horizontal = 8.dp, vertical = 8.dp)
-    ) {
-        content()
     }
 }
 

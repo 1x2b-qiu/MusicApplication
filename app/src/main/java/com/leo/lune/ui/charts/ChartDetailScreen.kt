@@ -142,7 +142,7 @@ fun ChartDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f)
-                        .padding(top = 16.dp),
+                        .padding(top = 8.dp),
                     contentPadding = PaddingValues(bottom = 12.dp)
                 ) {
                     if (topSongs.isNotEmpty()) {
