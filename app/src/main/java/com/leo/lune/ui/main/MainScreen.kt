@@ -29,6 +29,7 @@ fun MainScreen(
     onChartsClick: () -> Unit = {},
     onChartClick: (Long) -> Unit = {},
     onPlaylistClick: (Long) -> Unit = {},
+    onGenreClick: (styleId: Long, styleName: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -61,7 +62,8 @@ fun MainScreen(
                 onPlaylistPlazaClick = onPlaylistPlazaClick,
                 onChartsClick = onChartsClick,
                 onChartClick = onChartClick,
-                onPlaylistClick = onPlaylistClick
+                onPlaylistClick = onPlaylistClick,
+                onGenreClick = onGenreClick
             )
         }
     }

@@ -2,10 +2,12 @@ package com.leo.lune.domain.repository
 
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
+import com.leo.lune.domain.model.MusicStyle
+import com.leo.lune.domain.model.MusicStyleDetail
+import com.leo.lune.domain.model.MusicStyleSongsPage
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.PlaylistCategory
 import com.leo.lune.domain.model.PlaylistDetail
-import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.SearchSuggestion
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.SongUrl
@@ -58,6 +60,14 @@ interface MusicRepository {
     suspend fun getHotPlaylistCategories(): List<PlaylistCategory>
     // 按分类名获取网友精选碟歌单
     suspend fun getTopPlaylists(cat: String, limit: Int = 50): List<PersonalizedPlaylist>
-    // 获取热门风格分类（含封面）
-    suspend fun getHotPlaylistGenres(): List<PlaylistGenre>
+    // 获取曲风列表（顶级风格，含封面）
+    suspend fun getMusicStyles(): List<MusicStyle>
+    // 获取曲风详情
+    suspend fun getMusicStyleDetail(styleId: Long): MusicStyleDetail
+    // 获取曲风下单曲分页
+    suspend fun getMusicStyleSongs(
+        styleId: Long,
+        cursor: Long = 0,
+        size: Int = 30
+    ): MusicStyleSongsPage
 }

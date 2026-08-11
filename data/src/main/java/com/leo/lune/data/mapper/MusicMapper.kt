@@ -32,11 +32,14 @@ fun SongDto.toSong(): Song {
     )
 }
 
-// 补全协议相对路径的封面 URL（//xxx → https://xxx）
+// 补全协议相对路径的封面 URL（//xxx → https://xxx；yyimgs/ → CDN）
 internal fun normalizeCoverUrl(url: String?): String? {
     if (url.isNullOrBlank()) return null
     return when {
         url.startsWith("//") -> "https:$url"
+        // 曲风列表子标签常用相对路径 yyimgs/{hash}/{id}
+        url.startsWith("yyimgs/") ->
+            "https://p1.music.126.net/${url.removePrefix("yyimgs/")}"
         else -> url
     }
 }

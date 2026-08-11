@@ -37,6 +37,12 @@ sealed interface MusicRoute {
     data class ChartDetail(val chartId: Long) : MusicRoute
 
     @Serializable
+    data class GenreDetail(
+        val styleId: Long,
+        val styleName: String = ""
+    ) : MusicRoute
+
+    @Serializable
     data class PlaylistDetail(val playlistId: Long) : MusicRoute
 
     @Serializable

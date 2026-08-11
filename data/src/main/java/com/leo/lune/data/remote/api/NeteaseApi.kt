@@ -19,6 +19,9 @@ import com.leo.lune.data.remote.response.SearchResponse
 import com.leo.lune.data.remote.response.SearchSuggestResponse
 import com.leo.lune.data.remote.response.SongDetailResponse
 import com.leo.lune.data.remote.response.SongUrlResponse
+import com.leo.lune.data.remote.response.StyleDetailResponse
+import com.leo.lune.data.remote.response.StyleListResponse
+import com.leo.lune.data.remote.response.StyleSongResponse
 import com.leo.lune.data.remote.response.TopPlaylistResponse
 import com.leo.lune.data.remote.response.UserPlaylistResponse
 import retrofit2.http.Field
@@ -137,7 +140,7 @@ interface NeteaseApi {
         @Query("limit") limit: Int = 10
     ): PersonalizedPlaylistResponse
 
-    // 获取热门歌单分类（风格分类）
+    // 获取热门歌单分类标签（歌单广场 Tab）
     @GET("playlist/hot")
     suspend fun getPlaylistHot(): PlaylistHotResponse
 
@@ -148,6 +151,25 @@ interface NeteaseApi {
         @Query("limit") limit: Int = 1,
         @Query("order") order: String = "hot"
     ): TopPlaylistResponse
+
+    // 曲风列表（顶级 + 子风格树）
+    @GET("style/list")
+    suspend fun getStyleList(): StyleListResponse
+
+    // 曲风详情（简介、封面、数量文案）
+    @GET("style/detail")
+    suspend fun getStyleDetail(
+        @Query("tagId") tagId: Long
+    ): StyleDetailResponse
+
+    // 曲风下单曲；cursor 为偏移，size 为每页条数
+    @GET("style/song")
+    suspend fun getStyleSong(
+        @Query("tagId") tagId: Long,
+        @Query("cursor") cursor: Long = 0,
+        @Query("size") size: Int = 30,
+        @Query("sort") sort: Int = 0
+    ): StyleSongResponse
 
     // 向手机号发送登录验证码
     @GET("captcha/sent")

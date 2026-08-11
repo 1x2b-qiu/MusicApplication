@@ -48,6 +48,7 @@ import com.leo.lune.ui.player.PlayerScreen
 import com.leo.lune.ui.playlistdetail.PlaylistDetailScreen
 import com.leo.lune.ui.charts.ChartDetailScreen
 import com.leo.lune.ui.charts.ChartsScreen
+import com.leo.lune.ui.genredetail.GenreDetailScreen
 import com.leo.lune.ui.playlistplaza.PlaylistPlazaScreen
 import com.leo.lune.ui.recent.RecentScreen
 import com.leo.lune.ui.search.SearchScreen
@@ -110,6 +111,7 @@ private fun MusicNavHost(
             currentDestination?.hasRoute<MusicRoute.PlaylistPlaza>() == true ||
             currentDestination?.hasRoute<MusicRoute.Charts>() == true ||
             currentDestination?.hasRoute<MusicRoute.ChartDetail>() == true ||
+            currentDestination?.hasRoute<MusicRoute.GenreDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.PlaylistDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
             currentDestination?.hasRoute<MusicRoute.Downloads>() == true
@@ -171,6 +173,14 @@ private fun MusicNavHost(
                         onPlaylistClick = { playlistId ->
                             navController.navigateSingleTopTo(
                                 MusicRoute.PlaylistDetail(playlistId)
+                            )
+                        },
+                        onGenreClick = { styleId, styleName ->
+                            navController.navigateSingleTopTo(
+                                MusicRoute.GenreDetail(
+                                    styleId = styleId,
+                                    styleName = styleName
+                                )
                             )
                         }
                     )
@@ -265,6 +275,12 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.ChartDetail> {
                     ChartDetailScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable<MusicRoute.GenreDetail> {
+                    GenreDetailScreen(
                         onBack = { navController.popBackStack() }
                     )
                 }

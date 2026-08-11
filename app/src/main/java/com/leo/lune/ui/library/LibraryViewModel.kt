@@ -5,8 +5,8 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
+import com.leo.lune.domain.model.MusicStyle
 import com.leo.lune.domain.model.PersonalizedPlaylist
-import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.MusicRepository
@@ -249,10 +249,10 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    // 拉取热门风格分类（含封面）
+    // 拉取顶级曲风列表（含封面）
     private fun loadGenres() {
         viewModelScope.launch {
-            runCatching { musicRepository.getHotPlaylistGenres() }
+            runCatching { musicRepository.getMusicStyles() }
                 .onSuccess { genres ->
                     _uiState.update {
                         it.copy(genres = genres.map { genre -> genre.toGenreItem() })
@@ -319,8 +319,6 @@ class LibraryViewModel @Inject constructor(
         playerController.playSong(song, queue)
     }
 
-    fun onGenreClick(genreId: Long) = Unit
-
     // 当前是否正在播放每日推荐队列
     private fun isPlayingDailyRecommend(
         isPlaying: Boolean,
@@ -369,7 +367,7 @@ private fun PersonalizedPlaylist.toFeaturedItem(): FeaturedPlaylistItem =
         coverUrl = coverUrl.orEmpty()
     )
 
-private fun PlaylistGenre.toGenreItem(): GenreItem = GenreItem(
+private fun MusicStyle.toGenreItem(): GenreItem = GenreItem(
     id = id,
     name = name,
     coverUrl = coverUrl.orEmpty()

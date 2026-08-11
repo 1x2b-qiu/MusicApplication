@@ -16,10 +16,12 @@ import com.leo.lune.data.remote.response.SuggestSongDto
 import com.leo.lune.data.util.LrcParser
 import com.leo.lune.domain.model.LikeSongResult
 import com.leo.lune.domain.model.LyricLine
+import com.leo.lune.domain.model.MusicStyle
+import com.leo.lune.domain.model.MusicStyleDetail
+import com.leo.lune.domain.model.MusicStyleSongsPage
 import com.leo.lune.domain.model.PersonalizedPlaylist
 import com.leo.lune.domain.model.PlaylistCategory
 import com.leo.lune.domain.model.PlaylistDetail
-import com.leo.lune.domain.model.PlaylistGenre
 import com.leo.lune.domain.model.SearchSuggestion
 import com.leo.lune.domain.model.SearchSuggestionType
 import com.leo.lune.domain.model.Song
@@ -27,9 +29,6 @@ import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.SubscribePlaylistResult
 import com.leo.lune.domain.model.UserPlaylist
 import com.leo.lune.domain.repository.MusicRepository
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -241,34 +240,61 @@ class MusicRepositoryImpl @Inject constructor(
         return response.playlists.orEmpty().mapNotNull { it.toPersonalizedPlaylist() }
     }
 
-    // 获取热门风格分类，并为每个分类补一张热门歌单封面
-    override suspend fun getHotPlaylistGenres(): List<PlaylistGenre> = coroutineScope {
-        val response = neteaseApi.getPlaylistHot()
+    // 获取顶级曲风列表（含封面）；子风格不在曲库入口展示
+    override suspend fun getMusicStyles(): List<MusicStyle> {
+        val response = neteaseApi.getStyleList()
         if (response.code != 200) {
-            throw IllegalStateException("Get playlist hot tags failed with code ${response.code}")
+            throw IllegalStateException("Get style list failed with code ${response.code}")
         }
-        val tags = response.tags.orEmpty().mapNotNull { tag ->
-            val id = tag.id ?: return@mapNotNull null
-            val name = tag.name?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            id to name
+        return response.data.orEmpty().mapNotNull { tag ->
+            val id = tag.tagId ?: return@mapNotNull null
+            val name = tag.tagName?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+            MusicStyle(
+                id = id,
+                name = name,
+                coverUrl = normalizeCoverUrl(tag.picUrl)
+            )
         }
-        tags.map { (id, name) ->
-            async {
-                val coverUrl = runCatching {
-                    neteaseApi.getTopPlaylist(cat = name, limit = 1)
-                        .playlists
-                        ?.firstOrNull()
-                        ?.coverImgUrl
-                }.getOrNull()
-                // 去掉 imageView/watermark 参数，避免封面上叠分类字样
-                val cleanCover = coverUrl?.substringBefore('?')
-                PlaylistGenre(
-                    id = id,
-                    name = name,
-                    coverUrl = normalizeCoverUrl(cleanCover)
-                )
-            }
-        }.awaitAll()
+    }
+
+    // 获取曲风详情
+    override suspend fun getMusicStyleDetail(styleId: Long): MusicStyleDetail {
+        val response = neteaseApi.getStyleDetail(tagId = styleId)
+        if (response.code != 200) {
+            throw IllegalStateException("Get style detail failed with code ${response.code}")
+        }
+        val detail = response.data
+            ?: throw IllegalStateException("Style detail is empty")
+        return MusicStyleDetail(
+            id = detail.tagId ?: styleId,
+            name = detail.name.orEmpty(),
+            description = detail.desc?.trim()?.takeIf { it.isNotEmpty() },
+            coverUrl = normalizeCoverUrl(detail.cover?.firstOrNull()),
+            songCountLabel = detail.songNum?.trim()?.takeIf { it.isNotEmpty() }
+        )
+    }
+
+    // 获取曲风下单曲分页
+    override suspend fun getMusicStyleSongs(
+        styleId: Long,
+        cursor: Long,
+        size: Int
+    ): MusicStyleSongsPage {
+        val response = neteaseApi.getStyleSong(tagId = styleId, cursor = cursor, size = size)
+        if (response.code != 200) {
+            throw IllegalStateException("Get style songs failed with code ${response.code}")
+        }
+        val page = response.data?.page
+        val songs = response.data?.songs.orEmpty().map { it.toSong() }
+        val pageSize = page?.size?.takeIf { it > 0 } ?: size
+        val pageCursor = page?.cursor ?: cursor
+        val hasMore = page?.more == true
+        return MusicStyleSongsPage(
+            songs = songs,
+            nextCursor = if (hasMore) pageCursor + pageSize else null,
+            hasMore = hasMore,
+            total = page?.total ?: songs.size
+        )
     }
 }
 
