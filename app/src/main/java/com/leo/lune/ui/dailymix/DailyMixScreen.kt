@@ -2,6 +2,8 @@ package com.leo.lune.ui.dailymix
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -38,16 +40,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -76,6 +83,7 @@ import dev.chrisbanes.haze.hazeEffect
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 // 「每日推荐」全量页：固定顶栏/标题/身份行 + 可滚动推荐列表（UI 对齐 LikedScreen）
 @RequiresApi(Build.VERSION_CODES.O)
@@ -110,81 +118,142 @@ fun DailyMixScreen(
         else -> null
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp)
             .consumePointersUnlessResumed()
-            .navigationBarsPadding()
     ) {
-        DailyMixTopBar(
-            query = uiState.query,
-            darkTheme = darkTheme,
-            hazeState = hazeState,
-            onBack = onBack,
-            onQueryChange = viewModel::onQueryChange,
-            onClearQuery = { viewModel.onQueryChange("") },
-            onConfirmSearch = submitSearch,
-            modifier = Modifier.padding(top = 14.dp, bottom = 8.dp)
-        )
+        DailyMixBackdrop(coverUrl = uiState.songs.firstOrNull()?.coverUrl)
 
         Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(bottom = miniPlayerBottomInset + 20.dp)
-                .dismissKeyboardOnTap()
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
         ) {
-            DailyMixIntroTitle(dateLabel = dateLabel)
-            DailyMixIdentityRow(
-                songCount = uiState.songs.size,
-                coverUrl = uiState.songs.firstOrNull()?.coverUrl,
-                isPlayingDailyMix = uiState.hasStartedPlayAll && uiState.isPlaying,
-                onPlayAllClick = {
-                    dismissKeyboard()
-                    viewModel.onPlayAllClick()
-                }
+            DailyMixTopBar(
+                query = uiState.query,
+                darkTheme = darkTheme,
+                hazeState = hazeState,
+                onBack = onBack,
+                onQueryChange = viewModel::onQueryChange,
+                onClearQuery = { viewModel.onQueryChange("") },
+                onConfirmSearch = submitSearch,
+                modifier = Modifier.padding(top = 14.dp, bottom = 8.dp)
             )
-            if (statusMessage != null) {
-                DailyMixStatusText(
-                    text = statusMessage,
-                    actionLabel = "重试".takeIf {
-                        uiState.error != null && uiState.songs.isEmpty() &&
-                            uiState.error != "登录后查看每日推荐"
-                    },
-                    onAction = viewModel::onRetry.takeIf {
-                        uiState.error != null && uiState.songs.isEmpty() &&
-                            uiState.error != "登录后查看每日推荐"
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(top = 16.dp)
+
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(bottom = miniPlayerBottomInset + 20.dp)
+                    .dismissKeyboardOnTap()
+            ) {
+                DailyMixIntroTitle(dateLabel = dateLabel)
+                DailyMixIdentityRow(
+                    songCount = uiState.songs.size,
+                    coverUrl = uiState.songs.firstOrNull()?.coverUrl,
+                    isPlayingDailyMix = uiState.hasStartedPlayAll && uiState.isPlaying,
+                    onPlayAllClick = {
+                        dismissKeyboard()
+                        viewModel.onPlayAllClick()
+                    }
                 )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    itemsIndexed(
-                        items = uiState.filteredSongs,
-                        key = { _, song -> song.id }
-                    ) { index, song ->
-                        DailyMixTrackRow(
-                            index = index,
-                            song = song,
-                            onClick = {
-                                dismissKeyboard()
-                                viewModel.onSongClick(song)
-                            }
-                        )
+                if (statusMessage != null) {
+                    DailyMixStatusText(
+                        text = statusMessage,
+                        actionLabel = "重试".takeIf {
+                            uiState.error != null && uiState.songs.isEmpty() &&
+                                uiState.error != "登录后查看每日推荐"
+                        },
+                        onAction = viewModel::onRetry.takeIf {
+                            uiState.error != null && uiState.songs.isEmpty() &&
+                                uiState.error != "登录后查看每日推荐"
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(top = 16.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        itemsIndexed(
+                            items = uiState.filteredSongs,
+                            key = { _, song -> song.id }
+                        ) { index, song ->
+                            DailyMixTrackRow(
+                                index = index,
+                                song = song,
+                                onClick = {
+                                    dismissKeyboard()
+                                    viewModel.onSongClick(song)
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun DailyMixBackdrop(coverUrl: String?) {
+    val colorScheme = MaterialTheme.colorScheme
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(340.dp)
+    ) {
+        if (!coverUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = rememberCoverRequest(coverUrl, screenWidth),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(28.dp),
+                contentScale = ContentScale.Crop,
+                alpha = 0.35f
+            )
+        } else {
+            // 无封面时用淡色光斑，避免顶区一片死黑
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 80.dp)
+                    .size(176.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.12f),
+                                Color.Transparent
+                            )
+                        ),
+                        CircleShape
+                    )
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            colorScheme.background.copy(alpha = 0.2f),
+                            colorScheme.background.copy(alpha = 0.72f),
+                            colorScheme.background
+                        )
+                    )
+                )
+        )
     }
 }
 
@@ -421,11 +490,14 @@ private fun DailyMixIdentityRow(
 ) {
     val coverShape = RoundedCornerShape(15.dp)
     val colorScheme = MaterialTheme.colorScheme
+    val playInteraction = remember { MutableInteractionSource() }
+    val playScope = rememberCoroutineScope()
+    // 点击时主动播缩小再回弹，对齐 ChartDetailInfo
+    val playScale = remember { Animatable(1f) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colorScheme.background)
             .padding(top = 6.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -459,14 +531,21 @@ private fun DailyMixIdentityRow(
         Box(
             modifier = Modifier
                 .size(47.dp)
+                .scale(playScale.value)
                 .shadow(10.dp, CircleShape)
                 .clip(CircleShape)
                 .background(Color(0xFFF4F2FB))
                 .clickable(
                     enabled = songCount > 0,
-                    interactionSource = remember { MutableInteractionSource() },
+                    interactionSource = playInteraction,
                     indication = null,
-                    onClick = onPlayAllClick
+                    onClick = {
+                        playScope.launch {
+                            playScale.animateTo(0.9f, tween(60))
+                            playScale.animateTo(1f, tween(100))
+                        }
+                        onPlayAllClick()
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {

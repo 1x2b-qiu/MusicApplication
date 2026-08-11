@@ -1,5 +1,7 @@
 package com.leo.lune.ui.recent
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,16 +37,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -70,6 +77,7 @@ import com.leo.lune.util.rememberDismissKeyboard
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeEffect
+import kotlinx.coroutines.launch
 
 // 「最近播放」页：布局复用「我喜欢的」，展示本地最近播放与听歌统计
 @Composable
@@ -100,77 +108,138 @@ fun RecentScreen(
         else -> null
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(colorScheme.background)
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp)
             .consumePointersUnlessResumed()
-            .navigationBarsPadding()
     ) {
-        RecentTopBar(
-            query = uiState.query,
-            darkTheme = darkTheme,
-            hazeState = hazeState,
-            onBack = onBack,
-            onQueryChange = viewModel::onQueryChange,
-            onClearQuery = { viewModel.onQueryChange("") },
-            onConfirmSearch = submitSearch,
-            modifier = Modifier.padding(top = 14.dp, bottom = 8.dp)
-        )
+        RecentBackdrop(coverUrl = uiState.songs.firstOrNull()?.coverUrl)
 
-        // 顶栏以下整片内容区：点空白收键盘
         Column(
             modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(bottom = miniPlayerBottomInset + 20.dp)
-                .dismissKeyboardOnTap()
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding()
         ) {
-            RecentIntroTitle()
-            RecentIdentityRow(
-                hasSongs = uiState.songs.isNotEmpty(),
-                weekPlayedCount = uiState.weekPlayedCount,
-                totalPlayHours = uiState.totalPlayHours,
-                totalPlayMinutes = uiState.totalPlayMinutes,
-                coverUrl = uiState.songs.firstOrNull()?.coverUrl,
-                isPlayingRecent = uiState.hasStartedPlayAll && uiState.isPlaying,
-                onPlayAllClick = {
-                    dismissKeyboard()
-                    viewModel.onPlayAllClick()
-                }
+            RecentTopBar(
+                query = uiState.query,
+                darkTheme = darkTheme,
+                hazeState = hazeState,
+                onBack = onBack,
+                onQueryChange = viewModel::onQueryChange,
+                onClearQuery = { viewModel.onQueryChange("") },
+                onConfirmSearch = submitSearch,
+                modifier = Modifier.padding(top = 14.dp, bottom = 8.dp)
             )
-            if (statusMessage != null) {
-                RecentStatusText(
-                    text = statusMessage,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(top = 16.dp)
+
+            // 顶栏以下整片内容区：点空白收键盘
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(bottom = miniPlayerBottomInset + 20.dp)
+                    .dismissKeyboardOnTap()
+            ) {
+                RecentIntroTitle()
+                RecentIdentityRow(
+                    hasSongs = uiState.songs.isNotEmpty(),
+                    weekPlayedCount = uiState.weekPlayedCount,
+                    totalPlayHours = uiState.totalPlayHours,
+                    totalPlayMinutes = uiState.totalPlayMinutes,
+                    coverUrl = uiState.songs.firstOrNull()?.coverUrl,
+                    isPlayingRecent = uiState.hasStartedPlayAll && uiState.isPlaying,
+                    onPlayAllClick = {
+                        dismissKeyboard()
+                        viewModel.onPlayAllClick()
+                    }
                 )
-            } else {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    itemsIndexed(
-                        items = uiState.filteredSongs,
-                        key = { _, song -> song.id }
-                    ) { index, song ->
-                        RecentTrackRow(
-                            index = index,
-                            song = song,
-                            onClick = {
-                                dismissKeyboard()
-                                viewModel.onSongClick(song)
-                            }
-                        )
+                if (statusMessage != null) {
+                    RecentStatusText(
+                        text = statusMessage,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(top = 16.dp)
+                    )
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        itemsIndexed(
+                            items = uiState.filteredSongs,
+                            key = { _, song -> song.id }
+                        ) { index, song ->
+                            RecentTrackRow(
+                                index = index,
+                                song = song,
+                                onClick = {
+                                    dismissKeyboard()
+                                    viewModel.onSongClick(song)
+                                }
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun RecentBackdrop(coverUrl: String?) {
+    val colorScheme = MaterialTheme.colorScheme
+    val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(340.dp)
+    ) {
+        if (!coverUrl.isNullOrBlank()) {
+            AsyncImage(
+                model = rememberCoverRequest(coverUrl, screenWidth),
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(28.dp),
+                contentScale = ContentScale.Crop,
+                alpha = 0.35f
+            )
+        } else {
+            // 无封面时用淡色光斑，避免顶区一片死黑
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 80.dp)
+                    .size(176.dp)
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(
+                                Color.White.copy(alpha = 0.12f),
+                                Color.Transparent
+                            )
+                        ),
+                        CircleShape
+                    )
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            colorScheme.background.copy(alpha = 0.2f),
+                            colorScheme.background.copy(alpha = 0.72f),
+                            colorScheme.background
+                        )
+                    )
+                )
+        )
     }
 }
 
@@ -419,11 +488,14 @@ private fun RecentIdentityRow(
     // 身份行封面圆角
     val coverShape = RoundedCornerShape(15.dp)
     val colorScheme = MaterialTheme.colorScheme
+    val playInteraction = remember { MutableInteractionSource() }
+    val playScope = rememberCoroutineScope()
+    // 点击时主动播缩小再回弹，对齐 ChartDetailInfo
+    val playScale = remember { Animatable(1f) }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(colorScheme.background)
             .padding(top = 6.dp, bottom = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -462,14 +534,21 @@ private fun RecentIdentityRow(
         Box(
             modifier = Modifier
                 .size(47.dp)
+                .scale(playScale.value)
                 .shadow(10.dp, CircleShape)
                 .clip(CircleShape)
                 .background(Color(0xFFF4F2FB))
                 .clickable(
                     enabled = hasSongs,
-                    interactionSource = remember { MutableInteractionSource() },
+                    interactionSource = playInteraction,
                     indication = null,
-                    onClick = onPlayAllClick
+                    onClick = {
+                        playScope.launch {
+                            playScale.animateTo(0.9f, tween(60))
+                            playScale.animateTo(1f, tween(100))
+                        }
+                        onPlayAllClick()
+                    }
                 ),
             contentAlignment = Alignment.Center
         ) {

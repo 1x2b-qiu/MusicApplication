@@ -2,6 +2,8 @@ package com.leo.lune.ui.genredetail
 
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,11 +36,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -60,6 +64,7 @@ import com.leo.lune.ui.home.formatSongDuration
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 private val CoverShape = RoundedCornerShape(20.dp)
 private val GenreCoverSize = 108.dp
@@ -287,6 +292,10 @@ private fun GenreDetailHero(
     onPlayAllClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
+    val playInteraction = remember { MutableInteractionSource() }
+    val playScope = rememberCoroutineScope()
+    // 点击时主动播缩小再回弹，对齐 ChartDetailInfo
+    val playScale = remember { Animatable(1f) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -310,7 +319,12 @@ private fun GenreDetailHero(
                 )
             }
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    // 顶对齐封面，避免 stats 晚到时标题从居中跳到上方
+                    .align(Alignment.Top)
+            ) {
                 Text(
                     text = title.ifBlank { " " },
                     color = colorScheme.onBackground,
@@ -338,14 +352,21 @@ private fun GenreDetailHero(
             Box(
                 modifier = Modifier
                     .size(47.dp)
+                    .scale(playScale.value)
                     .shadow(10.dp, CircleShape)
                     .clip(CircleShape)
                     .background(Color(0xFFF4F2FB))
                     .clickable(
                         enabled = canPlay,
-                        interactionSource = remember { MutableInteractionSource() },
+                        interactionSource = playInteraction,
                         indication = null,
-                        onClick = onPlayAllClick
+                        onClick = {
+                            playScope.launch {
+                                playScale.animateTo(0.9f, tween(60))
+                                playScale.animateTo(1f, tween(100))
+                            }
+                            onPlayAllClick()
+                        }
                     ),
                 contentAlignment = Alignment.Center
             ) {

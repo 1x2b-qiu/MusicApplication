@@ -7,12 +7,15 @@ import android.graphics.Path
 import android.graphics.RectF
 import android.os.Build
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,14 +43,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.input.pointer.pointerInput
+import kotlinx.coroutines.launch
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -168,6 +174,10 @@ private fun RadioPlayerControls(
     val colorScheme = MaterialTheme.colorScheme
     val songName = uiState.songName.ifBlank { "未知歌曲" }
     val artistName = uiState.artistName.ifBlank { "未知歌手" }
+    val playInteraction = remember { MutableInteractionSource() }
+    val playScope = rememberCoroutineScope()
+    // 点击时主动播缩小再回弹，对齐 ChartDetailInfo
+    val playScale = remember { Animatable(1f) }
 
     Column(
         modifier = modifier.padding(horizontal = 20.dp, vertical = 16.dp)
@@ -266,9 +276,20 @@ private fun RadioPlayerControls(
                 Box(
                     modifier = Modifier
                         .size(53.dp)
+                        .scale(playScale.value)
                         .clip(CircleShape)
                         .background(colorScheme.primary)
-                        .clickable(onClick = onTogglePlayPause),
+                        .clickable(
+                            interactionSource = playInteraction,
+                            indication = null,
+                            onClick = {
+                                playScope.launch {
+                                    playScale.animateTo(0.9f, tween(60))
+                                    playScale.animateTo(1f, tween(100))
+                                }
+                                onTogglePlayPause()
+                            }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Image(
