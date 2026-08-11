@@ -375,7 +375,7 @@ private fun PlaylistGenre.toGenreItem(): GenreItem = GenreItem(
     coverUrl = coverUrl.orEmpty()
 )
 
-// 固定四个榜单：id 来自网易云官方榜
+// 曲库预览固定四个榜单；总览页另有完整列表
 private data class ChartSpec(
     val id: Long,
     val title: String,

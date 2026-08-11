@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 
 private val HeroShape = RoundedCornerShape(18.dp)
 
-// 排行榜总览：四个榜单均使用 Hero 大卡竖向列表
+// 排行榜总览：官方榜单均使用 Hero 大卡竖向列表
 @Composable
 fun ChartsScreen(
     onBack: () -> Unit,
