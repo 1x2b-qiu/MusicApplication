@@ -319,12 +319,7 @@ private fun GenreDetailHero(
                 )
             }
 
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    // 顶对齐封面，避免 stats 晚到时标题从居中跳到上方
-                    .align(Alignment.Top)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title.ifBlank { " " },
                     color = colorScheme.onBackground,
@@ -336,16 +331,19 @@ private fun GenreDetailHero(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                if (stats.isNotEmpty()) {
-                    Text(
-                        text = stats,
-                        color = colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                        fontSize = 11.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
+                // 始终占位，避免 stats 晚到时标题在居中块内上移
+                Text(
+                    text = stats.ifBlank { " " },
+                    color = if (stats.isBlank()) {
+                        Color.Transparent
+                    } else {
+                        colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                    },
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
             }
 
             // 与歌单详情 / Liked 一致的大播放钮
