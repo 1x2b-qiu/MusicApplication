@@ -52,29 +52,33 @@ class ChartsViewModel @Inject constructor(
 
     private fun loadCharts() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
-            val results = FixedCharts.map { spec ->
+            _uiState.update { it.copy(isLoading = true, error = null, charts = emptyList()) }
+            FixedCharts.map { spec ->
                 async {
                     val songs = runCatching {
                         musicRepository.getPlaylistSongs(spec.id, limit = 3)
                     }.getOrElse { emptyList() }
-                    spec to songs
+                    val item = ChartsHubItem(
+                        id = spec.id,
+                        title = spec.title,
+                        subtitle = spec.subtitle,
+                        songs = songs.map { it.toPreview() }
+                    )
+                    // 谁先回来谁先展示，列表仍按 FixedCharts 顺序排列
+                    _uiState.update { current ->
+                        val byId = current.charts.associateBy { it.id } + (item.id to item)
+                        current.copy(
+                            charts = FixedCharts.mapNotNull { chart -> byId[chart.id] }
+                        )
+                    }
                 }
             }.awaitAll()
 
-            val charts = results.map { (spec, songs) ->
-                ChartsHubItem(
-                    id = spec.id,
-                    title = spec.title,
-                    subtitle = spec.subtitle,
-                    songs = songs.map { it.toPreview() }
-                )
-            }
-            val allFailed = charts.all { it.songs.isEmpty() }
-            _uiState.update {
-                it.copy(
+            _uiState.update { current ->
+                val allFailed = current.charts.isEmpty() ||
+                    current.charts.all { it.songs.isEmpty() }
+                current.copy(
                     isLoading = false,
-                    charts = charts,
                     error = "加载失败，请重试".takeIf { allFailed }
                 )
             }
