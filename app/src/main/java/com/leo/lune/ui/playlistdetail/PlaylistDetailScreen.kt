@@ -344,66 +344,70 @@ private fun PlaylistDetailHero(
                     overflow = TextOverflow.Ellipsis
                 )
 
-                if (creatorName.isNotEmpty() || playlist?.creatorAvatarUrl != null) {
-                    Row(
-                        modifier = Modifier.padding(top = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        AsyncImage(
-                            model = rememberCoverRequest(playlist?.creatorAvatarUrl, 22.dp),
-                            contentDescription = null,
-                            modifier = Modifier
-                                .size(22.dp)
-                                .clip(CircleShape)
-                                .background(colorScheme.surfaceVariant)
-                                .border(0.67.dp, colorScheme.outlineVariant, CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                        Text(
-                            text = creatorName,
-                            color = colorScheme.onSurfaceVariant,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                // 始终占位，避免创建者晚到时信息区高度跳动
+                Row(
+                    modifier = Modifier.padding(top = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    AsyncImage(
+                        model = rememberCoverRequest(playlist?.creatorAvatarUrl, 22.dp),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(22.dp)
+                            .clip(CircleShape)
+                            .background(colorScheme.surfaceVariant)
+                            .border(0.67.dp, colorScheme.outlineVariant, CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                    Text(
+                        text = creatorName.ifBlank { " " },
+                        color = if (creatorName.isBlank()) {
+                            Color.Transparent
+                        } else {
+                            colorScheme.onSurfaceVariant
+                        },
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
 
-                if (mood.isNotEmpty() || stats.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier.padding(top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (mood.isNotEmpty()) {
-                            Text(
-                                text = mood,
-                                color = colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
-                            )
-                        }
-                        if (mood.isNotEmpty() && stats.isNotEmpty()) {
-                            Box(
-                                modifier = Modifier
-                                    .size(4.dp)
-                                    .clip(CircleShape)
-                                    .background(colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
-                            )
-                        }
-                        if (stats.isNotEmpty()) {
-                            Text(
-                                text = stats,
-                                color = colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                // 始终占位，避免标签 / 曲数晚到时标题块上移
+                Row(
+                    modifier = Modifier.padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (mood.isNotEmpty()) {
+                        Text(
+                            text = mood,
+                            color = colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
                     }
+                    if (mood.isNotEmpty() && stats.isNotEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .size(4.dp)
+                                .clip(CircleShape)
+                                .background(colorScheme.onSurfaceVariant.copy(alpha = 0.35f))
+                        )
+                    }
+                    Text(
+                        text = stats.ifBlank { " " },
+                        color = if (stats.isBlank()) {
+                            Color.Transparent
+                        } else {
+                            colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        },
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
 

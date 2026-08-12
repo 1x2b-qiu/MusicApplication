@@ -64,7 +64,12 @@ private val CoverShape = RoundedCornerShape(14.dp)
 @Composable
 fun PlaylistPlazaScreen(
     onBack: () -> Unit,
-    onPlaylistClick: (Long) -> Unit = {},
+    onPlaylistClick: (
+        playlistId: Long,
+        playlistName: String,
+        coverUrl: String,
+        trackCount: Int
+    ) -> Unit = { _, _, _, _ -> },
     viewModel: PlaylistPlazaViewModel = hiltViewModel()
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -119,7 +124,14 @@ fun PlaylistPlazaScreen(
                     PlaylistPlazaCard(
                         playlist = playlist,
                         isPlayingThis = uiState.playingPlaylistId == playlist.id,
-                        onOpenClick = { onPlaylistClick(playlist.id) },
+                        onOpenClick = {
+                            onPlaylistClick(
+                                playlist.id,
+                                playlist.title,
+                                playlist.coverUrl,
+                                0
+                            )
+                        },
                         onPlayClick = { viewModel.onPlaylistPlayClick(playlist.id) }
                     )
                 }

@@ -170,9 +170,14 @@ private fun MusicNavHost(
                                 MusicRoute.ChartDetail(chartId)
                             )
                         },
-                        onPlaylistClick = { playlistId ->
+                        onPlaylistClick = { playlistId, playlistName, coverUrl, trackCount ->
                             navController.navigateSingleTopTo(
-                                MusicRoute.PlaylistDetail(playlistId)
+                                MusicRoute.PlaylistDetail(
+                                    playlistId = playlistId,
+                                    playlistName = playlistName,
+                                    coverUrl = coverUrl,
+                                    trackCount = trackCount
+                                )
                             )
                         },
                         onGenreClick = { styleId, styleName ->
@@ -254,9 +259,14 @@ private fun MusicNavHost(
                 composable<MusicRoute.PlaylistPlaza> {
                     PlaylistPlazaScreen(
                         onBack = { navController.popBackStack() },
-                        onPlaylistClick = { playlistId ->
+                        onPlaylistClick = { playlistId, playlistName, coverUrl, trackCount ->
                             navController.navigateSingleTopTo(
-                                MusicRoute.PlaylistDetail(playlistId)
+                                MusicRoute.PlaylistDetail(
+                                    playlistId = playlistId,
+                                    playlistName = playlistName,
+                                    coverUrl = coverUrl,
+                                    trackCount = trackCount
+                                )
                             )
                         }
                     )

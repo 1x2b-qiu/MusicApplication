@@ -145,7 +145,12 @@ fun LibraryScreen(
     onPlaylistPlazaClick: () -> Unit,
     onChartsClick: () -> Unit = {},
     onChartClick: (Long) -> Unit = {},
-    onPlaylistClick: (Long) -> Unit = {},
+    onPlaylistClick: (
+        playlistId: Long,
+        playlistName: String,
+        coverUrl: String,
+        trackCount: Int
+    ) -> Unit = { _, _, _, _ -> },
     onGenreClick: (styleId: Long, styleName: String) -> Unit = { _, _ -> },
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
@@ -562,8 +567,13 @@ private fun DailySongRow(
 private fun FeaturedPlaylistsSection(
     playlists: List<FeaturedPlaylistItem>,
     playingPlaylistId: Long?,
-    // 点击卡片进入详情
-    onPlaylistClick: (Long) -> Unit,
+    // 点击卡片进入详情（带上入口预览字段）
+    onPlaylistClick: (
+        playlistId: Long,
+        playlistName: String,
+        coverUrl: String,
+        trackCount: Int
+    ) -> Unit,
     // 点击播放钮播放 / 暂停
     onPlaylistPlayClick: (Long) -> Unit,
     onViewAllClick: () -> Unit
@@ -584,7 +594,14 @@ private fun FeaturedPlaylistsSection(
                 FeaturedPlaylistCard(
                     playlist = playlist,
                     isPlayingThis = playingPlaylistId == playlist.id,
-                    onOpenClick = { onPlaylistClick(playlist.id) },
+                    onOpenClick = {
+                        onPlaylistClick(
+                            playlist.id,
+                            playlist.title,
+                            playlist.coverUrl,
+                            playlist.trackCount
+                        )
+                    },
                     onPlayClick = { onPlaylistPlayClick(playlist.id) }
                 )
             }

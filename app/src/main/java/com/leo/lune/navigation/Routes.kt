@@ -43,7 +43,13 @@ sealed interface MusicRoute {
     ) : MusicRoute
 
     @Serializable
-    data class PlaylistDetail(val playlistId: Long) : MusicRoute
+    data class PlaylistDetail(
+        val playlistId: Long,
+        // 入口预览：进页即可展示，详情接口返回后覆盖
+        val playlistName: String = "",
+        val coverUrl: String = "",
+        val trackCount: Int = 0
+    ) : MusicRoute
 
     @Serializable
     data object Recent : MusicRoute

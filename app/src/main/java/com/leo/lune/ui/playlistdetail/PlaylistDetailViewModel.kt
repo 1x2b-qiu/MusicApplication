@@ -65,11 +65,16 @@ class PlaylistDetailViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    // 导航参数中的歌单 ID（MusicRoute.PlaylistDetail）
-    private val playlistId: Long =
-        savedStateHandle.toRoute<MusicRoute.PlaylistDetail>().playlistId
+    // 导航参数（MusicRoute.PlaylistDetail）
+    private val route = savedStateHandle.toRoute<MusicRoute.PlaylistDetail>()
+    private val playlistId: Long = route.playlistId
 
-    private val _uiState = MutableStateFlow(PlaylistDetailUiState())
+    private val _uiState = MutableStateFlow(
+        PlaylistDetailUiState(
+            // 入口已有预览时先填 Hero / 背景，等详情接口覆盖
+            playlist = previewFromRoute(route)
+        )
+    )
     // 对外只读，PlaylistDetailScreen 通过 collect 订阅
     val uiState: StateFlow<PlaylistDetailUiState> = _uiState.asStateFlow()
 
@@ -238,8 +243,14 @@ class PlaylistDetailViewModel @Inject constructor(
                 )
                 nextOffset = if (hasMore) songs.size else null
                 _uiState.update {
+                    // 入口已有封面时保留，避免详情回来重载闪一下
+                    val keepCover = it.playlist?.coverUrl?.takeIf { url -> url.isNotBlank() }
                     it.copy(
-                        playlist = detail,
+                        playlist = if (keepCover != null) {
+                            detail.copy(coverUrl = keepCover)
+                        } else {
+                            detail
+                        },
                         songs = songs,
                         hasMore = hasMore,
                         isLoading = false,
@@ -287,6 +298,22 @@ class PlaylistDetailViewModel @Inject constructor(
             if (pageSize < PageSize) return false
             val total = trackCount?.takeIf { it > 0 }
             return if (total != null) loadedCount < total else true
+        }
+
+        // 由路由预填的轻量歌单元数据；名称与封面都空则返回 null
+        private fun previewFromRoute(route: MusicRoute.PlaylistDetail): PlaylistDetail? {
+            if (route.playlistName.isBlank() && route.coverUrl.isBlank()) return null
+            return PlaylistDetail(
+                id = route.playlistId,
+                name = route.playlistName,
+                description = null,
+                coverUrl = route.coverUrl.takeIf { it.isNotBlank() },
+                trackCount = route.trackCount.coerceAtLeast(0),
+                tags = emptyList(),
+                creatorName = null,
+                creatorAvatarUrl = null,
+                subscribed = false
+            )
         }
     }
 }

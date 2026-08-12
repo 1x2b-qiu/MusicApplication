@@ -28,7 +28,12 @@ fun MainScreen(
     onPlaylistPlazaClick: () -> Unit,
     onChartsClick: () -> Unit = {},
     onChartClick: (Long) -> Unit = {},
-    onPlaylistClick: (Long) -> Unit = {},
+    onPlaylistClick: (
+        playlistId: Long,
+        playlistName: String,
+        coverUrl: String,
+        trackCount: Int
+    ) -> Unit = { _, _, _, _ -> },
     onGenreClick: (styleId: Long, styleName: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
