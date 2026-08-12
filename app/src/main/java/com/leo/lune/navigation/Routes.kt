@@ -22,7 +22,11 @@ sealed interface MusicRoute {
     data object Search : MusicRoute
 
     @Serializable
-    data object Liked : MusicRoute
+    data class Liked(
+        // 入口预览：首页首曲封面与歌单总数
+        val coverUrl: String = "",
+        val trackCount: Int = 0
+    ) : MusicRoute
 
     @Serializable
     data object DailyMix : MusicRoute

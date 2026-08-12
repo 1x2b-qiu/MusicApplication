@@ -26,6 +26,8 @@ import javax.inject.Inject
 data class HomeUiState(
     // 「我喜欢的」歌曲列表
     val likedSongs: List<Song> = emptyList(),
+    // 「我喜欢的」歌单曲目总数（来自 user playlist.trackCount）
+    val likedTrackCount: Int = 0,
     // 最近播放歌曲列表（来自 Room 本地记录）
     val recentSongs: List<Song> = emptyList(),
     // 自己创建的歌单（含「我喜欢的音乐」、年度歌单等）
@@ -149,6 +151,7 @@ class HomeViewModel @Inject constructor(
                 }
                 HomeLoadedContent(
                     likedSongs = likedSongs,
+                    likedTrackCount = likedPlaylist?.trackCount?.coerceAtLeast(0) ?: 0,
                     createdPlaylists = playlists.filter { it.isCreatedByUser },
                     subscribedPlaylists = playlists.filter { !it.isCreatedByUser }
                 )
@@ -156,6 +159,7 @@ class HomeViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         likedSongs = content.likedSongs,
+                        likedTrackCount = content.likedTrackCount,
                         createdPlaylists = content.createdPlaylists,
                         subscribedPlaylists = content.subscribedPlaylists,
                         isLoading = false,
@@ -177,6 +181,7 @@ class HomeViewModel @Inject constructor(
 // 首页一次加载得到的远端内容
 private data class HomeLoadedContent(
     val likedSongs: List<Song> = emptyList(),
+    val likedTrackCount: Int = 0,
     val createdPlaylists: List<UserPlaylist> = emptyList(),
     val subscribedPlaylists: List<UserPlaylist> = emptyList()
 )

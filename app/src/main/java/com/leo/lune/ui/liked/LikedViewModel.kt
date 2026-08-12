@@ -1,11 +1,14 @@
 package com.leo.lune.ui.liked
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.toRoute
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.MusicRepository
+import com.leo.lune.navigation.MusicRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +26,8 @@ data class LikedUiState(
     val songs: List<Song> = emptyList(),
     // 当前展示列表：确认搜索后主动算好；无关键词时等于 songs
     val filteredSongs: List<Song> = emptyList(),
+    // 入口 / 歌单封面；优先入口传入且不因列表刷新覆盖
+    val coverUrl: String? = null,
     // 歌单 trackCount；身份区曲数优先用它
     val trackCount: Int = 0,
     // 搜索框当前输入（草稿，输入时不筛选）
@@ -52,10 +57,20 @@ class LikedViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val authRepository: AuthRepository,
     // 全局播放控制器，本页不直接持有 ExoPlayer
-    private val playerController: MusicPlayerController
+    private val playerController: MusicPlayerController,
+    savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(LikedUiState())
+    // 导航参数（MusicRoute.Liked）
+    private val route = savedStateHandle.toRoute<MusicRoute.Liked>()
+
+    private val _uiState = MutableStateFlow(
+        LikedUiState(
+            // 进页即可展示首页带入的封面与曲数
+            coverUrl = route.coverUrl.takeIf { it.isNotBlank() },
+            trackCount = route.trackCount.coerceAtLeast(0)
+        )
+    )
     // 对外只读，LikedScreen 通过 collect 订阅
     val uiState: StateFlow<LikedUiState> = _uiState.asStateFlow()
 
@@ -224,9 +239,13 @@ class LikedViewModel @Inject constructor(
                 )
                 nextOffset = if (hasMore) songs.size else null
                 _uiState.update { state ->
+                    // 入口已有封面时保留，避免列表回来重载闪一下
+                    val keepCover = state.coverUrl?.takeIf { it.isNotBlank() }
                     state.copy(
                         songs = songs,
                         filteredSongs = filterSongs(songs, state.activeKeyword),
+                        coverUrl = keepCover
+                            ?: songs.firstOrNull()?.coverUrl,
                         trackCount = total,
                         hasMore = hasMore,
                         isLoading = false,

@@ -22,7 +22,7 @@ import com.leo.lune.ui.radio.RadioScreen
 @Composable
 fun MainScreen(
     selectedTab: MainTab,
-    onLikedClick: () -> Unit,
+    onLikedClick: (coverUrl: String, trackCount: Int) -> Unit,
     onRecentClick: () -> Unit,
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,

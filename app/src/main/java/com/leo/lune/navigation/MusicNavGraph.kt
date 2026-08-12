@@ -150,8 +150,13 @@ private fun MusicNavHost(
                 composable<MusicRoute.Main> {
                     MainScreen(
                         selectedTab = selectedTab,
-                        onLikedClick = {
-                            navController.navigateSingleTopTo(MusicRoute.Liked)
+                        onLikedClick = { coverUrl, trackCount ->
+                            navController.navigateSingleTopTo(
+                                MusicRoute.Liked(
+                                    coverUrl = coverUrl,
+                                    trackCount = trackCount
+                                )
+                            )
                         },
                         onRecentClick = {
                             navController.navigateSingleTopTo(MusicRoute.Recent)

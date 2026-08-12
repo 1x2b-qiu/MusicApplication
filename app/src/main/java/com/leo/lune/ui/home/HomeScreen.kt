@@ -132,7 +132,7 @@ private val favoritesTitleExitTransition = slideOutVertically(
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun HomeScreen(
-    onLikedClick: () -> Unit,
+    onLikedClick: (coverUrl: String, trackCount: Int) -> Unit,
     onRecentClick: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
@@ -166,7 +166,12 @@ fun HomeScreen(
                                 currentSongId = uiState.currentSongId,
                                 onPlaySong = viewModel::playSong,
                                 onTogglePlayPause = viewModel::togglePlayPause,
-                                onViewAllClick = onLikedClick
+                                onViewAllClick = {
+                                    onLikedClick(
+                                        uiState.likedSongs.firstOrNull()?.coverUrl.orEmpty(),
+                                        uiState.likedTrackCount
+                                    )
+                                }
                             )
                         }
                     }

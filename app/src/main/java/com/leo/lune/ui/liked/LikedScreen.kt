@@ -135,7 +135,7 @@ fun LikedScreen(
             .background(colorScheme.background)
             .consumePointersUnlessResumed()
     ) {
-        LikedBackdrop(coverUrl = uiState.songs.firstOrNull()?.coverUrl)
+        LikedBackdrop(coverUrl = uiState.coverUrl ?: uiState.songs.firstOrNull()?.coverUrl)
 
         Column(
             modifier = Modifier
@@ -166,7 +166,7 @@ fun LikedScreen(
                 LikedIntroTitle()
                 LikedIdentityRow(
                     songCount = displaySongCount,
-                    coverUrl = uiState.songs.firstOrNull()?.coverUrl,
+                    coverUrl = uiState.coverUrl ?: uiState.songs.firstOrNull()?.coverUrl,
                     isPlayingLiked = uiState.hasStartedPlayAll && uiState.isPlaying,
                     onPlayAllClick = {
                         dismissKeyboard()
