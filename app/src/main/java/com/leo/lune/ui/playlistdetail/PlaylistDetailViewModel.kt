@@ -32,10 +32,14 @@ import javax.inject.Inject
 data class PlaylistDetailUiState(
     // 歌单元数据（封面、标题、创建者等）；未加载成功前为 null
     val playlist: PlaylistDetail? = null,
-    // 歌单内全部歌曲
+    // 已加载歌曲，作播放队列；下滑续拉追加
     val songs: List<Song> = emptyList(),
-    // 是否正在拉取详情 / 曲目
+    // 首屏加载中
     val isLoading: Boolean = false,
+    // 分页续拉中
+    val isLoadingMore: Boolean = false,
+    // 是否还有下一页
+    val hasMore: Boolean = false,
     // 加载失败时的错误信息
     val error: String? = null,
     // 是否正在播放，驱动主播放钮图标
@@ -49,7 +53,7 @@ data class PlaylistDetailUiState(
 )
 
 // 歌单详情页 ViewModel
-// 负责按路由 playlistId 并行拉取元数据与曲目、同步播放状态；播放操作委托给全局播放器
+// 按路由 playlistId 并行拉取元数据与首屏曲目；下滑分页续拉；播放委托全局播放器
 @HiltViewModel
 class PlaylistDetailViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
@@ -69,13 +73,17 @@ class PlaylistDetailViewModel @Inject constructor(
     // 对外只读，PlaylistDetailScreen 通过 collect 订阅
     val uiState: StateFlow<PlaylistDetailUiState> = _uiState.asStateFlow()
 
-    // 当前进行中的加载任务，重试时可取消旧任务
+    // 首屏加载任务，重试时可取消旧任务
     private var loadJob: Job? = null
+    // 分页续拉任务；与首屏互斥，首屏重载时一并取消
+    private var loadMoreJob: Job? = null
     // 当前进行中的收藏任务
     private var subscribeJob: Job? = null
+    // 下一页 offset；null 表示没有更多或尚未完成首屏
+    private var nextOffset: Int? = null
 
     init {
-        loadPlaylist()
+        loadInitial()
         // 只同步 isPlaying，驱动主播放钮播/停图标
         viewModelScope.launch {
             playerController.playbackState
@@ -87,7 +95,7 @@ class PlaylistDetailViewModel @Inject constructor(
         }
     }
 
-    // 点击歌曲：以当前歌单列表为队列开始播放
+    // 点击歌曲：以当前已加载列表为队列开始播放
     @RequiresApi(Build.VERSION_CODES.O)
     fun onSongClick(song: Song) {
         val queue = _uiState.value.songs
@@ -95,7 +103,7 @@ class PlaylistDetailViewModel @Inject constructor(
         playerController.playSong(song, queue)
     }
 
-    // 主播放钮：本页首次点击从首曲连播全量，之后切换播停（至 ViewModel 销毁）
+    // 主播放钮：本页首次点击从首曲连播已加载列表，之后切换播停（至 ViewModel 销毁）
     @RequiresApi(Build.VERSION_CODES.O)
     fun onPlayAllClick() {
         val state = _uiState.value
@@ -151,32 +159,89 @@ class PlaylistDetailViewModel @Inject constructor(
         }
     }
 
-    // 加载失败后由 UI 触发重试
+    // 加载失败后由 UI 触发重试（重新首屏加载）
     fun onRetry() {
-        loadPlaylist()
+        loadInitial()
     }
 
-    // 并行拉取歌单详情与全部曲目；任一侧失败则整页错误
-    private fun loadPlaylist() {
+    // 列表接近底部时续拉下一页；无 offset / 正在加载 / 无更多则忽略
+    fun onLoadMore() {
+        val offset = nextOffset ?: return
+        val state = _uiState.value
+        if (state.isLoading || state.isLoadingMore || !state.hasMore) return
+        loadMoreJob?.cancel()
+        loadMoreJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingMore = true) }
+            runCatching {
+                musicRepository.getPlaylistSongs(
+                    playlistId = playlistId,
+                    limit = PageSize,
+                    offset = offset
+                )
+            }.onSuccess { page ->
+                val hasMore = resolveHasMore(
+                    loadedCount = offset + page.size,
+                    pageSize = page.size,
+                    trackCount = _uiState.value.playlist?.trackCount
+                )
+                nextOffset = if (hasMore) offset + page.size else null
+                _uiState.update { current ->
+                    // 按 id 去重，避免分页边界偶发重复曲
+                    val merged = (current.songs + page)
+                        .distinctBy { it.id }
+                    current.copy(
+                        songs = merged,
+                        hasMore = hasMore,
+                        isLoadingMore = false
+                    )
+                }
+            }.onFailure {
+                // 续拉失败不打断已展示列表，仅结束 loadingMore
+                _uiState.update { it.copy(isLoadingMore = false) }
+            }
+        }
+    }
+
+    // 并行拉取歌单详情与首屏曲目；任一侧失败则整页错误
+    private fun loadInitial() {
         loadJob?.cancel()
+        loadMoreJob?.cancel()
+        nextOffset = null
         loadJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    isLoadingMore = false,
+                    error = null,
+                    hasMore = false
+                )
+            }
             runCatching {
                 coroutineScope {
                     val detailDeferred = async {
                         musicRepository.getPlaylistDetail(playlistId)
                     }
                     val songsDeferred = async {
-                        // limit = null：不截断，返回歌单内全部歌曲
-                        musicRepository.getPlaylistSongs(playlistId, limit = null)
+                        musicRepository.getPlaylistSongs(
+                            playlistId = playlistId,
+                            limit = PageSize,
+                            offset = 0
+                        )
                     }
                     detailDeferred.await() to songsDeferred.await()
                 }
             }.onSuccess { (detail, songs) ->
+                val hasMore = resolveHasMore(
+                    loadedCount = songs.size,
+                    pageSize = songs.size,
+                    trackCount = detail.trackCount
+                )
+                nextOffset = if (hasMore) songs.size else null
                 _uiState.update {
                     it.copy(
                         playlist = detail,
                         songs = songs,
+                        hasMore = hasMore,
                         isLoading = false,
                         error = null,
                         isSubscribed = detail.subscribed,
@@ -207,5 +272,21 @@ class PlaylistDetailViewModel @Inject constructor(
             )
         }
         favoriteManager.emitResult(FavoriteResult.Failure(message))
+    }
+
+    companion object {
+        // playlist/track/all 每页条数
+        private const val PageSize = 30
+
+        // 本页未满 → 无更多；否则对照 trackCount（>0 时）或默认还有下一页
+        private fun resolveHasMore(
+            loadedCount: Int,
+            pageSize: Int,
+            trackCount: Int?
+        ): Boolean {
+            if (pageSize < PageSize) return false
+            val total = trackCount?.takeIf { it > 0 }
+            return if (total != null) loadedCount < total else true
+        }
     }
 }

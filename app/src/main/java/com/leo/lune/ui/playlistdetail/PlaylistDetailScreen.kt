@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -31,9 +32,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -60,13 +63,14 @@ import com.leo.lune.domain.model.Song
 import com.leo.lune.ui.home.formatSongDuration
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 private val CoverShape = RoundedCornerShape(20.dp)
 private val PlaylistCoverSize = 108.dp
 
 /**
- * 歌单详情页：顶栏 + 封面信息 + 歌曲列表。
+ * 歌单详情页：顶栏 + 封面信息 + 歌曲列表（支持分页续拉）。
  * 列表行视觉对齐 ChartDetailTrackRow，本页单独实现。
  */
 @RequiresApi(Build.VERSION_CODES.O)
@@ -77,9 +81,24 @@ fun PlaylistDetailScreen(
 ) {
     val colorScheme = MaterialTheme.colorScheme
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val listState = rememberLazyListState()
     // 底部留白：迷你播放栏 66dp + 导航层间距 12dp
     val miniPlayerBottomInset = 78.dp
     val playlist = uiState.playlist
+
+    // 接近底部时续拉
+    LaunchedEffect(listState, uiState.hasMore, uiState.isLoadingMore, uiState.songs.size) {
+        snapshotFlow {
+            val info = listState.layoutInfo
+            val lastVisible = info.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val total = info.totalItemsCount
+            total > 0 && lastVisible >= total - 4
+        }
+            .distinctUntilChanged()
+            .collect { nearEnd ->
+                if (nearEnd) viewModel.onLoadMore()
+            }
+    }
 
     val statusMessage = when {
         uiState.isLoading && uiState.songs.isEmpty() -> "加载中…"
@@ -138,6 +157,7 @@ fun PlaylistDetailScreen(
                     )
                 } else {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -152,6 +172,19 @@ fun PlaylistDetailScreen(
                                 song = song,
                                 onClick = { viewModel.onSongClick(song) }
                             )
+                        }
+                        if (uiState.isLoadingMore) {
+                            item(key = "loading_more") {
+                                Text(
+                                    text = "加载更多…",
+                                    color = colorScheme.onSurfaceVariant,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 16.dp),
+                                    textAlign = TextAlign.Center
+                                )
+                            }
                         }
                     }
                 }
