@@ -1,5 +1,7 @@
 package com.leo.lune.ui.downloads
 
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -65,13 +67,14 @@ import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.formatFileSize
 import com.leo.lune.util.rememberCoverRequest
 
-// 封面缩略图圆角（与 HomeRecentItem 一致）
+// 封面缩略图圆角
 private val CoverShape = RoundedCornerShape(14.dp)
 
-// 单曲卡片圆角（与 HomeRecentItem 一致）
-private val ItemCardShape = RoundedCornerShape(16.dp)
+// 列表行点击裁剪圆角
+private val ItemCardShape = RoundedCornerShape(12.dp)
 
 // 本地下载页：顶栏居中标题；下载中 / 已下载单曲卡片；全空时空态
+@RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun DownloadsScreen(
     onBack: () -> Unit,
@@ -243,7 +246,7 @@ private fun SectionHeader(
     }
 }
 
-// 进行中下载单曲卡：封面 + 暂停/继续；进度条在下方（卡片样式对齐 HomeRecentItem）
+// 进行中下载单曲行：封面 + 暂停/继续；进度条在下方（无玻璃底）
 @Composable
 private fun ActiveDownloadRow(
     task: ActiveDownloadTask,
@@ -261,9 +264,7 @@ private fun ActiveDownloadRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(ItemCardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(1.dp, colorScheme.surfaceDim, ItemCardShape)
-            .padding(12.dp)
+            .padding(vertical = 11.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -427,7 +428,7 @@ private fun ActiveDownloadRow(
     }
 }
 
-// 已下载单曲卡：布局/描边对齐 HomeRecentItem，右侧保留音质与更多菜单
+// 已下载单曲行：无玻璃底；右侧保留音质与更多菜单
 @Composable
 private fun DownloadedSongRow(
     song: DownloadedSong,
@@ -442,14 +443,12 @@ private fun DownloadedSongRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(ItemCardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(1.dp, colorScheme.surfaceDim, ItemCardShape)
             .clickable(onClick = onClick)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {

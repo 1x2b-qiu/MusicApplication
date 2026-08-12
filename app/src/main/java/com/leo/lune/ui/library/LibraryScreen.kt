@@ -471,7 +471,7 @@ private fun DailyMixBanner(
     }
 }
 
-// 猜你喜欢单曲行：布局/字号与 HomeRecentItem 一致，保留 HOT
+// 猜你喜欢单曲行：无玻璃底；HOT 默认展示
 @Composable
 private fun DailySongRow(
     song: DailyRecommendSongItem,
@@ -483,9 +483,9 @@ private fun DailySongRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .cardSurface(CardShape)
+            .clip(CardShape)
             .clickable(onClick = { onPlay(song.id) })
-            .padding(12.dp),
+            .padding(vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -538,19 +538,17 @@ private fun DailySongRow(
             )
         }
 
-        if (song.hot) {
-            Text(
-                text = "HOT",
-                color = Color(0xFFF87171),
-                fontSize = 10.sp,
-                lineHeight = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clip(HotBadgeShape)
-                    .background(Color(0x33EF4444))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            )
-        }
+        Text(
+            text = "HOT",
+            color = Color(0xFFF87171),
+            fontSize = 10.sp,
+            lineHeight = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier
+                .clip(HotBadgeShape)
+                .background(Color(0x33EF4444))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        )
 
         Text(
             text = song.duration,
@@ -980,17 +978,6 @@ private fun GenreCard(
         )
     }
 }
-
-// 卡片表面：与 HomeRecentItem 一致（surfaceVariant 底 + surfaceDim 描边）
-@Composable
-private fun Modifier.cardSurface(shape: RoundedCornerShape): Modifier {
-    val colorScheme = MaterialTheme.colorScheme
-    return this
-        .clip(shape)
-        .background(colorScheme.surfaceVariant)
-        .border(1.dp, colorScheme.surfaceDim, shape)
-}
-
 
 // 点击缩放动画 Modifier：封装 Animatable + InteractionSource + CoroutineScope
 // 减少 LazyRow 列表项中重复的 remember 槽位分配

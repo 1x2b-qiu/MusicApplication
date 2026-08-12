@@ -27,7 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -72,13 +73,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.leo.lune.domain.model.SearchSuggestion
 import com.leo.lune.domain.model.SearchSuggestionType
 import com.leo.lune.domain.model.Song
-import com.leo.lune.ui.home.HomeRecentItem
+import com.leo.lune.ui.home.formatSongDuration
 import com.leo.lune.util.ClearFocusOnImeHidden
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.dismissKeyboardOnTap
+import com.leo.lune.util.rememberCoverRequest
 import com.leo.lune.util.rememberDismissKeyboard
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeTint
@@ -204,7 +207,7 @@ fun SearchScreen(
                                     translationY = (1f - mounted.value) * 12f
                                 }
                                 .verticalScroll(rememberScrollState())
-                                .padding(top = 20.dp, bottom = 32.dp + MiniPlayerBottomInset)
+                                .padding(top = 12.dp, bottom = 32.dp + MiniPlayerBottomInset)
                         ) {
                             RecentSearchSection(
                                 recents = uiState.recentSearches,
@@ -716,22 +719,8 @@ private fun SearchResultsSection(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = 20.dp, bottom = 32.dp)
+            .padding(bottom = 32.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(bottom = 16.dp),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = "结果",
-                color = themeStyle.sectionLabelColor,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = 2.5.sp
-            )
-        }
-
         if (songs.isEmpty()) {
             SearchEmptyResults(
                 themeStyle = themeStyle,
@@ -742,15 +731,87 @@ private fun SearchResultsSection(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = MiniPlayerBottomInset)
             ) {
-                items(songs, key = { it.id }) { song ->
-                    HomeRecentItem(
+                itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+                    SearchTrackRow(
+                        index = index,
                         song = song,
-                        onClick = { onSongClick(song) },
-                        modifier = Modifier.padding(vertical = 4.dp)
+                        onClick = { onSongClick(song) }
                     )
                 }
             }
         }
+    }
+}
+
+// 搜索结果行：本地仿 LikedTrackRow（序号 + 封面 + 歌名/歌手专辑 + 时长，无玻璃底）
+@Composable
+private fun SearchTrackRow(
+    index: Int,
+    song: Song,
+    onClick: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = (index + 1).toString(),
+            color = colorScheme.onSurfaceVariant,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Start,
+            modifier = Modifier.width(20.dp)
+        )
+        AsyncImage(
+            model = rememberCoverRequest(song.coverUrl, 43.dp),
+            contentDescription = song.name,
+            modifier = Modifier
+                .padding(start = 4.dp)
+                .size(43.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(colorScheme.surfaceVariant),
+            contentScale = ContentScale.Crop
+        )
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = 9.dp)
+        ) {
+            Text(
+                text = song.name,
+                color = colorScheme.onBackground,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = buildString {
+                    append(song.artists)
+                    if (song.album.isNotBlank()) {
+                        append(" · ")
+                        append(song.album)
+                    }
+                },
+                color = colorScheme.onSurfaceVariant,
+                fontSize = 10.5.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = 3.dp)
+            )
+        }
+        Text(
+            text = formatSongDuration(song.durationMs),
+            color = colorScheme.onSurfaceVariant,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(start = 9.dp)
+        )
     }
 }
 

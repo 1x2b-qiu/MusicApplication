@@ -172,18 +172,15 @@ private fun SectionLabel(title: String) {
     )
 }
 
-// 列表外层卡片外壳（surfaceVariant + 细描边，对齐本地下载页）
+// 列表外层分组容器（无玻璃底）
 @Composable
 private fun DownloadSettingsCard(
     content: @Composable () -> Unit
 ) {
-    val colorScheme = MaterialTheme.colorScheme
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(0.67.dp, colorScheme.outlineVariant, CardShape)
     ) {
         content()
     }
@@ -269,8 +266,6 @@ private fun StorageLocationRow(
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .background(colorScheme.surfaceVariant)
-            .border(0.67.dp, colorScheme.outlineVariant, CardShape)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
