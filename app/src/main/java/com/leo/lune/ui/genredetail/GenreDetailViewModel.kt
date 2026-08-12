@@ -31,7 +31,7 @@ data class GenreDetailUiState(
     val title: String = "",
     // 曲风简介（style/detail.desc）
     val description: String? = null,
-    // 曲风封面；详情失败时回落首曲封面
+    // 曲风封面；优先入口传入，详情失败时回落首曲封面
     val coverUrl: String? = null,
     // 接口数量文案（如「999999+」）；无则 UI 回落已加载首数
     val songCountLabel: String? = null,
@@ -68,8 +68,9 @@ class GenreDetailViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(
         GenreDetailUiState(
             styleId = styleId,
-            // 进页即可展示曲库格子上的名称，等详情返回后再校正
-            title = route.styleName
+            // 进页即可展示曲库格子上的名称与封面
+            title = route.styleName,
+            coverUrl = route.coverUrl.takeIf { it.isNotBlank() }
         )
     )
     // 对外只读，GenreDetailScreen 通过 collect 订阅
@@ -187,11 +188,14 @@ class GenreDetailViewModel @Inject constructor(
             }.onSuccess { (detail, page) ->
                 nextCursor = page.nextCursor
                 _uiState.update { current ->
+                    // 入口已有封面时保留，避免详情回来重载闪一下
+                    val keepCover = current.coverUrl?.takeIf { it.isNotBlank() }
                     current.copy(
                         title = detail?.name?.takeIf { it.isNotBlank() }
                             ?: current.title,
                         description = detail?.description,
-                        coverUrl = detail?.coverUrl
+                        coverUrl = keepCover
+                            ?: detail?.coverUrl
                             ?: page.songs.firstOrNull()?.coverUrl,
                         songCountLabel = detail?.songCountLabel,
                         songs = page.songs,

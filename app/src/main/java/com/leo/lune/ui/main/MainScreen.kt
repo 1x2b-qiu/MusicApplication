@@ -34,7 +34,7 @@ fun MainScreen(
         coverUrl: String,
         trackCount: Int
     ) -> Unit = { _, _, _, _ -> },
-    onGenreClick: (styleId: Long, styleName: String) -> Unit = { _, _ -> },
+    onGenreClick: (styleId: Long, styleName: String, coverUrl: String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     Box(modifier = modifier.fillMaxSize()) {

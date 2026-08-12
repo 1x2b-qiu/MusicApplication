@@ -151,7 +151,7 @@ fun LibraryScreen(
         coverUrl: String,
         trackCount: Int
     ) -> Unit = { _, _, _, _ -> },
-    onGenreClick: (styleId: Long, styleName: String) -> Unit = { _, _ -> },
+    onGenreClick: (styleId: Long, styleName: String, coverUrl: String) -> Unit = { _, _, _ -> },
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -892,7 +892,7 @@ private fun ChartCard(
 @Composable
 private fun GenresSection(
     genres: List<GenreItem>,
-    onGenreClick: (Long, String) -> Unit
+    onGenreClick: (Long, String, String) -> Unit
 ) {
     if (genres.isEmpty()) return
 
@@ -904,7 +904,7 @@ private fun GenresSection(
             items(genres, key = { it.id }) { genre ->
                 GenreCard(
                     genre = genre,
-                    onClick = { onGenreClick(genre.id, genre.name) }
+                    onClick = { onGenreClick(genre.id, genre.name, genre.coverUrl) }
                 )
             }
         }

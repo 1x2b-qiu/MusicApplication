@@ -39,7 +39,9 @@ sealed interface MusicRoute {
     @Serializable
     data class GenreDetail(
         val styleId: Long,
-        val styleName: String = ""
+        // 入口预览：进页即可展示，详情接口可校正名称
+        val styleName: String = "",
+        val coverUrl: String = ""
     ) : MusicRoute
 
     @Serializable

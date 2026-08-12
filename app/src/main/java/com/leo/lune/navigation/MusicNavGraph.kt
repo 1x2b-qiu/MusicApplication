@@ -180,11 +180,12 @@ private fun MusicNavHost(
                                 )
                             )
                         },
-                        onGenreClick = { styleId, styleName ->
+                        onGenreClick = { styleId, styleName, coverUrl ->
                             navController.navigateSingleTopTo(
                                 MusicRoute.GenreDetail(
                                     styleId = styleId,
-                                    styleName = styleName
+                                    styleName = styleName,
+                                    coverUrl = coverUrl
                                 )
                             )
                         }
