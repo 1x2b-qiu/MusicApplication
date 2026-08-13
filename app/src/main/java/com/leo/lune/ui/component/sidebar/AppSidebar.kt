@@ -31,7 +31,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.Logout
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Groups
 import androidx.compose.material.icons.outlined.LibraryMusic
@@ -72,7 +71,6 @@ private data class SidebarMenuItem(
 )
 
 private val sidebarMenuItems = listOf(
-    SidebarMenuItem("playlist", "添加歌单", Icons.AutoMirrored.Outlined.QueueMusic),
     SidebarMenuItem("download", "本地下载", Icons.Outlined.Download),
     SidebarMenuItem("together", "一起听", Icons.Outlined.Groups),
     SidebarMenuItem("identify", "听歌识曲", Icons.Outlined.MicNone),
