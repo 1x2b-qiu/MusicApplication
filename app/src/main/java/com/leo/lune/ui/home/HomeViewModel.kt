@@ -5,6 +5,8 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.leo.lune.controller.MusicPlayerController
+import com.leo.lune.domain.model.DownloadQuality
+import com.leo.lune.domain.model.DownloadedSong
 import com.leo.lune.domain.model.LoginState
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.UserPlaylist
@@ -31,8 +33,10 @@ data class HomeUiState(
     val likedTrackCount: Int = 0,
     // 最近播放歌曲列表（来自 Room 本地记录）
     val recentSongs: List<Song> = emptyList(),
-    // 本地下载歌曲（同曲多音质去重后）
-    val localSongs: List<Song> = emptyList(),
+    // 本地下载歌曲（同曲多音质分行，首页横滑截断）
+    val localSongs: List<DownloadedSong> = emptyList(),
+    // 本地下载行总数（含多音质分行，用于「全部」入口）
+    val localTrackCount: Int = 0,
     // 自己创建的歌单（含「我喜欢的音乐」、年度歌单等）
     val createdPlaylists: List<UserPlaylist> = emptyList(),
     // 收藏的他人歌单
@@ -109,14 +113,15 @@ class HomeViewModel @Inject constructor(
                 _uiState.update { it.copy(recentSongs = recentSongs) }
             }
         }
-        // 订阅本地下载；同曲多音质只展示一首
+        // 订阅本地下载；同曲多音质各占一行，不去重
         viewModelScope.launch {
             downloadRepository.observeDownloadedSongs().collect { downloaded ->
-                val localSongs = downloaded
-                    .distinctBy { it.songId }
-                    .take(HOME_LOCAL_SONGS_LIMIT)
-                    .map { it.toSong() }
-                _uiState.update { it.copy(localSongs = localSongs) }
+                _uiState.update {
+                    it.copy(
+                        localSongs = downloaded.take(HOME_LOCAL_SONGS_LIMIT),
+                        localTrackCount = downloaded.size
+                    )
+                }
             }
         }
     }
@@ -130,6 +135,16 @@ class HomeViewModel @Inject constructor(
     @RequiresApi(Build.VERSION_CODES.O)
     fun playSong(song: Song, queue: List<Song>) {
         playerController.playSong(song, queue)
+    }
+
+    // 播放本地下载行：用该行音质；队列按 songId 去重
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun playLocalSong(song: DownloadedSong, queue: List<DownloadedSong>) {
+        playerController.playSong(
+            song = song.toSong(),
+            queue = queue.distinctBy { it.songId }.map { it.toSong() },
+            localQuality = DownloadQuality.fromBitrate(song.bitrate)
+        )
     }
 
     // 播放/暂停切换，委托给全局播放器

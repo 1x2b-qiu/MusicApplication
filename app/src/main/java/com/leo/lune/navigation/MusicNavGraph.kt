@@ -42,6 +42,7 @@ import com.leo.lune.ui.dailymix.DailyMixScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
 import com.leo.lune.ui.identify.IdentifyScreen
 import com.leo.lune.ui.liked.LikedScreen
+import com.leo.lune.ui.localsongs.LocalSongsScreen
 import com.leo.lune.ui.login.LoginScreen
 import com.leo.lune.ui.main.MainScreen
 import com.leo.lune.ui.player.PlayerScreen
@@ -114,6 +115,7 @@ private fun MusicNavHost(
             currentDestination?.hasRoute<MusicRoute.GenreDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.PlaylistDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
+            currentDestination?.hasRoute<MusicRoute.LocalSongs>() == true ||
             currentDestination?.hasRoute<MusicRoute.Downloads>() == true
 
     val hazeState = rememberHazeState()
@@ -161,8 +163,13 @@ private fun MusicNavHost(
                         onRecentClick = {
                             navController.navigateSingleTopTo(MusicRoute.Recent)
                         },
-                        onLocalClick = {
-                            navController.navigateSingleTopTo(MusicRoute.Downloads)
+                        onLocalClick = { coverUrl, trackCount ->
+                            navController.navigateSingleTopTo(
+                                MusicRoute.LocalSongs(
+                                    coverUrl = coverUrl,
+                                    trackCount = trackCount
+                                )
+                            )
                         },
                         onDailyMixClick = {
                             navController.navigateSingleTopTo(MusicRoute.DailyMix)
@@ -312,6 +319,14 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.Recent> {
                     RecentScreen(
+                        onBack = { navController.popBackStack() },
+                        darkTheme = darkTheme,
+                        hazeState = hazeState
+                    )
+                }
+
+                composable<MusicRoute.LocalSongs> {
+                    LocalSongsScreen(
                         onBack = { navController.popBackStack() },
                         darkTheme = darkTheme,
                         hazeState = hazeState

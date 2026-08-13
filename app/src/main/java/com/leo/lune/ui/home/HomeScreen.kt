@@ -61,6 +61,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.leo.lune.R
+import com.leo.lune.domain.model.DownloadedSong
 import com.leo.lune.domain.model.Song
 import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeaderContentHeight
 import com.leo.lune.util.consumePointersUnlessResumed
@@ -82,7 +83,7 @@ private val ThumbOuterSize = 66.dp
 fun HomeScreen(
     onLikedClick: (coverUrl: String, trackCount: Int) -> Unit,
     onRecentClick: () -> Unit,
-    onLocalClick: () -> Unit,
+    onLocalClick: (coverUrl: String, trackCount: Int) -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -126,15 +127,18 @@ fun HomeScreen(
                     }
                     if (uiState.localSongs.isNotEmpty()) {
                         item {
-                            HomeSongThumbSection(
-                                title = "本地歌曲",
-                                iconRes = R.drawable.ic_music_note,
+                            HomeLocalThumbSection(
                                 songs = uiState.localSongs,
                                 isPlaying = uiState.isPlaying,
                                 currentSongId = uiState.currentSongId,
-                                onPlaySong = viewModel::playSong,
+                                onPlaySong = viewModel::playLocalSong,
                                 onTogglePlayPause = viewModel::togglePlayPause,
-                                onViewAllClick = onLocalClick
+                                onViewAllClick = {
+                                    onLocalClick(
+                                        uiState.localSongs.firstOrNull()?.coverUrl.orEmpty(),
+                                        uiState.localTrackCount
+                                    )
+                                }
                             )
                         }
                     }
@@ -227,7 +231,61 @@ fun HomeSectionHeader(
     }
 }
 
-// 缩略图横滑区块（最近播放 / 本地歌曲等）：点选中，点中心钮播放
+// 「本地歌曲」横滑：同曲多音质分行；点选中，点中心钮按该行音质播放
+@Composable
+private fun HomeLocalThumbSection(
+    songs: List<DownloadedSong>,
+    isPlaying: Boolean,
+    currentSongId: Long?,
+    onPlaySong: (DownloadedSong, List<DownloadedSong>) -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onViewAllClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (songs.isEmpty()) return
+
+    var selectedIndex by remember(songs) { mutableIntStateOf(0) }
+    val listState = rememberLazyListState()
+    val visibleIndices by remember {
+        derivedStateOf {
+            listState.layoutInfo.visibleItemsInfo.map { it.index }.toSet()
+        }
+    }
+    val safeIndex = selectedIndex.coerceIn(0, songs.lastIndex)
+
+    Column(modifier = modifier) {
+        HomeSectionHeader(
+            title = "本地歌曲",
+            iconRes = R.drawable.ic_music_note,
+            iconTint = colorScheme.onBackground,
+            onViewAllClick = onViewAllClick
+        )
+        LazyRow(
+            state = listState,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            itemsIndexed(
+                songs,
+                key = { _, song -> "${song.songId}_${song.bitrate}" }
+            ) { index, song ->
+                val asSong = song.toSong()
+                FavoritesThumbnailItem(
+                    song = asSong,
+                    isSelected = index == safeIndex,
+                    isPlayingThis = isPlaying && currentSongId == song.songId,
+                    isLazyAnimated = index in visibleIndices,
+                    onSelectClick = { selectedIndex = index },
+                    onPlayClick = {
+                        if (isPlaying && currentSongId == song.songId) onTogglePlayPause()
+                        else onPlaySong(song, songs)
+                    }
+                )
+            }
+        }
+    }
+}
+
+// 缩略图横滑区块（最近播放等）：点选中，点中心钮播放
 @Composable
 private fun HomeSongThumbSection(
     title: String,

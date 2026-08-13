@@ -61,6 +61,13 @@ sealed interface MusicRoute {
     data object Recent : MusicRoute
 
     @Serializable
+    data class LocalSongs(
+        // 入口预览：首页首曲封面与本地曲数
+        val coverUrl: String = "",
+        val trackCount: Int = 0
+    ) : MusicRoute
+
+    @Serializable
     data object Downloads : MusicRoute
 
     @Serializable

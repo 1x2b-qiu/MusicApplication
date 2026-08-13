@@ -24,7 +24,7 @@ fun MainScreen(
     selectedTab: MainTab,
     onLikedClick: (coverUrl: String, trackCount: Int) -> Unit,
     onRecentClick: () -> Unit,
-    onLocalClick: () -> Unit,
+    onLocalClick: (coverUrl: String, trackCount: Int) -> Unit,
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,
     onChartsClick: () -> Unit = {},
