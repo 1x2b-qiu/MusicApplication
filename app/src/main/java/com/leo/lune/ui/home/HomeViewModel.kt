@@ -9,6 +9,7 @@ import com.leo.lune.domain.model.LoginState
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.model.UserPlaylist
 import com.leo.lune.domain.repository.AuthRepository
+import com.leo.lune.domain.repository.DownloadRepository
 import com.leo.lune.domain.repository.MusicRepository
 import com.leo.lune.domain.repository.PlayHistoryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -30,6 +31,8 @@ data class HomeUiState(
     val likedTrackCount: Int = 0,
     // 最近播放歌曲列表（来自 Room 本地记录）
     val recentSongs: List<Song> = emptyList(),
+    // 本地下载歌曲（同曲多音质去重后）
+    val localSongs: List<Song> = emptyList(),
     // 自己创建的歌单（含「我喜欢的音乐」、年度歌单等）
     val createdPlaylists: List<UserPlaylist> = emptyList(),
     // 收藏的他人歌单
@@ -51,11 +54,12 @@ data class HomeUiState(
 )
 
 // 首页 ViewModel
-// 负责加载「我喜欢的」、用户歌单、订阅本地最近播放与播放状态；登录信息进页时读一次
+// 负责加载「我喜欢的」、用户歌单、订阅本地最近播放 / 本地下载与播放状态
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val musicRepository: MusicRepository,
     private val playHistoryRepository: PlayHistoryRepository,
+    private val downloadRepository: DownloadRepository,
     private val authRepository: AuthRepository,
     // 全局播放控制器，首页不直接持有 ExoPlayer
     private val playerController: MusicPlayerController
@@ -103,6 +107,16 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             playHistoryRepository.observeRecentPlays(limit = RECENT_PLAY_LIMIT).collect { recentSongs ->
                 _uiState.update { it.copy(recentSongs = recentSongs) }
+            }
+        }
+        // 订阅本地下载；同曲多音质只展示一首
+        viewModelScope.launch {
+            downloadRepository.observeDownloadedSongs().collect { downloaded ->
+                val localSongs = downloaded
+                    .distinctBy { it.songId }
+                    .take(HOME_LOCAL_SONGS_LIMIT)
+                    .map { it.toSong() }
+                _uiState.update { it.copy(localSongs = localSongs) }
             }
         }
     }
@@ -188,6 +202,8 @@ private data class HomeLoadedContent(
 
 // 首页「最近播放」展示条数
 private const val RECENT_PLAY_LIMIT = 20
+// 首页「本地歌曲」横滑条数
+private const val HOME_LOCAL_SONGS_LIMIT = 20
 // 首页「我喜欢的」轮播只拉取前 N 首，避免全量歌单拖慢首屏
 private const val HOME_LIKED_SONGS_LIMIT = 30
 

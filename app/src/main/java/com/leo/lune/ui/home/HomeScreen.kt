@@ -82,6 +82,7 @@ private val ThumbOuterSize = 66.dp
 fun HomeScreen(
     onLikedClick: (coverUrl: String, trackCount: Int) -> Unit,
     onRecentClick: () -> Unit,
+    onLocalClick: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -123,15 +124,32 @@ fun HomeScreen(
                             )
                         }
                     }
+                    if (uiState.localSongs.isNotEmpty()) {
+                        item {
+                            HomeSongThumbSection(
+                                title = "本地歌曲",
+                                iconRes = R.drawable.ic_music_note,
+                                songs = uiState.localSongs,
+                                isPlaying = uiState.isPlaying,
+                                currentSongId = uiState.currentSongId,
+                                onPlaySong = viewModel::playSong,
+                                onTogglePlayPause = viewModel::togglePlayPause,
+                                onViewAllClick = onLocalClick
+                            )
+                        }
+                    }
                     if (uiState.recentSongs.isNotEmpty()) {
                         item {
-                            HomeRecentThumbSection(
+                            HomeSongThumbSection(
+                                title = "最近播放",
+                                iconRes = R.drawable.ic_recent_play,
                                 songs = uiState.recentSongs,
                                 isPlaying = uiState.isPlaying,
                                 currentSongId = uiState.currentSongId,
                                 onPlaySong = viewModel::playSong,
                                 onTogglePlayPause = viewModel::togglePlayPause,
-                                onViewAllClick = onRecentClick
+                                onViewAllClick = onRecentClick,
+                                scrollToFrontWhenFirstChanges = true
                             )
                         }
                     }
@@ -209,15 +227,18 @@ fun HomeSectionHeader(
     }
 }
 
-// 「最近播放」：与喜欢同款缩略图横滑（点选中，点中心钮播放）
+// 缩略图横滑区块（最近播放 / 本地歌曲等）：点选中，点中心钮播放
 @Composable
-private fun HomeRecentThumbSection(
+private fun HomeSongThumbSection(
+    title: String,
+    @DrawableRes iconRes: Int,
     songs: List<Song>,
     isPlaying: Boolean,
     currentSongId: Long?,
     onPlaySong: (Song, List<Song>) -> Unit,
     onTogglePlayPause: () -> Unit,
     onViewAllClick: () -> Unit,
+    scrollToFrontWhenFirstChanges: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     if (songs.isEmpty()) return
@@ -232,15 +253,17 @@ private fun HomeRecentThumbSection(
     }
     val safeIndex = selectedIndex.coerceIn(0, songs.lastIndex)
 
-    // 新记录插入队首后，横滑列表滚回最前
-    LaunchedEffect(songs.firstOrNull()?.id) {
-        listState.animateScrollToItem(0)
+    // 新记录插入队首后，横滑列表滚回最前（如最近播放）
+    if (scrollToFrontWhenFirstChanges) {
+        LaunchedEffect(songs.firstOrNull()?.id) {
+            listState.animateScrollToItem(0)
+        }
     }
 
     Column(modifier = modifier) {
         HomeSectionHeader(
-            title = "最近播放",
-            iconRes = R.drawable.ic_recent_play,
+            title = title,
+            iconRes = iconRes,
             iconTint = colorScheme.onBackground,
             onViewAllClick = onViewAllClick
         )

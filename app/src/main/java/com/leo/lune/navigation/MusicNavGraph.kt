@@ -161,6 +161,9 @@ private fun MusicNavHost(
                         onRecentClick = {
                             navController.navigateSingleTopTo(MusicRoute.Recent)
                         },
+                        onLocalClick = {
+                            navController.navigateSingleTopTo(MusicRoute.Downloads)
+                        },
                         onDailyMixClick = {
                             navController.navigateSingleTopTo(MusicRoute.DailyMix)
                         },
