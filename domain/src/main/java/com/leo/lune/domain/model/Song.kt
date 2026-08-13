@@ -17,5 +17,7 @@ data class Song(
     // 封面图 URL，可能为空
     val coverUrl: String?,
     // 时长（毫秒）
-    val durationMs: Long
+    val durationMs: Long,
+    // 队列项绑定的本地下载音质码率；非本地多档队列为 null（播时取最高本地 / 流媒体默认）
+    val preferredDownloadBitrate: Int? = null
 )

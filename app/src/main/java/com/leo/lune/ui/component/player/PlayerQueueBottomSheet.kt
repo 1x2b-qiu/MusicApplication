@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import coil.compose.AsyncImage
+import com.leo.lune.domain.model.DownloadQuality
 import com.leo.lune.domain.model.Song
 import com.leo.lune.ui.home.formatSongDuration
 import com.leo.lune.util.rememberCoverRequest
@@ -219,7 +220,8 @@ fun PlayerQueueBottomSheet(
                             .heightIn(max = 360.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        itemsIndexed(queue, key = { _, song -> song.id }) { index, song ->
+                        // 用 index 作 key：本地多音质队列可出现同 songId
+                        itemsIndexed(queue, key = { index, song -> "${song.id}_$index" }) { index, song ->
                             QueueSongRow(
                                 index = index,
                                 song = song,
@@ -436,12 +438,16 @@ private fun QueueSongRow(
                 PlayingEqualizer(color = colorScheme.onBackground)
             }
         }
+        // 本地多档队列显示音质，便于区分同曲不同行；其它队列仍显示时长
         Text(
-            text = formatSongDuration(song.durationMs),
+            text = song.preferredDownloadBitrate
+                ?.let { DownloadQuality.fromBitrate(it).label }
+                ?: formatSongDuration(song.durationMs),
             color = colorScheme.onBackground.copy(alpha = 0.35f),
-            fontSize = 12.sp
+            fontSize = 12.sp,
+            maxLines = 1,
+            softWrap = false
         )
-
     }
 }
 

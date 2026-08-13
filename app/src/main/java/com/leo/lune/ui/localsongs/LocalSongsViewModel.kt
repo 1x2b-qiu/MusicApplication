@@ -135,15 +135,19 @@ class LocalSongsViewModel @Inject constructor(
         }
     }
 
-    // 点击某行：按该行音质开播；队列按 songId 去重（切到其它曲仍走最高音质）
+    // 点击某行：按该行音质开播；队列与列表一致（同曲多音质各占一项，不去重）
     @RequiresApi(Build.VERSION_CODES.O)
     fun onSongClick(song: DownloadedSong) {
         val rows = _uiState.value.filteredSongs
         if (rows.isEmpty()) return
+        val startIndex = rows.indexOfFirst {
+            it.songId == song.songId && it.bitrate == song.bitrate
+        }.coerceAtLeast(0)
         playerController.playSong(
             song = song.toSong(),
-            queue = rows.distinctBy { it.songId }.map { it.toSong() },
-            localQuality = DownloadQuality.fromBitrate(song.bitrate)
+            queue = rows.map { it.toSong() },
+            localQuality = DownloadQuality.fromBitrate(song.bitrate),
+            startQueueIndex = startIndex
         )
     }
 
@@ -160,8 +164,9 @@ class LocalSongsViewModel @Inject constructor(
             _uiState.update { it.copy(hasStartedPlayAll = true) }
             playerController.playSong(
                 song = first.toSong(),
-                queue = rows.distinctBy { it.songId }.map { it.toSong() },
-                localQuality = DownloadQuality.fromBitrate(first.bitrate)
+                queue = rows.map { it.toSong() },
+                localQuality = DownloadQuality.fromBitrate(first.bitrate),
+                startQueueIndex = 0
             )
         }
     }

@@ -137,13 +137,17 @@ class HomeViewModel @Inject constructor(
         playerController.playSong(song, queue)
     }
 
-    // 播放本地下载行：用该行音质；队列按 songId 去重
+    // 播放本地下载行：用该行音质；队列与横滑列表一致（同曲多音质不去重）
     @RequiresApi(Build.VERSION_CODES.O)
     fun playLocalSong(song: DownloadedSong, queue: List<DownloadedSong>) {
+        val startIndex = queue.indexOfFirst {
+            it.songId == song.songId && it.bitrate == song.bitrate
+        }.coerceAtLeast(0)
         playerController.playSong(
             song = song.toSong(),
-            queue = queue.distinctBy { it.songId }.map { it.toSong() },
-            localQuality = DownloadQuality.fromBitrate(song.bitrate)
+            queue = queue.map { it.toSong() },
+            localQuality = DownloadQuality.fromBitrate(song.bitrate),
+            startQueueIndex = startIndex
         )
     }
 

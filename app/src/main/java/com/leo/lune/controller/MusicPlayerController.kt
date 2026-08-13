@@ -214,6 +214,8 @@ class MusicPlayerController @Inject constructor(
     private var prefetchJob: Job? = null
     // 已追加进 Media3 播放列表的下一首歌曲 id；用于预取去重与自动切歌对账
     private var prefetchedNextSongId: Long? = null
+    // 预取项在业务队列中的下标（同 songId 多档时不能只用 id 回查）
+    private var prefetchedNextQueueIndex: Int? = null
     // 预取下一首对应的音质文案，切到该曲时写入 PlaybackState
     private var prefetchedNextQualityLabel: String? = null
 
@@ -285,27 +287,33 @@ class MusicPlayerController @Inject constructor(
 
     // 播放指定歌曲：结算上一曲时长 → 更新状态并拉歌词 → 启动服务 → 异步取 URL 后 prepare/play
     // 切歌会取消进行中的 URL/歌词任务，并用 songId 校验防止过期回调污染状态
-    // localQuality：本地下载列表点选某档时传入，仅本次播放用该档；其它入口不传则优先最高音质
+    // localQuality：显式指定本地下载档；未传则用 song.preferredDownloadBitrate，再否则最高本地/流媒体默认
+    // startQueueIndex：队列含同 id 多行时指定起始下标；未传则按 song.id 找第一处
     @RequiresApi(Build.VERSION_CODES.O)
     fun playSong(
         song: Song,
         queue: List<Song> = emptyList(),
-        localQuality: DownloadQuality? = null
+        localQuality: DownloadQuality? = null,
+        startQueueIndex: Int? = null
     ) {
         playStatsRecorderManager.settleListenDuration()
         val resolvedQueue = queue.ifEmpty { listOf(song) }
-        val queueIndex = resolvedQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        val queueIndex = startQueueIndex
+            ?.takeIf { it in resolvedQueue.indices }
+            ?: resolvedQueue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+        // 以队列中该下标的项为准（带 preferredDownloadBitrate）
+        val playSong = resolvedQueue.getOrNull(queueIndex) ?: song
+        val resolvedQuality = localQuality ?: playSong.preferredDownloadQuality()
 
         positionJob?.cancel()
         lyricManager.cancelLoading()
         urlJob?.cancel()
         prefetchJob?.cancel()
-        prefetchedNextSongId = null
-        prefetchedNextQualityLabel = null
+        clearPrefetchMarkers()
 
         _playbackState.update {
             it.copy(
-                currentSong = song,
+                currentSong = playSong,
                 queue = resolvedQueue,
                 queueIndex = queueIndex,
                 isLoading = true,
@@ -314,24 +322,30 @@ class MusicPlayerController @Inject constructor(
                 playUrl = null,
                 qualityLabel = "",
                 lyrics = emptyList(),
-                currentLyricLine = lyricManager.fallbackLyric(song),
+                currentLyricLine = lyricManager.fallbackLyric(playSong),
                 activeLyricIndex = 0
             )
         }
         _playbackPosition.value = PlaybackPosition()
 
         ensurePlaybackService()
-        lyricManager.loadLyrics(song.id)
-        favoriteManager.syncForSong(song.id)
+        lyricManager.loadLyrics(playSong.id)
+        favoriteManager.syncForSong(playSong.id)
 
-        val requestSongId = song.id
+        val requestSongId = playSong.id
+        val requestQueueIndex = queueIndex
         urlJob = scope.launch {
             try {
                 // UseCase 并行执行 URL 解析 + 封面加载（本地文件优先，封面失败降级）
-                val preparation = preparePlaybackUseCase(song, localQuality)
+                val preparation = preparePlaybackUseCase(playSong, resolvedQuality)
 
-                // 用户已切到别的歌：丢弃本次结果
-                if (_playbackState.value.currentSong?.id != requestSongId) return@launch
+                // 用户已切到别的歌 / 同曲另一档：丢弃本次结果
+                val latest = _playbackState.value
+                if (latest.currentSong?.id != requestSongId ||
+                    latest.queueIndex != requestQueueIndex
+                ) {
+                    return@launch
+                }
 
                 _playbackState.update {
                     it.copy(
@@ -341,19 +355,24 @@ class MusicPlayerController @Inject constructor(
                         error = null
                     )
                 }
-                playStatsRecorderManager.recordPlayStats(song)
+                playStatsRecorderManager.recordPlayStats(playSong)
                 saveSnapshot()
 
                 // URI 转换是 Android 特有操作（Uri.fromFile / content://），保留在 Controller
                 val playUri = toPlayUri(preparation.source)
-                player.setMediaItem(buildMediaItem(song, playUri, preparation.artworkBytes))
+                player.setMediaItem(buildMediaItem(playSong, playUri, preparation.artworkBytes))
                 player.prepare()
                 player.playWhenReady = true
 
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (throwable: Throwable) {
-                if (_playbackState.value.currentSong?.id != requestSongId) return@launch
+                val latest = _playbackState.value
+                if (latest.currentSong?.id != requestSongId ||
+                    latest.queueIndex != requestQueueIndex
+                ) {
+                    return@launch
+                }
                 _playbackState.update {
                     it.copy(
                         isLoading = false,
@@ -362,6 +381,17 @@ class MusicPlayerController @Inject constructor(
                 }
             }
         }
+    }
+
+    // 按业务队列下标开播（保留该行 preferredDownloadBitrate）
+    @RequiresApi(Build.VERSION_CODES.O)
+    private fun playAtQueueIndex(queue: List<Song>, index: Int) {
+        if (index !in queue.indices) return
+        playSong(
+            song = queue[index],
+            queue = queue,
+            startQueueIndex = index
+        )
     }
 
     // 播放/暂停：暂停直接 pause；续播仅在播放器仍可直接 play 时走 play()，
@@ -381,7 +411,8 @@ class MusicPlayerController @Inject constructor(
             player.playbackState != Player.STATE_ENDED &&
             player.playerError == null
         if (!canResume) {
-            playSong(song, state.queue.ifEmpty { listOf(song) })
+            val queue = state.queue.ifEmpty { listOf(song) }
+            playAtQueueIndex(queue, state.queueIndex.coerceIn(0, queue.lastIndex))
             return
         }
         ensurePlaybackService()
@@ -415,7 +446,8 @@ class MusicPlayerController @Inject constructor(
             PlayerPlayMode.Single -> {
                 val state = _playbackState.value
                 val song = state.currentSong ?: return
-                playSong(song, state.queue.ifEmpty { listOf(song) })
+                val queue = state.queue.ifEmpty { listOf(song) }
+                playAtQueueIndex(queue, state.queueIndex.coerceIn(0, queue.lastIndex))
             }
             PlayerPlayMode.Loop, PlayerPlayMode.Shuffle -> skipToNext()
         }
@@ -428,13 +460,16 @@ class MusicPlayerController @Inject constructor(
         val queue = state.queue
         if (queue.isEmpty()) return
         val prefetchedReady = prefetchedNextSongId != null &&
-            player.currentMediaItemIndex + 1 < player.mediaItemCount &&
-            queue.any { it.id == prefetchedNextSongId }
+            prefetchedNextQueueIndex != null &&
+            player.currentMediaItemIndex + 1 < player.mediaItemCount
         if (prefetchedReady) {
             player.seekToNextMediaItem()
             return
         }
-        playSong(queue[queueManager.resolveNextIndex(queue, state.queueIndex)], queue)
+        playAtQueueIndex(
+            queue,
+            queueManager.resolveNextIndex(queue, state.queueIndex)
+        )
     }
 
     // 上一首：Shuffle 随机；Loop 环形回退；Single 在队首则回到开头，否则播上一曲
@@ -449,8 +484,10 @@ class MusicPlayerController @Inject constructor(
             syncPositionAndLyric()
             return
         }
-        val prevIndex = queueManager.resolvePreviousIndex(queue, state.queueIndex)
-        playSong(queue[prevIndex], queue)
+        playAtQueueIndex(
+            queue,
+            queueManager.resolvePreviousIndex(queue, state.queueIndex)
+        )
     }
 
     // 循环切换播放模式：委托给 QueueManager
@@ -462,12 +499,11 @@ class MusicPlayerController @Inject constructor(
         syncPositionAndLyric()
     }
 
-    // 从当前队列按索引播放；越界则忽略
+    // 从当前队列按索引播放；越界则忽略（同曲多档按行音质播）
     @RequiresApi(Build.VERSION_CODES.O)
     fun playQueueItemAt(index: Int) {
         val state = _playbackState.value
-        if (index !in state.queue.indices) return
-        playSong(state.queue[index], state.queue)
+        playAtQueueIndex(state.queue, index)
     }
 
     // 向当前队列末尾追加歌曲（按 id 去重），不中断当前播放；供私人 FM 续拉
@@ -492,8 +528,10 @@ class MusicPlayerController @Inject constructor(
             return
         }
         // 删掉的若是已预取的下一首，同步移除播放列表中的预取项
-        if (removedSong.id == prefetchedNextSongId) {
+        if (index == prefetchedNextQueueIndex || removedSong.id == prefetchedNextSongId) {
             removePrefetchedMediaItem()
+        } else if (prefetchedNextQueueIndex != null && index < prefetchedNextQueueIndex!!) {
+            prefetchedNextQueueIndex = prefetchedNextQueueIndex!! - 1
         }
         when {
             index < state.queueIndex -> {
@@ -508,7 +546,7 @@ class MusicPlayerController @Inject constructor(
             }
             else -> {
                 val nextIndex = index.coerceAtMost(newQueue.lastIndex)
-                playSong(newQueue[nextIndex], newQueue)
+                playAtQueueIndex(newQueue, nextIndex)
             }
         }
     }
@@ -520,8 +558,7 @@ class MusicPlayerController @Inject constructor(
         lyricManager.cancelLoading()
         urlJob?.cancel()
         prefetchJob?.cancel()
-        prefetchedNextSongId = null
-        prefetchedNextQualityLabel = null
+        clearPrefetchMarkers()
         cancelSleepTimer()
         player.stop()
         player.clearMediaItems()
@@ -587,18 +624,27 @@ class MusicPlayerController @Inject constructor(
     // 按当前播放模式选定下一首并异步取 URL；仅在仍播放原曲且未预取过时追加进播放列表
     private fun prefetchNext(state: PlaybackState) {
         val originSongId = state.currentSong?.id ?: return
-        val nextSong = state.queue[queueManager.resolveNextIndex(state.queue, state.queueIndex)]
+        val originQueueIndex = state.queueIndex
+        val nextIndex = queueManager.resolveNextIndex(state.queue, state.queueIndex)
+        val nextSong = state.queue[nextIndex]
         prefetchJob = scope.launch {
             // 预取失败静默忽略：播完仍走 onPlaybackEnded → skipToNext 全量拉取
-            val preparation = runCatching { preparePlaybackUseCase(nextSong) }.getOrNull()
-                ?: return@launch
+            val preparation = runCatching {
+                preparePlaybackUseCase(nextSong, nextSong.preferredDownloadQuality())
+            }.getOrNull() ?: return@launch
 
-            if (_playbackState.value.currentSong?.id != originSongId) return@launch
+            val latest = _playbackState.value
+            if (latest.currentSong?.id != originSongId ||
+                latest.queueIndex != originQueueIndex
+            ) {
+                return@launch
+            }
             if (prefetchedNextSongId != null) return@launch
 
             val playUri = toPlayUri(preparation.source)
             player.addMediaItem(buildMediaItem(nextSong, playUri, preparation.artworkBytes))
             prefetchedNextSongId = nextSong.id
+            prefetchedNextQueueIndex = nextIndex
             prefetchedNextQualityLabel = preparation.source.qualityLabel
             prefetchJob = null
         }
@@ -607,13 +653,15 @@ class MusicPlayerController @Inject constructor(
     // 播放列表切到已预取的下一首：结算上一首并重开计时、对齐队列下标、清理已播项，续上歌词/收藏/统计
     private fun onPrefetchedSongStarted(songId: Long) {
         val state = _playbackState.value
-        val song = state.queue.firstOrNull { it.id == songId } ?: return
+        val nextIndex = prefetchedNextQueueIndex
+            ?.takeIf { it in state.queue.indices }
+            ?: state.queue.indexOfFirst { it.id == songId }.coerceAtLeast(0)
+        val song = state.queue.getOrNull(nextIndex) ?: return
         playStatsRecorderManager.settleListenDuration()
         // 自动衔接期间 isPlaying 不变，onIsPlayingChanged 不会重开计时，需手动开段
         playStatsRecorderManager.markListeningStarted()
         val qualityLabel = prefetchedNextQualityLabel.orEmpty()
-        prefetchedNextSongId = null
-        prefetchedNextQualityLabel = null
+        clearPrefetchMarkers()
         // 移除已播完的旧项，播放列表始终保持「当前曲 + 预取的下一首」
         val currentIndex = player.currentMediaItemIndex
         if (currentIndex > 0) {
@@ -622,7 +670,7 @@ class MusicPlayerController @Inject constructor(
         _playbackState.update {
             it.copy(
                 currentSong = song,
-                queueIndex = state.queue.indexOfFirst { item -> item.id == songId }.coerceAtLeast(0),
+                queueIndex = nextIndex,
                 isLoading = false,
                 error = null,
                 playUrl = player.currentMediaItem?.localConfiguration?.uri?.toString(),
@@ -644,9 +692,17 @@ class MusicPlayerController @Inject constructor(
         if (nextIndex < player.mediaItemCount) {
             player.removeMediaItem(nextIndex)
         }
+        clearPrefetchMarkers()
+    }
+
+    private fun clearPrefetchMarkers() {
         prefetchedNextSongId = null
+        prefetchedNextQueueIndex = null
         prefetchedNextQualityLabel = null
     }
+
+    private fun Song.preferredDownloadQuality(): DownloadQuality? =
+        preferredDownloadBitrate?.let { DownloadQuality.fromBitrate(it) }
 
     // 将 Song + 可播 URL 转为 Media3 MediaItem；Metadata 供通知栏/锁屏，mediaId 用歌曲 id
     // 优先内嵌已下载的封面字节（artworkData），系统无需再远程拉取，通知栏封面稳定显示；

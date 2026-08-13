@@ -23,6 +23,8 @@ data class DownloadedSong(
         artists = artists,
         album = album,
         coverUrl = coverUrl,
-        durationMs = durationMs
+        durationMs = durationMs,
+        // 带入该下载档位，供队列点播 / 上下首按行音质播放
+        preferredDownloadBitrate = bitrate
     )
 }

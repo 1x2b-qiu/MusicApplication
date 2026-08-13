@@ -50,16 +50,18 @@ class DownloadsViewModel @Inject constructor(
         initialValue = DownloadsUiState()
     )
 
-    // 播放指定已下载行：用该行音质；队列按 songId 去重，切到其它曲仍走最高音质
+    // 播放指定已下载行：用该行音质；队列与列表一致（同曲多音质各占一项，不去重）
     @RequiresApi(Build.VERSION_CODES.O)
     fun playSong(song: DownloadedSong) {
-        val queue = uiState.value.downloadedSongs
-            .distinctBy { it.songId }
-            .map { it.toSong() }
+        val rows = uiState.value.downloadedSongs
+        val startIndex = rows.indexOfFirst {
+            it.songId == song.songId && it.bitrate == song.bitrate
+        }.coerceAtLeast(0)
         playerController.playSong(
             song = song.toSong(),
-            queue = queue,
-            localQuality = DownloadQuality.fromBitrate(song.bitrate)
+            queue = rows.map { it.toSong() },
+            localQuality = DownloadQuality.fromBitrate(song.bitrate),
+            startQueueIndex = startIndex
         )
     }
 

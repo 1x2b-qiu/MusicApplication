@@ -63,7 +63,9 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
         val artists: String,
         val album: String,
         val coverUrl: String?,
-        val durationMs: Long
+        val durationMs: Long,
+        // 旧快照无此字段时 Gson 为 null
+        val preferredDownloadBitrate: Int? = null
     ) {
         fun toSong(): Song = Song(
             id = id,
@@ -71,7 +73,8 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
             artists = artists,
             album = album,
             coverUrl = coverUrl,
-            durationMs = durationMs
+            durationMs = durationMs,
+            preferredDownloadBitrate = preferredDownloadBitrate
         )
     }
 
@@ -81,6 +84,7 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
         artists = artists,
         album = album,
         coverUrl = coverUrl,
-        durationMs = durationMs
+        durationMs = durationMs,
+        preferredDownloadBitrate = preferredDownloadBitrate
     )
 }
