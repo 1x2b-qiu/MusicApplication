@@ -442,13 +442,13 @@ private fun RecentIntroTitle(modifier: Modifier = Modifier) {
             horizontalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Icon(
-                painter = painterResource(R.drawable.ic_music_note),
+                painter = painterResource(R.drawable.ic_recent_play),
                 contentDescription = null,
                 tint = colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(13.dp)
             )
             Text(
-                text = "YOUR LIBRARY",
+                text = "RECENTLY PLAYED",
                 color = colorScheme.onSurfaceVariant,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
