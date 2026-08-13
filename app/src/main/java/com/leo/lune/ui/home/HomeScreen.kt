@@ -3,6 +3,7 @@ package com.leo.lune.ui.home
 import android.os.Build
 import androidx.annotation.DrawableRes
 import androidx.annotation.RequiresApi
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -20,11 +21,14 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -40,21 +44,26 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -67,6 +76,7 @@ import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeaderContentHeight
 import com.leo.lune.util.consumePointersUnlessResumed
 import com.leo.lune.util.rememberCoverRequest
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 // 「我喜欢的」缩略图行参数
 private const val FavoritesThumbTransitionMs = 300
@@ -76,6 +86,7 @@ private const val FavoritesAutoCarouselIntervalMs = 4_000L
 private const val FavoritesAutoCarouselResumeDelayMs = 5_000L
 private val ThumbShape = RoundedCornerShape(16.dp)
 private val ThumbOuterSize = 66.dp
+private val MyPlaylistCoverShape = RoundedCornerShape(12.dp)
 
 // 首页：可滚动内容区（顶栏由 MusicNavHost 统一挂载）
 @RequiresApi(Build.VERSION_CODES.O)
@@ -85,6 +96,12 @@ fun HomeScreen(
     onRecentClick: () -> Unit,
     onLocalClick: (coverUrl: String, trackCount: Int) -> Unit,
     onMyPlaylistsClick: () -> Unit,
+    onPlaylistClick: (
+        playlistId: Long,
+        playlistName: String,
+        coverUrl: String,
+        trackCount: Int
+    ) -> Unit = { _, _, _, _ -> },
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -126,11 +143,14 @@ fun HomeScreen(
                             )
                         }
                     }
-                    // 「我的歌单」入口：已登录即展示；点「全部」进复用歌单广场布局的页
-                    if (uiState.loginState.userId != null) {
+                    // 「我的歌单」：对齐曲库甄选歌单横滑；有数据才展示
+                    if (uiState.myPlaylists.isNotEmpty()) {
                         item {
-                            HomeSectionHeader(
-                                title = "我的歌单",
+                            HomeMyPlaylistsSection(
+                                playlists = uiState.myPlaylists,
+                                playingPlaylistId = uiState.playingMyPlaylistId,
+                                onPlaylistClick = onPlaylistClick,
+                                onPlaylistPlayClick = viewModel::onMyPlaylistPlayClick,
                                 onViewAllClick = onMyPlaylistsClick
                             )
                         }
@@ -171,6 +191,199 @@ fun HomeScreen(
             }
         }
     }
+}
+
+// 「我的歌单」：横向滚动卡片，视觉对齐曲库 FeaturedPlaylistsSection
+@Composable
+private fun HomeMyPlaylistsSection(
+    playlists: List<HomeMyPlaylistItem>,
+    playingPlaylistId: Long?,
+    onPlaylistClick: (
+        playlistId: Long,
+        playlistName: String,
+        coverUrl: String,
+        trackCount: Int
+    ) -> Unit,
+    onPlaylistPlayClick: (Long) -> Unit,
+    onViewAllClick: () -> Unit
+) {
+    if (playlists.isEmpty()) return
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        HomeSectionHeader(
+            title = "我的歌单",
+            iconRes = R.drawable.ic_my_playlists,
+            iconTint = colorScheme.onBackground,
+            onViewAllClick = onViewAllClick
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            // 给封面投影留出上下溢出空间，避免被列表裁切
+            contentPadding = PaddingValues(vertical = 4.dp)
+        ) {
+            items(playlists, key = { it.id }) { playlist ->
+                HomeMyPlaylistCard(
+                    playlist = playlist,
+                    isPlayingThis = playingPlaylistId == playlist.id,
+                    onOpenClick = {
+                        onPlaylistClick(
+                            playlist.id,
+                            playlist.title,
+                            playlist.coverUrl,
+                            playlist.trackCount
+                        )
+                    },
+                    onPlayClick = { onPlaylistPlayClick(playlist.id) }
+                )
+            }
+        }
+    }
+}
+
+// 「我的歌单」卡片：浮起投影封面 + 播放钮 + 标题副标题
+@Composable
+private fun HomeMyPlaylistCard(
+    playlist: HomeMyPlaylistItem,
+    isPlayingThis: Boolean,
+    onOpenClick: () -> Unit,
+    onPlayClick: () -> Unit
+) {
+    val colorScheme = MaterialTheme.colorScheme
+    val playInteraction = remember { MutableInteractionSource() }
+    val playScope = rememberCoroutineScope()
+    val playScale = remember { Animatable(1f) }
+    val coverSize = 128.dp
+    // 深色底上黑阴影几乎不可见，改用浅色散射；浅色底仍用黑影
+    val isDarkBg = remember(colorScheme) { colorScheme.background.luminance() < 0.5f }
+    val shadowBase = if (isDarkBg) Color.White else Color.Black
+
+    Column(
+        modifier = Modifier
+            .width(coverSize)
+            .homePressScaleClickable(0.95f) { onOpenClick() },
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(modifier = Modifier.size(coverSize)) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(y = 10.dp)
+                    .padding(horizontal = 10.dp)
+                    .clip(MyPlaylistCoverShape)
+                    .background(shadowBase.copy(alpha = if (isDarkBg) 0.06f else 0.08f))
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(y = 6.dp)
+                    .padding(horizontal = 5.dp)
+                    .clip(MyPlaylistCoverShape)
+                    .background(shadowBase.copy(alpha = if (isDarkBg) 0.10f else 0.12f))
+            )
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .offset(y = 3.dp)
+                    .clip(MyPlaylistCoverShape)
+                    .background(shadowBase.copy(alpha = if (isDarkBg) 0.14f else 0.16f))
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(coverSize)
+                    .clip(MyPlaylistCoverShape)
+                    .then(
+                        if (isDarkBg) {
+                            Modifier.border(
+                                1.dp,
+                                Color.White.copy(alpha = 0.1f),
+                                MyPlaylistCoverShape
+                            )
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
+                AsyncImage(
+                    model = rememberCoverRequest(playlist.coverUrl, coverSize),
+                    contentDescription = playlist.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .size(32.dp)
+                        .scale(playScale.value)
+                        .shadow(8.dp, CircleShape, spotColor = colorScheme.primary)
+                        .clip(CircleShape)
+                        .background(Color(0xFFF4F2FB))
+                        .clickable(
+                            interactionSource = playInteraction,
+                            indication = null,
+                            onClick = {
+                                playScope.launch {
+                                    playScale.animateTo(0.9f, tween(60))
+                                    playScale.animateTo(1f, tween(100))
+                                }
+                                onPlayClick()
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        painter = painterResource(
+                            if (isPlayingThis) R.drawable.ic_pause else R.drawable.ic_play
+                        ),
+                        contentDescription = if (isPlayingThis) "暂停" else "播放歌单",
+                        colorFilter = ColorFilter.tint(Color(0xFF0E0E10)),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = playlist.title,
+                color = colorScheme.onBackground,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = playlist.subtitle,
+                color = colorScheme.onSurfaceVariant,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun Modifier.homePressScaleClickable(
+    pressedScale: Float,
+    onClick: () -> Unit
+): Modifier {
+    val interaction = remember { MutableInteractionSource() }
+    val scope = rememberCoroutineScope()
+    val scale = remember { Animatable(1f) }
+    return this
+        .scale(scale.value)
+        .clickable(
+            interactionSource = interaction,
+            indication = null,
+            onClick = {
+                scope.launch {
+                    scale.animateTo(pressedScale, tween(60))
+                    scale.animateTo(1f, tween(100))
+                }
+                onClick()
+            }
+        )
 }
 
 // 区块标题行：左侧可选图标 + 标题，右侧可选操作文案（默认「全部」）

@@ -49,7 +49,8 @@ fun MainScreen(
                 onLikedClick = onLikedClick,
                 onRecentClick = onRecentClick,
                 onLocalClick = onLocalClick,
-                onMyPlaylistsClick = onMyPlaylistsClick
+                onMyPlaylistsClick = onMyPlaylistsClick,
+                onPlaylistClick = onPlaylistClick
             )
         }
 

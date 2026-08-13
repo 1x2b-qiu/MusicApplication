@@ -25,6 +25,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+// 首页「我的歌单」横滑条目（对齐曲库甄选歌单卡片字段）
+data class HomeMyPlaylistItem(
+    val id: Long,
+    val title: String,
+    val subtitle: String,
+    val trackCount: Int,
+    val coverUrl: String
+)
+
 // 首页 UI 状态
 data class HomeUiState(
     // 「我喜欢的」歌曲列表
@@ -37,6 +46,8 @@ data class HomeUiState(
     val localSongs: List<DownloadedSong> = emptyList(),
     // 本地下载行总数（含多音质分行，用于「全部」入口）
     val localTrackCount: Int = 0,
+    // 「我的歌单」横滑预览：收藏在前、创建在后（已排除「我喜欢的音乐」）
+    val myPlaylists: List<HomeMyPlaylistItem> = emptyList(),
     // 自己创建的歌单（含「我喜欢的音乐」、年度歌单等）
     val createdPlaylists: List<UserPlaylist> = emptyList(),
     // 收藏的他人歌单
@@ -54,7 +65,9 @@ data class HomeUiState(
     // 当前正在播放的歌曲 ID，用于「我喜欢的」播放按钮状态
     val currentSongId: Long? = null,
     // 迷你栏/顶栏是否有可展示的播放内容
-    val hasPlaybackContent: Boolean = false
+    val hasPlaybackContent: Boolean = false,
+    // 当前正在播放的「我的歌单」id；无则为 null，驱动封面播放钮
+    val playingMyPlaylistId: Long? = null
 )
 
 // 首页 ViewModel
@@ -75,6 +88,8 @@ class HomeViewModel @Inject constructor(
 
     // 当前进行中的「我喜欢的」加载任务，重试时可取消
     private var loadJob: Job? = null
+    // 「我的歌单」播放标记：首曲 id + 队列集合，用于匹配全局播放状态
+    private val myPlaylistMarkers = mutableMapOf<Long, HomeMyPlaylistMarker>()
 
     init {
         // 持续观察登录态：会话恢复 / 登录 / 登出后自动刷新「我喜欢的」
@@ -84,15 +99,16 @@ class HomeViewModel @Inject constructor(
                 loadHomeContent()
             }
         }
-        // 只取本页需要的播放字段，过滤无关更新（含顶栏歌词）
+        // 只取本页需要的播放字段，过滤无关更新（含顶栏歌词 / 我的歌单播停）
         viewModelScope.launch {
             playerController.playbackState
                 .map { state ->
-                    HomeUiState(
+                    HomePlaybackSlice(
                         currentLyricLine = state.currentLyricLine,
                         isPlaying = state.isPlaying,
                         currentSongId = state.currentSong?.id,
-                        hasPlaybackContent = state.displaySong != null
+                        hasPlaybackContent = state.displaySong != null,
+                        queueFirstId = state.queue.firstOrNull()?.id
                     )
                 }
                 .distinctUntilChanged()
@@ -102,7 +118,12 @@ class HomeViewModel @Inject constructor(
                             currentLyricLine = playback.currentLyricLine,
                             isPlaying = playback.isPlaying,
                             currentSongId = playback.currentSongId,
-                            hasPlaybackContent = playback.hasPlaybackContent
+                            hasPlaybackContent = playback.hasPlaybackContent,
+                            playingMyPlaylistId = resolvePlayingMyPlaylistId(
+                                playback.isPlaying,
+                                playback.queueFirstId,
+                                playback.currentSongId
+                            )
                         )
                     }
                 }
@@ -157,6 +178,29 @@ class HomeViewModel @Inject constructor(
         playerController.togglePlayPause()
     }
 
+    // 「我的歌单」封面播放钮：拉取曲目并播放；若正在播该歌单则暂停
+    @RequiresApi(Build.VERSION_CODES.O)
+    fun onMyPlaylistPlayClick(playlistId: Long) {
+        val playback = playerController.playbackState.value
+        val isPlayingThis = _uiState.value.playingMyPlaylistId == playlistId &&
+            playback.isPlaying
+        if (isPlayingThis) {
+            playerController.togglePlayPause()
+            return
+        }
+        viewModelScope.launch {
+            runCatching { musicRepository.getPlaylistSongs(playlistId, limit = null) }
+                .onSuccess { songs ->
+                    if (songs.isEmpty()) return@onSuccess
+                    myPlaylistMarkers[playlistId] = HomeMyPlaylistMarker(
+                        firstSongId = songs.first().id,
+                        songIds = songs.map { it.id }.toSet()
+                    )
+                    playerController.playSong(songs.first(), songs)
+                }
+        }
+    }
+
     // 加载「我喜欢的」与用户歌单；未登录时仅清空列表，不视为错误
     private fun loadHomeContent() {
         loadJob?.cancel()
@@ -182,11 +226,15 @@ class HomeViewModel @Inject constructor(
                 } else {
                     emptyList()
                 }
+                val created = playlists.filter { it.isCreatedByUser }
+                val subscribed = playlists.filter { !it.isCreatedByUser }
                 HomeLoadedContent(
                     likedSongs = likedSongs,
                     likedTrackCount = likedPlaylist?.trackCount?.coerceAtLeast(0) ?: 0,
-                    createdPlaylists = playlists.filter { it.isCreatedByUser },
-                    subscribedPlaylists = playlists.filter { !it.isCreatedByUser }
+                    createdPlaylists = created,
+                    subscribedPlaylists = subscribed,
+                    // 横滑预览：收藏在前、创建在后（排除喜欢歌单）
+                    myPlaylists = buildHomeMyPlaylists(subscribed, created)
                 )
             }.onSuccess { content ->
                 _uiState.update {
@@ -195,6 +243,7 @@ class HomeViewModel @Inject constructor(
                         likedTrackCount = content.likedTrackCount,
                         createdPlaylists = content.createdPlaylists,
                         subscribedPlaylists = content.subscribedPlaylists,
+                        myPlaylists = content.myPlaylists,
                         isLoading = false,
                         error = null
                     )
@@ -209,6 +258,18 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    // 返回当前正在播放的「我的歌单」id；无则为 null
+    private fun resolvePlayingMyPlaylistId(
+        isPlaying: Boolean,
+        queueFirstId: Long?,
+        currentSongId: Long?
+    ): Long? {
+        if (!isPlaying || currentSongId == null || queueFirstId == null) return null
+        return myPlaylistMarkers.entries.firstOrNull { (_, marker) ->
+            marker.firstSongId == queueFirstId && currentSongId in marker.songIds
+        }?.key
+    }
 }
 
 // 首页一次加载得到的远端内容
@@ -216,13 +277,49 @@ private data class HomeLoadedContent(
     val likedSongs: List<Song> = emptyList(),
     val likedTrackCount: Int = 0,
     val createdPlaylists: List<UserPlaylist> = emptyList(),
-    val subscribedPlaylists: List<UserPlaylist> = emptyList()
+    val subscribedPlaylists: List<UserPlaylist> = emptyList(),
+    val myPlaylists: List<HomeMyPlaylistItem> = emptyList()
+)
+
+// 播放状态切片：仅首页关心的字段，便于 distinctUntilChanged
+private data class HomePlaybackSlice(
+    val currentLyricLine: String,
+    val isPlaying: Boolean,
+    val currentSongId: Long?,
+    val hasPlaybackContent: Boolean,
+    val queueFirstId: Long?
+)
+
+// 「我的歌单」播放标记
+private data class HomeMyPlaylistMarker(
+    val firstSongId: Long,
+    val songIds: Set<Long>
+)
+
+// 组装首页横滑歌单：收藏 → 创建（去掉喜欢），再截断
+private fun buildHomeMyPlaylists(
+    subscribed: List<UserPlaylist>,
+    created: List<UserPlaylist>
+): List<HomeMyPlaylistItem> {
+    return (subscribed + created.filter { !it.isLikedMusicPlaylist })
+        .take(HOME_MY_PLAYLISTS_LIMIT)
+        .map { it.toHomeMyPlaylistItem() }
+}
+
+private fun UserPlaylist.toHomeMyPlaylistItem(): HomeMyPlaylistItem = HomeMyPlaylistItem(
+    id = id,
+    title = name,
+    subtitle = if (trackCount > 0) "$trackCount 首" else "",
+    trackCount = trackCount.coerceAtLeast(0),
+    coverUrl = coverUrl.orEmpty()
 )
 
 // 首页「最近播放」展示条数
 private const val RECENT_PLAY_LIMIT = 20
 // 首页「本地歌曲」横滑条数
 private const val HOME_LOCAL_SONGS_LIMIT = 20
+// 首页「我的歌单」横滑条数
+private const val HOME_MY_PLAYLISTS_LIMIT = 20
 // 首页「我喜欢的」轮播只拉取前 N 首，避免全量歌单拖慢首屏
 private const val HOME_LIKED_SONGS_LIMIT = 20
 
