@@ -25,6 +25,7 @@ fun MainScreen(
     onLikedClick: (coverUrl: String, trackCount: Int) -> Unit,
     onRecentClick: () -> Unit,
     onLocalClick: (coverUrl: String, trackCount: Int) -> Unit,
+    onMyPlaylistsClick: () -> Unit,
     onDailyMixClick: () -> Unit,
     onPlaylistPlazaClick: () -> Unit,
     onChartsClick: () -> Unit = {},
@@ -47,7 +48,8 @@ fun MainScreen(
             HomeScreen(
                 onLikedClick = onLikedClick,
                 onRecentClick = onRecentClick,
-                onLocalClick = onLocalClick
+                onLocalClick = onLocalClick,
+                onMyPlaylistsClick = onMyPlaylistsClick
             )
         }
 

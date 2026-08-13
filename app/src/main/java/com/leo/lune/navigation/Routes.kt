@@ -35,6 +35,9 @@ sealed interface MusicRoute {
     data object PlaylistPlaza : MusicRoute
 
     @Serializable
+    data object MyPlaylists : MusicRoute
+
+    @Serializable
     data object Charts : MusicRoute
 
     @Serializable

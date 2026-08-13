@@ -84,6 +84,7 @@ fun HomeScreen(
     onLikedClick: (coverUrl: String, trackCount: Int) -> Unit,
     onRecentClick: () -> Unit,
     onLocalClick: (coverUrl: String, trackCount: Int) -> Unit,
+    onMyPlaylistsClick: () -> Unit,
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -122,6 +123,15 @@ fun HomeScreen(
                                         uiState.likedTrackCount
                                     )
                                 }
+                            )
+                        }
+                    }
+                    // 「我的歌单」入口：已登录即展示；点「全部」进复用歌单广场布局的页
+                    if (uiState.loginState.userId != null) {
+                        item {
+                            HomeSectionHeader(
+                                title = "我的歌单",
+                                onViewAllClick = onMyPlaylistsClick
                             )
                         }
                     }

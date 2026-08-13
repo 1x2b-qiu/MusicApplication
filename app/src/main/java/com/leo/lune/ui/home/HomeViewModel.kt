@@ -224,7 +224,7 @@ private const val RECENT_PLAY_LIMIT = 20
 // 首页「本地歌曲」横滑条数
 private const val HOME_LOCAL_SONGS_LIMIT = 20
 // 首页「我喜欢的」轮播只拉取前 N 首，避免全量歌单拖慢首屏
-private const val HOME_LIKED_SONGS_LIMIT = 30
+private const val HOME_LIKED_SONGS_LIMIT = 20
 
 // 将歌曲时长（毫秒）格式化为 mm:ss
 fun formatSongDuration(durationMs: Long): String {

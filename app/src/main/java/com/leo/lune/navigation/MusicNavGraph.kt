@@ -45,6 +45,7 @@ import com.leo.lune.ui.liked.LikedScreen
 import com.leo.lune.ui.localsongs.LocalSongsScreen
 import com.leo.lune.ui.login.LoginScreen
 import com.leo.lune.ui.main.MainScreen
+import com.leo.lune.ui.myplaylists.MyPlaylistsScreen
 import com.leo.lune.ui.player.PlayerScreen
 import com.leo.lune.ui.playlistdetail.PlaylistDetailScreen
 import com.leo.lune.ui.charts.ChartDetailScreen
@@ -110,6 +111,7 @@ private fun MusicNavHost(
             currentDestination?.hasRoute<MusicRoute.Liked>() == true ||
             currentDestination?.hasRoute<MusicRoute.DailyMix>() == true ||
             currentDestination?.hasRoute<MusicRoute.PlaylistPlaza>() == true ||
+            currentDestination?.hasRoute<MusicRoute.MyPlaylists>() == true ||
             currentDestination?.hasRoute<MusicRoute.Charts>() == true ||
             currentDestination?.hasRoute<MusicRoute.ChartDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.GenreDetail>() == true ||
@@ -170,6 +172,9 @@ private fun MusicNavHost(
                                     trackCount = trackCount
                                 )
                             )
+                        },
+                        onMyPlaylistsClick = {
+                            navController.navigateSingleTopTo(MusicRoute.MyPlaylists)
                         },
                         onDailyMixClick = {
                             navController.navigateSingleTopTo(MusicRoute.DailyMix)
@@ -274,6 +279,22 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.PlaylistPlaza> {
                     PlaylistPlazaScreen(
+                        onBack = { navController.popBackStack() },
+                        onPlaylistClick = { playlistId, playlistName, coverUrl, trackCount ->
+                            navController.navigateSingleTopTo(
+                                MusicRoute.PlaylistDetail(
+                                    playlistId = playlistId,
+                                    playlistName = playlistName,
+                                    coverUrl = coverUrl,
+                                    trackCount = trackCount
+                                )
+                            )
+                        }
+                    )
+                }
+
+                composable<MusicRoute.MyPlaylists> {
+                    MyPlaylistsScreen(
                         onBack = { navController.popBackStack() },
                         onPlaylistClick = { playlistId, playlistName, coverUrl, trackCount ->
                             navController.navigateSingleTopTo(
