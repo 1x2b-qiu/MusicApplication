@@ -41,6 +41,7 @@ import com.leo.lune.ui.component.toast.FavoriteToastHost
 import com.leo.lune.ui.dailymix.DailyMixScreen
 import com.leo.lune.ui.downloads.DownloadsScreen
 import com.leo.lune.ui.identify.IdentifyScreen
+import com.leo.lune.ui.importlocal.ImportLocalScreen
 import com.leo.lune.ui.liked.LikedScreen
 import com.leo.lune.ui.localsongs.LocalSongsScreen
 import com.leo.lune.ui.login.LoginScreen
@@ -118,7 +119,8 @@ private fun MusicNavHost(
             currentDestination?.hasRoute<MusicRoute.PlaylistDetail>() == true ||
             currentDestination?.hasRoute<MusicRoute.Recent>() == true ||
             currentDestination?.hasRoute<MusicRoute.LocalSongs>() == true ||
-            currentDestination?.hasRoute<MusicRoute.Downloads>() == true
+            currentDestination?.hasRoute<MusicRoute.Downloads>() == true ||
+            currentDestination?.hasRoute<MusicRoute.ImportLocal>() == true
 
     val hazeState = rememberHazeState()
     var sidebarOpen by remember { mutableStateOf(false) }
@@ -241,6 +243,12 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.Downloads> {
                     DownloadsScreen(
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+
+                composable<MusicRoute.ImportLocal> {
+                    ImportLocalScreen(
                         onBack = { navController.popBackStack() }
                     )
                 }
@@ -454,6 +462,7 @@ private fun MusicNavHost(
             onMenuClick = { id ->
                 when (id) {
                     "download" -> navController.navigateSingleTopTo(MusicRoute.Downloads)
+                    "import_local" -> navController.navigateSingleTopTo(MusicRoute.ImportLocal)
                     "settings" -> navController.navigateSingleTopTo(MusicRoute.Settings)
                     "identify" -> navController.navigateSingleTopTo(MusicRoute.Identify)
                 }
