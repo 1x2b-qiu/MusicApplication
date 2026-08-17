@@ -7,6 +7,8 @@ import com.leo.lune.data.local.entity.PlaybackSnapshotEntity
 import com.leo.lune.domain.model.PlaybackSnapshot
 import com.leo.lune.domain.model.Song
 import com.leo.lune.domain.repository.PlaybackSnapshotRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,7 +21,8 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
     private val gson = Gson()
     private val songListType = object : TypeToken<List<SongJson>>() {}.type
 
-    override suspend fun save(snapshot: PlaybackSnapshot) {
+    // 整队 Gson 序列化可能较重，切到 Default 避免占主线程
+    override suspend fun save(snapshot: PlaybackSnapshot) = withContext(Dispatchers.Default) {
         val entity = PlaybackSnapshotEntity(
             currentSongId = snapshot.currentSong.id,
             currentSongName = snapshot.currentSong.name,
@@ -33,9 +36,9 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
         playbackSnapshotDao.upsert(entity)
     }
 
-    override suspend fun get(): PlaybackSnapshot? {
-        val entity = playbackSnapshotDao.get() ?: return null
-        return runCatching {
+    override suspend fun get(): PlaybackSnapshot? = withContext(Dispatchers.Default) {
+        val entity = playbackSnapshotDao.get() ?: return@withContext null
+        runCatching {
             val queueJson = gson.fromJson<List<SongJson>>(entity.queueJson, songListType)
             PlaybackSnapshot(
                 currentSong = Song(

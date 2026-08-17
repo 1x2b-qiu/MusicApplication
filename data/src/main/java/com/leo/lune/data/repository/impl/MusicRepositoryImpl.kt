@@ -29,6 +29,8 @@ import com.leo.lune.domain.model.SongUrl
 import com.leo.lune.domain.model.SubscribePlaylistResult
 import com.leo.lune.domain.model.UserPlaylist
 import com.leo.lune.domain.repository.MusicRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -101,7 +103,8 @@ class MusicRepositoryImpl @Inject constructor(
         val response = neteaseApi.getLyric(songId)
         val lrcText = response.lrc?.lyric
         if (lrcText.isNullOrBlank()) return emptyList()
-        return LrcParser.parse(lrcText)
+        // 解析属 CPU 工作，切到 Default 避免占主线程
+        return withContext(Dispatchers.Default) { LrcParser.parse(lrcText) }
     }
 
     // 收藏或取消收藏歌曲

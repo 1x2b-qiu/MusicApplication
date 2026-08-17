@@ -4,6 +4,8 @@ import com.leo.lune.data.BuildConfig
 import com.leo.lune.data.remote.api.AuddApi
 import com.leo.lune.domain.model.RecognizedTrack
 import com.leo.lune.domain.repository.IdentifyRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -18,7 +20,8 @@ class IdentifyRepositoryImpl @Inject constructor(
     private val auddApi: AuddApi,
 ) : IdentifyRepository {
 
-    override suspend fun recognize(audioPath: String): RecognizedTrack? {
+    // File 检查 / multipart 构建属阻塞 IO，整段切到 IO 保证 Main-Safe
+    override suspend fun recognize(audioPath: String): RecognizedTrack? = withContext(Dispatchers.IO) {
         val token = BuildConfig.AUDD_API_TOKEN
         if (token.isBlank()) {
             throw IllegalStateException(
@@ -51,12 +54,12 @@ class IdentifyRepositoryImpl @Inject constructor(
             )
         }
 
-        val result = response.result ?: return null
+        val result = response.result ?: return@withContext null
         val title = result.title?.trim().orEmpty()
         val artist = result.artist?.trim().orEmpty()
-        if (title.isEmpty() && artist.isEmpty()) return null
+        if (title.isEmpty() && artist.isEmpty()) return@withContext null
 
-        return RecognizedTrack(
+        RecognizedTrack(
             title = title,
             artist = artist,
             album = result.album?.trim()?.takeIf { it.isNotEmpty() },
