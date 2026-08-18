@@ -180,47 +180,58 @@ fun LibraryScreen(
         contentPadding = PaddingValues(bottom = 161.dp),
         verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
-        item {
-            DailyRecommendSection(
-                dailySongs = uiState.dailyRecommendSongs,
-                isDailyRecommendPlaying = uiState.isDailyRecommendPlaying,
-                onDailyRecommendPlayClick = viewModel::onDailyRecommendPlayClick,
-                onDailyMixClick = onDailyMixClick
-            )
+        // 有数据才占槽：避免空 section 高度为 0 时，列表把视口锚在后到的中部区块
+        if (uiState.dailyRecommendSongs.isNotEmpty()) {
+            item {
+                DailyRecommendSection(
+                    dailySongs = uiState.dailyRecommendSongs,
+                    isDailyRecommendPlaying = uiState.isDailyRecommendPlaying,
+                    onDailyRecommendPlayClick = viewModel::onDailyRecommendPlayClick,
+                    onDailyMixClick = onDailyMixClick
+                )
+            }
         }
 
-        item {
-            FeaturedPlaylistsSection(
-                playlists = uiState.featuredPlaylists,
-                playingPlaylistId = uiState.playingFeaturedPlaylistId,
-                onPlaylistClick = onPlaylistClick,
-                onPlaylistPlayClick = viewModel::onPlaylistPlayClick,
-                onViewAllClick = onPlaylistPlazaClick
-            )
+        if (uiState.featuredPlaylists.isNotEmpty()) {
+            item {
+                FeaturedPlaylistsSection(
+                    playlists = uiState.featuredPlaylists,
+                    playingPlaylistId = uiState.playingFeaturedPlaylistId,
+                    onPlaylistClick = onPlaylistClick,
+                    onPlaylistPlayClick = viewModel::onPlaylistPlayClick,
+                    onViewAllClick = onPlaylistPlazaClick
+                )
+            }
         }
 
-        item {
-            ChartsSection(
-                charts = uiState.charts,
-                onChartClick = onChartClick,
-                onChartSongClick = viewModel::onChartSongClick,
-                onViewAllClick = onChartsClick
-            )
+        if (uiState.charts.isNotEmpty()) {
+            item {
+                ChartsSection(
+                    charts = uiState.charts,
+                    onChartClick = onChartClick,
+                    onChartSongClick = viewModel::onChartSongClick,
+                    onViewAllClick = onChartsClick
+                )
+            }
         }
 
-        item {
-            GuessYouLikeSection(
-                songs = uiState.guessYouLikeSongs,
-                playingSongId = playingSongIdState.value,
-                onPlay = onGuessYouLikePlay
-            )
+        if (uiState.guessYouLikeSongs.isNotEmpty()) {
+            item {
+                GuessYouLikeSection(
+                    songs = uiState.guessYouLikeSongs,
+                    playingSongId = playingSongIdState.value,
+                    onPlay = onGuessYouLikePlay
+                )
+            }
         }
 
-        item {
-            GenresSection(
-                genres = uiState.genres,
-                onGenreClick = onGenreClick
-            )
+        if (uiState.genres.isNotEmpty()) {
+            item {
+                GenresSection(
+                    genres = uiState.genres,
+                    onGenreClick = onGenreClick
+                )
+            }
         }
     }
 }
