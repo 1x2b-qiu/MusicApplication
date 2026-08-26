@@ -45,16 +45,19 @@ import androidx.documentfile.provider.DocumentFile
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.leo.lune.local.ScannedLocalTrack
+import com.leo.lune.permission.AppPermission
+import com.leo.lune.permission.PermissionCoordinator
 import com.leo.lune.ui.home.formatSongDuration
 import com.leo.lune.util.consumePointersUnlessResumed
 
 private val ActionButtonShape = RoundedCornerShape(14.dp)
 private val RowShape = RoundedCornerShape(12.dp)
 
-// 「导入本地歌曲」：自定义文件夹扫描，确认后写入本地曲库
+// 「导入本地歌曲」：全盘 / 自定义文件夹扫描，确认后写入本地曲库
 @Composable
 fun ImportLocalScreen(
     onBack: () -> Unit,
+    permissions: PermissionCoordinator,
     viewModel: ImportLocalViewModel = hiltViewModel()
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -81,6 +84,18 @@ fun ImportLocalScreen(
         viewModel.onFolderPicked(uri, folderName)
     }
 
+    // 全盘扫描入口：先查 / 申请音频读取权限，通过后再启动扫描
+    val onScanAllClick: () -> Unit = {
+        if (permissions.isGranted(AppPermission.ReadAudio)) {
+            viewModel.startDeviceScan()
+        } else {
+            permissions.request(AppPermission.ReadAudio) { granted ->
+                if (granted) viewModel.startDeviceScan()
+                else viewModel.onAudioPermissionDenied()
+            }
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -93,7 +108,7 @@ fun ImportLocalScreen(
         ImportLocalTopBar(onBack = onBack)
 
         Text(
-            text = "选择手机中的文件夹，扫描音频后点「导入」写入曲库。不会复制或删除原文件。",
+            text = "扫描设备全部歌曲，或选择指定文件夹扫描，确认后点「导入」写入曲库。不会复制或删除原文件。",
             color = colorScheme.onSurfaceVariant,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 12.dp, bottom = 16.dp)
@@ -104,29 +119,41 @@ fun ImportLocalScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             ImportLocalActionButton(
-                text = if (uiState.isScanning) "扫描中…" else "选择文件夹",
+                text = if (uiState.isScanning) "扫描中…" else "扫描全部歌曲",
                 enabled = !uiState.isScanning && !uiState.isImporting,
                 filled = true,
+                onClick = onScanAllClick,
+                modifier = Modifier.weight(1f)
+            )
+            ImportLocalActionButton(
+                text = "选择文件夹",
+                enabled = !uiState.isScanning && !uiState.isImporting,
+                filled = false,
                 onClick = { openTreeLauncher.launch(null) },
                 modifier = Modifier.weight(1f)
             )
-            if (uiState.isScanning) {
-                ImportLocalActionButton(
-                    text = "取消",
-                    enabled = true,
-                    filled = false,
-                    onClick = viewModel::cancelScan,
-                    modifier = Modifier.weight(1f)
-                )
-            } else if (uiState.tracks.isNotEmpty() || uiState.error != null) {
-                ImportLocalActionButton(
-                    text = "清空",
-                    enabled = !uiState.isImporting,
-                    filled = false,
-                    onClick = viewModel::clearResults,
-                    modifier = Modifier.weight(1f)
-                )
-            }
+        }
+
+        if (uiState.isScanning) {
+            ImportLocalActionButton(
+                text = "取消",
+                enabled = true,
+                filled = false,
+                onClick = viewModel::cancelScan,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+            )
+        } else if (uiState.tracks.isNotEmpty() || uiState.error != null) {
+            ImportLocalActionButton(
+                text = "清空",
+                enabled = !uiState.isImporting,
+                filled = false,
+                onClick = viewModel::clearResults,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+            )
         }
 
         if (!uiState.isScanning && uiState.tracks.isNotEmpty()) {
@@ -366,7 +393,7 @@ private fun ImportLocalEmptyHint(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(top = 16.dp)
         )
         Text(
-            text = "点「选择文件夹」开始自定义扫描",
+            text = "点「扫描全部歌曲」或「选择文件夹」开始扫描",
             color = colorScheme.onSurfaceVariant,
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp)

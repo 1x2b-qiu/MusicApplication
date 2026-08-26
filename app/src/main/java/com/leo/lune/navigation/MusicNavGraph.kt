@@ -249,7 +249,8 @@ private fun MusicNavHost(
 
                 composable<MusicRoute.ImportLocal> {
                     ImportLocalScreen(
-                        onBack = { navController.popBackStack() }
+                        onBack = { navController.popBackStack() },
+                        permissions = permissions
                     )
                 }
 

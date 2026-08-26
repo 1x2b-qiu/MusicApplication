@@ -24,4 +24,14 @@ enum class AppPermission(
         minSdk = Build.VERSION_CODES.BASE,
         requestOnStartup = false,
     ),
+    // 读取音频媒体库（全盘扫描）；仅在导入页点「扫描全部歌曲」时按需申请
+    ReadAudio(
+        manifest = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            Manifest.permission.READ_EXTERNAL_STORAGE
+        },
+        minSdk = Build.VERSION_CODES.BASE,
+        requestOnStartup = false,
+    ),
 }
