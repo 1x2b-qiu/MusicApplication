@@ -55,7 +55,9 @@ data class PlayerUiState(
     // 已落盘的音质；用于拦截重复下载同档
     val downloadedQualities: Set<DownloadQuality> = emptySet(),
     // 定时关闭是否进行中
-    val sleepTimerActive: Boolean = false
+    val sleepTimerActive: Boolean = false,
+    // 自定义文件夹导入曲：不提供网易云下载
+    val isImportedLocal: Boolean = false
 )
 
 // 全屏播放页 ViewModel
@@ -82,7 +84,7 @@ class PlayerViewModel @Inject constructor(
             .map { it.displaySong?.id ?: 0L }
             .distinctUntilChanged()
             .flatMapLatest { songId ->
-                if (songId == 0L) flowOf(emptySet())
+                if (songId <= 0L) flowOf(emptySet())
                 else downloadRepository.observeDownloadedQualities(songId)
             },
         downloadManager.tasks,
@@ -115,7 +117,8 @@ class PlayerViewModel @Inject constructor(
             downloadProgress = activeTask?.progress ?: 0f,
             downloadError = tasks.firstOrNull { it.songId == songId }?.error,
             downloadedQualities = downloadedQualities,
-            sleepTimerActive = sleepTimerActive
+            sleepTimerActive = sleepTimerActive,
+            isImportedLocal = song?.isImportedLocal == true
         )
     }
         .distinctUntilChanged()
@@ -165,6 +168,7 @@ class PlayerViewModel @Inject constructor(
     // 下载当前展示曲指定音质；该档已下载或正在下同档则忽略
     fun downloadCurrentSong(quality: DownloadQuality = DownloadQuality.Default) {
         val song = playerController.playbackState.value.displaySong ?: return
+        if (song.isImportedLocal) return
         val state = uiState.value
         if (quality in state.downloadedQualities) return
         val alreadyQueued = downloadManager.tasks.value.any {

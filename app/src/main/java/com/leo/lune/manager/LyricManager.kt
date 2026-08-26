@@ -41,6 +41,7 @@ class LyricManager @Inject constructor(
         lyricJob?.cancel()
         targetSongId = songId
         _lyrics.value = emptyList()
+        if (songId < 0L) return
         lyricJob = scope.launch {
             runCatching { musicRepository.getSongLyrics(songId) }
                 .onSuccess { result ->

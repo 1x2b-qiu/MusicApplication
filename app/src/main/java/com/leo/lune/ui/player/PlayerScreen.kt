@@ -155,6 +155,7 @@ fun PlayerScreen(
                     isDownloaded = uiState.isDownloaded,
                     isDownloading = uiState.isDownloading,
                     downloadProgress = uiState.downloadProgress,
+                    showDownload = !uiState.isImportedLocal,
                     sleepTimerActive = uiState.sleepTimerActive,
                     sleepTimerEndsAtEpochMs = sleepTimerEndsAt,
                     onSleepTimerClick = { sleepTimerSheetOpen = true },
@@ -308,6 +309,7 @@ private fun PlayerTopBar(
     isDownloaded: Boolean,
     isDownloading: Boolean,
     downloadProgress: Float,
+    showDownload: Boolean = true,
     sleepTimerActive: Boolean,
     sleepTimerEndsAtEpochMs: Long?,
     onSleepTimerClick: () -> Unit,
@@ -354,12 +356,14 @@ private fun PlayerTopBar(
             }
         }
 
-        PlayerDownloadButton(
-            isDownloaded = isDownloaded,
-            isDownloading = isDownloading,
-            downloadProgress = downloadProgress,
-            onClick = onDownloadClick
-        )
+        if (showDownload) {
+            PlayerDownloadButton(
+                isDownloaded = isDownloaded,
+                isDownloading = isDownloading,
+                downloadProgress = downloadProgress,
+                onClick = onDownloadClick
+            )
+        }
 
         PlayerIconButton(onClick = onImmersiveClick) {
             Icon(

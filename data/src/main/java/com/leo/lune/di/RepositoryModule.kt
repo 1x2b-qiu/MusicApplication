@@ -5,6 +5,7 @@ import com.leo.lune.data.repository.impl.AuthRepositoryImpl
 import com.leo.lune.data.repository.impl.CacheRepositoryImpl
 import com.leo.lune.data.repository.impl.DownloadRepositoryImpl
 import com.leo.lune.data.repository.impl.IdentifyRepositoryImpl
+import com.leo.lune.data.repository.impl.ImportedLocalTrackRepositoryImpl
 import com.leo.lune.data.repository.impl.MusicRepositoryImpl
 import com.leo.lune.data.repository.impl.PlayHistoryRepositoryImpl
 import com.leo.lune.data.repository.impl.PlayStatsRepositoryImpl
@@ -17,6 +18,7 @@ import com.leo.lune.domain.repository.AuthRepository
 import com.leo.lune.domain.repository.CacheRepository
 import com.leo.lune.domain.repository.DownloadRepository
 import com.leo.lune.domain.repository.IdentifyRepository
+import com.leo.lune.domain.repository.ImportedLocalTrackRepository
 import com.leo.lune.domain.repository.MusicRepository
 import com.leo.lune.domain.repository.PlayHistoryRepository
 import com.leo.lune.domain.repository.PlayStatsRepository
@@ -90,6 +92,13 @@ abstract class RepositoryModule {
     abstract fun bindDownloadRepository(
         downloadRepositoryImpl: DownloadRepositoryImpl
     ): DownloadRepository
+
+    @Binds
+    @Singleton
+    // 自定义文件夹导入曲目仓储
+    abstract fun bindImportedLocalTrackRepository(
+        importedLocalTrackRepositoryImpl: ImportedLocalTrackRepositoryImpl
+    ): ImportedLocalTrackRepository
 
     @Binds
     @Singleton

@@ -19,5 +19,11 @@ data class Song(
     // 时长（毫秒）
     val durationMs: Long,
     // 队列项绑定的本地下载音质码率；非本地多档队列为 null（播时取最高本地 / 流媒体默认）
-    val preferredDownloadBitrate: Int? = null
-)
+    val preferredDownloadBitrate: Int? = null,
+    // 导入本地曲的可播放 URI（content://）；网易云曲为 null
+    val localPlaybackUri: String? = null
+) {
+    // 自定义文件夹导入：负 id，或不经过网易云下载表
+    val isImportedLocal: Boolean
+        get() = id < 0L || !localPlaybackUri.isNullOrBlank()
+}

@@ -44,7 +44,7 @@ class PreparePlaybackUseCase @Inject constructor(
         preferredQuality: DownloadQuality? = null
     ): PlaybackPreparation = coroutineScope {
         // 并行启动，URL 解析通常比封面下载快（仅一次 API，封面需完整下载图片）
-        val urlDeferred = async { resolvePlaybackUrl(song.id, preferredQuality) }
+        val urlDeferred = async { resolvePlaybackUrl(song, preferredQuality) }
         // 封面失败不影响播放：runCatching 吸收所有异常，超时由 ArtworkRepository 自行处理
         val artworkDeferred = async {
             runCatching { artworkRepository.loadArtworkBytes(song.coverUrl) }.getOrNull()

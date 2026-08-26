@@ -4,12 +4,14 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.leo.lune.data.local.dao.AppSettingDao
 import com.leo.lune.data.local.dao.DownloadedSongDao
+import com.leo.lune.data.local.dao.ImportedLocalTrackDao
 import com.leo.lune.data.local.dao.PendingDownloadDao
 import com.leo.lune.data.local.dao.PlayStatsDao
 import com.leo.lune.data.local.dao.PlaybackSnapshotDao
 import com.leo.lune.data.local.dao.RecentPlayDao
 import com.leo.lune.data.local.entity.AppSettingEntity
 import com.leo.lune.data.local.entity.DownloadedSongEntity
+import com.leo.lune.data.local.entity.ImportedLocalTrackEntity
 import com.leo.lune.data.local.entity.PendingDownloadEntity
 import com.leo.lune.data.local.entity.PlayStatsEntity
 import com.leo.lune.data.local.entity.PlaybackSnapshotEntity
@@ -23,9 +25,10 @@ import com.leo.lune.data.local.entity.RecentPlayEntity
         DownloadedSongEntity::class,
         PendingDownloadEntity::class,
         PlaybackSnapshotEntity::class,
-        AppSettingEntity::class
+        AppSettingEntity::class,
+        ImportedLocalTrackEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class MusicDatabase : RoomDatabase() {
@@ -47,4 +50,7 @@ abstract class MusicDatabase : RoomDatabase() {
 
     // 通用设置 key-value DAO
     abstract fun appSettingDao(): AppSettingDao
+
+    // 自定义文件夹导入曲目 DAO
+    abstract fun importedLocalTrackDao(): ImportedLocalTrackDao
 }

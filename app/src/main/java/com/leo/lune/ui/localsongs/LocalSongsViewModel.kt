@@ -8,8 +8,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.leo.lune.controller.MusicPlayerController
 import com.leo.lune.domain.model.DownloadQuality
-import com.leo.lune.domain.model.DownloadedSong
-import com.leo.lune.domain.repository.DownloadRepository
+import com.leo.lune.domain.model.LocalLibraryItem
+import com.leo.lune.domain.usecase.local.ObserveLocalLibraryUseCase
 import com.leo.lune.navigation.MusicRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,10 +23,10 @@ import javax.inject.Inject
 
 // 「本地歌曲」页 UI 状态
 data class LocalSongsUiState(
-    // 本地下载全量；同曲多音质各占一行，不去重
-    val songs: List<DownloadedSong> = emptyList(),
+    // 本地曲库全量（下载 + 导入）
+    val songs: List<LocalLibraryItem> = emptyList(),
     // 当前展示列表：确认搜索后主动算好；无关键词时等于 songs
-    val filteredSongs: List<DownloadedSong> = emptyList(),
+    val filteredSongs: List<LocalLibraryItem> = emptyList(),
     // 入口 / 首曲封面；优先入口传入且不因列表刷新覆盖空白闪烁
     val coverUrl: String? = null,
     // 列表行总数（含多音质分行）；身份区优先用它
@@ -46,10 +46,10 @@ data class LocalSongsUiState(
 )
 
 // 「本地歌曲」页 ViewModel
-// 订阅本地下载、本地筛选、同步播放状态；播放操作委托给全局播放器
+// 订阅本地曲库、本地筛选、同步播放状态；播放操作委托给全局播放器
 @HiltViewModel
 class LocalSongsViewModel @Inject constructor(
-    private val downloadRepository: DownloadRepository,
+    private val observeLocalLibrary: ObserveLocalLibraryUseCase,
     // 全局播放控制器，本页不直接持有 ExoPlayer
     private val playerController: MusicPlayerController,
     savedStateHandle: SavedStateHandle
@@ -69,9 +69,9 @@ class LocalSongsViewModel @Inject constructor(
     val uiState: StateFlow<LocalSongsUiState> = _uiState.asStateFlow()
 
     init {
-        // 订阅本地下载列表；下载完成 / 删除后本页会自动刷新
+        // 订阅本地曲库；下载/导入/删除后本页会自动刷新
         viewModelScope.launch {
-            downloadRepository.observeDownloadedSongs().collect { songs ->
+            observeLocalLibrary().collect { songs ->
                 _uiState.update { state ->
                     // 入口已有封面时保留，避免列表回来重载闪一下
                     val keepCover = state.coverUrl?.takeIf { it.isNotBlank() }
@@ -79,7 +79,7 @@ class LocalSongsViewModel @Inject constructor(
                         songs = songs,
                         // 列表刷新后按当前关键词重新筛一遍
                         filteredSongs = filterSongs(songs, state.activeKeyword),
-                        coverUrl = keepCover ?: songs.firstOrNull()?.coverUrl,
+                        coverUrl = keepCover ?: songs.firstOrNull()?.song?.coverUrl,
                         trackCount = songs.size,
                         isLoading = false,
                         // 列表被清空后重置「首次播放」；有歌时保留会话内状态
@@ -135,23 +135,21 @@ class LocalSongsViewModel @Inject constructor(
         }
     }
 
-    // 点击某行：按该行音质开播；队列与列表一致（同曲多音质各占一项，不去重）
+    // 点击某行：下载行按该行音质开播；导入行播文件 URI
     @RequiresApi(Build.VERSION_CODES.O)
-    fun onSongClick(song: DownloadedSong) {
+    fun onSongClick(song: LocalLibraryItem) {
         val rows = _uiState.value.filteredSongs
         if (rows.isEmpty()) return
-        val startIndex = rows.indexOfFirst {
-            it.songId == song.songId && it.bitrate == song.bitrate
-        }.coerceAtLeast(0)
+        val startIndex = rows.indexOfFirst { it.rowKey == song.rowKey }.coerceAtLeast(0)
         playerController.playSong(
-            song = song.toSong(),
-            queue = rows.map { it.toSong() },
-            localQuality = DownloadQuality.fromBitrate(song.bitrate),
+            song = song.song,
+            queue = rows.map { it.song },
+            localQuality = song.bitrate?.let { DownloadQuality.fromBitrate(it) },
             startQueueIndex = startIndex
         )
     }
 
-    // 身份区主播放钮：本页首次点击从首行音质连播，之后切换播停（至 ViewModel 销毁）
+    // 身份区主播放钮：本页首次点击从首行连播，之后切换播停（至 ViewModel 销毁）
     @RequiresApi(Build.VERSION_CODES.O)
     fun onPlayAllClick() {
         val state = _uiState.value
@@ -163,9 +161,9 @@ class LocalSongsViewModel @Inject constructor(
             val first = rows.first()
             _uiState.update { it.copy(hasStartedPlayAll = true) }
             playerController.playSong(
-                song = first.toSong(),
-                queue = rows.map { it.toSong() },
-                localQuality = DownloadQuality.fromBitrate(first.bitrate),
+                song = first.song,
+                queue = rows.map { it.song },
+                localQuality = first.bitrate?.let { DownloadQuality.fromBitrate(it) },
                 startQueueIndex = 0
             )
         }
@@ -174,12 +172,13 @@ class LocalSongsViewModel @Inject constructor(
     companion object {
         // 按关键词本地过滤（不区分大小写）；空关键词返回全量
         fun filterSongs(
-            songs: List<DownloadedSong>,
+            songs: List<LocalLibraryItem>,
             keyword: String
-        ): List<DownloadedSong> {
+        ): List<LocalLibraryItem> {
             val key = keyword.trim()
             if (key.isEmpty()) return songs
-            return songs.filter { song ->
+            return songs.filter { item ->
+                val song = item.song
                 song.name.contains(key, ignoreCase = true) ||
                     song.artists.contains(key, ignoreCase = true) ||
                     song.album.contains(key, ignoreCase = true)

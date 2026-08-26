@@ -69,8 +69,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.leo.lune.R
-import com.leo.lune.domain.model.DownloadQuality
-import com.leo.lune.domain.model.DownloadedSong
+import com.leo.lune.domain.model.LocalLibraryItem
 import com.leo.lune.ui.home.formatSongDuration
 import com.leo.lune.util.ClearFocusOnImeHidden
 import com.leo.lune.util.consumePointersUnlessResumed
@@ -117,7 +116,7 @@ fun LocalSongsScreen(
             .background(colorScheme.background)
             .consumePointersUnlessResumed()
     ) {
-        LocalSongsBackdrop(coverUrl = uiState.coverUrl ?: uiState.songs.firstOrNull()?.coverUrl)
+        LocalSongsBackdrop(coverUrl = uiState.coverUrl ?: uiState.songs.firstOrNull()?.song?.coverUrl)
 
         Column(
             modifier = Modifier
@@ -147,7 +146,7 @@ fun LocalSongsScreen(
                 LocalSongsIntroTitle()
                 LocalSongsIdentityRow(
                     songCount = displaySongCount,
-                    coverUrl = uiState.coverUrl ?: uiState.songs.firstOrNull()?.coverUrl,
+                    coverUrl = uiState.coverUrl ?: uiState.songs.firstOrNull()?.song?.coverUrl,
                     isPlayingLocal = uiState.hasStartedPlayAll && uiState.isPlaying,
                     onPlayAllClick = {
                         dismissKeyboard()
@@ -168,9 +167,9 @@ fun LocalSongsScreen(
                             .fillMaxWidth()
                             .weight(1f)
                     ) {
-                        itemsIndexed(
+                            itemsIndexed(
                             items = uiState.filteredSongs,
-                            key = { _, song -> "${song.songId}_${song.bitrate}" }
+                            key = { _, song -> song.rowKey }
                         ) { index, song ->
                             LocalSongsTrackRow(
                                 index = index,
@@ -502,7 +501,7 @@ private fun LocalSongsIdentityRow(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "已下载 · 一键连播",
+                text = "本地曲库 · 一键连播",
                 color = colorScheme.onSurfaceVariant,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 3.dp)
@@ -545,7 +544,7 @@ private fun LocalSongsIdentityRow(
 @Composable
 private fun LocalSongsTrackRow(
     index: Int,
-    song: DownloadedSong,
+    song: LocalLibraryItem,
     onClick: () -> Unit
 ) {
     val colorScheme = MaterialTheme.colorScheme
@@ -567,8 +566,8 @@ private fun LocalSongsTrackRow(
             modifier = Modifier.width(20.dp)
         )
         AsyncImage(
-            model = rememberCoverRequest(song.coverUrl, 43.dp),
-            contentDescription = song.name,
+            model = rememberCoverRequest(song.song.coverUrl, 43.dp),
+            contentDescription = song.song.name,
             modifier = Modifier
                 .padding(start = 4.dp)
                 .size(43.dp)
@@ -582,7 +581,7 @@ private fun LocalSongsTrackRow(
                 .padding(start = 9.dp, end = 9.dp)
         ) {
             Text(
-                text = song.name,
+                text = song.song.name,
                 color = colorScheme.onBackground,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
@@ -597,16 +596,16 @@ private fun LocalSongsTrackRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = song.artists,
+                    text = song.song.artists,
                     modifier = Modifier.weight(1f, fill = false),
                     color = colorScheme.onSurfaceVariant,
                     fontSize = 10.5.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (song.durationMs > 0L) {
+                if (song.song.durationMs > 0L) {
                     Text(
-                        text = " · ${formatSongDuration(song.durationMs)}",
+                        text = " · ${formatSongDuration(song.song.durationMs)}",
                         color = colorScheme.onSurfaceVariant,
                         fontSize = 10.5.sp,
                         maxLines = 1,
@@ -616,7 +615,7 @@ private fun LocalSongsTrackRow(
             }
         }
         Text(
-            text = DownloadQuality.fromBitrate(song.bitrate).label,
+            text = song.qualityLabel,
             color = colorScheme.onSurfaceVariant,
             fontSize = 11.sp,
             maxLines = 1,

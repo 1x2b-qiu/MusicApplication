@@ -62,6 +62,7 @@ class SongDownloadManager @Inject constructor(
 
     // 入队下载；同曲同音质已在列表（含暂停）则忽略或恢复，避免重复请求
     fun enqueue(song: Song, quality: DownloadQuality = DownloadQuality.Default) {
+        if (song.isImportedLocal) return
         val key = taskKey(song.id, quality)
         val existing = _tasks.value.find { it.songId == song.id && it.quality == quality }
         if (existing != null && existing.error == null) {

@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.leo.lune.data.local.MusicDatabase
 import com.leo.lune.data.local.dao.AppSettingDao
 import com.leo.lune.data.local.dao.DownloadedSongDao
+import com.leo.lune.data.local.dao.ImportedLocalTrackDao
 import com.leo.lune.data.local.dao.PendingDownloadDao
 import com.leo.lune.data.local.dao.PlayStatsDao
 import com.leo.lune.data.local.dao.PlaybackSnapshotDao
@@ -71,5 +72,11 @@ object DatabaseModule {
     // 提供通用设置 DAO
     fun provideAppSettingDao(database: MusicDatabase): AppSettingDao {
         return database.appSettingDao()
+    }
+
+    @Provides
+    // 提供自定义文件夹导入曲目 DAO
+    fun provideImportedLocalTrackDao(database: MusicDatabase): ImportedLocalTrackDao {
+        return database.importedLocalTrackDao()
     }
 }

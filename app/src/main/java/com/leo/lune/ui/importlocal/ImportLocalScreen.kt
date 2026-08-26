@@ -51,7 +51,7 @@ import com.leo.lune.util.consumePointersUnlessResumed
 private val ActionButtonShape = RoundedCornerShape(14.dp)
 private val RowShape = RoundedCornerShape(12.dp)
 
-// 「导入本地歌曲」：自定义文件夹扫描（仅扫描展示，不落库）
+// 「导入本地歌曲」：自定义文件夹扫描，确认后写入本地曲库
 @Composable
 fun ImportLocalScreen(
     onBack: () -> Unit,
@@ -68,7 +68,7 @@ fun ImportLocalScreen(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
-        // 会话内可读；不写入设置/Room（本阶段不做存储）
+        // 会话内可读；持久化权限以便导入后仍能打开文件
         runCatching {
             contentResolver.takePersistableUriPermission(
                 uri,
@@ -93,7 +93,7 @@ fun ImportLocalScreen(
         ImportLocalTopBar(onBack = onBack)
 
         Text(
-            text = "选择手机中的文件夹，扫描其中的音频文件。当前仅预览结果，不会写入曲库。",
+            text = "选择手机中的文件夹，扫描音频后点「导入」写入曲库。不会复制或删除原文件。",
             color = colorScheme.onSurfaceVariant,
             fontSize = 13.sp,
             modifier = Modifier.padding(top = 12.dp, bottom = 16.dp)
@@ -105,7 +105,7 @@ fun ImportLocalScreen(
         ) {
             ImportLocalActionButton(
                 text = if (uiState.isScanning) "扫描中…" else "选择文件夹",
-                enabled = !uiState.isScanning,
+                enabled = !uiState.isScanning && !uiState.isImporting,
                 filled = true,
                 onClick = { openTreeLauncher.launch(null) },
                 modifier = Modifier.weight(1f)
@@ -121,12 +121,37 @@ fun ImportLocalScreen(
             } else if (uiState.tracks.isNotEmpty() || uiState.error != null) {
                 ImportLocalActionButton(
                     text = "清空",
-                    enabled = true,
+                    enabled = !uiState.isImporting,
                     filled = false,
                     onClick = viewModel::clearResults,
                     modifier = Modifier.weight(1f)
                 )
             }
+        }
+
+        if (!uiState.isScanning && uiState.tracks.isNotEmpty()) {
+            ImportLocalActionButton(
+                text = when {
+                    uiState.isImporting -> "导入中…"
+                    else -> "导入 ${uiState.tracks.size} 首到曲库"
+                },
+                enabled = !uiState.isImporting,
+                filled = true,
+                onClick = viewModel::importScannedTracks,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+            )
+        }
+
+        uiState.importMessage?.let { message ->
+            Text(
+                text = message,
+                color = colorScheme.onBackground,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 12.dp)
+            )
         }
 
         when {

@@ -40,6 +40,9 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
         val entity = playbackSnapshotDao.get() ?: return@withContext null
         runCatching {
             val queueJson = gson.fromJson<List<SongJson>>(entity.queueJson, songListType)
+            val queue = queueJson.map { it.toSong() }
+            val queuedCurrent = queue.getOrNull(entity.queueIndex)
+                ?.takeIf { it.id == entity.currentSongId }
             PlaybackSnapshot(
                 currentSong = Song(
                     id = entity.currentSongId,
@@ -47,9 +50,11 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
                     artists = entity.currentSongArtists,
                     album = entity.currentSongAlbum,
                     coverUrl = entity.currentSongCoverUrl,
-                    durationMs = entity.currentSongDurationMs
+                    durationMs = entity.currentSongDurationMs,
+                    preferredDownloadBitrate = queuedCurrent?.preferredDownloadBitrate,
+                    localPlaybackUri = queuedCurrent?.localPlaybackUri
                 ),
-                queue = queueJson.map { it.toSong() },
+                queue = queue,
                 queueIndex = entity.queueIndex
             )
         }.getOrNull()
@@ -68,7 +73,8 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
         val coverUrl: String?,
         val durationMs: Long,
         // 旧快照无此字段时 Gson 为 null
-        val preferredDownloadBitrate: Int? = null
+        val preferredDownloadBitrate: Int? = null,
+        val localPlaybackUri: String? = null
     ) {
         fun toSong(): Song = Song(
             id = id,
@@ -77,7 +83,8 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
             album = album,
             coverUrl = coverUrl,
             durationMs = durationMs,
-            preferredDownloadBitrate = preferredDownloadBitrate
+            preferredDownloadBitrate = preferredDownloadBitrate,
+            localPlaybackUri = localPlaybackUri
         )
     }
 
@@ -88,6 +95,7 @@ class PlaybackSnapshotRepositoryImpl @Inject constructor(
         album = album,
         coverUrl = coverUrl,
         durationMs = durationMs,
-        preferredDownloadBitrate = preferredDownloadBitrate
+        preferredDownloadBitrate = preferredDownloadBitrate,
+        localPlaybackUri = localPlaybackUri
     )
 }

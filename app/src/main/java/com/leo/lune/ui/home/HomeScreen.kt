@@ -70,7 +70,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.leo.lune.R
-import com.leo.lune.domain.model.DownloadedSong
+import com.leo.lune.domain.model.LocalLibraryItem
 import com.leo.lune.domain.model.Song
 import com.leo.lune.ui.component.lyricsheader.HomeLyricsHeaderContentHeight
 import com.leo.lune.util.consumePointersUnlessResumed
@@ -165,7 +165,7 @@ fun HomeScreen(
                                 onTogglePlayPause = viewModel::togglePlayPause,
                                 onViewAllClick = {
                                     onLocalClick(
-                                        uiState.localSongs.firstOrNull()?.coverUrl.orEmpty(),
+                                        uiState.localSongs.firstOrNull()?.song?.coverUrl.orEmpty(),
                                         uiState.localTrackCount
                                     )
                                 }
@@ -457,10 +457,10 @@ fun HomeSectionHeader(
 // 「本地歌曲」横滑：同曲多音质分行；点选中，点中心钮按该行音质播放
 @Composable
 private fun HomeLocalThumbSection(
-    songs: List<DownloadedSong>,
+    songs: List<LocalLibraryItem>,
     isPlaying: Boolean,
     currentSongId: Long?,
-    onPlaySong: (DownloadedSong, List<DownloadedSong>) -> Unit,
+    onPlaySong: (LocalLibraryItem, List<LocalLibraryItem>) -> Unit,
     onTogglePlayPause: () -> Unit,
     onViewAllClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -489,18 +489,17 @@ private fun HomeLocalThumbSection(
         ) {
             itemsIndexed(
                 songs,
-                key = { _, song -> "${song.songId}_${song.bitrate}" }
-            ) { index, song ->
-                val asSong = song.toSong()
+                key = { _, item -> item.rowKey }
+            ) { index, item ->
                 FavoritesThumbnailItem(
-                    song = asSong,
+                    song = item.song,
                     isSelected = index == safeIndex,
-                    isPlayingThis = isPlaying && currentSongId == song.songId,
+                    isPlayingThis = isPlaying && currentSongId == item.song.id,
                     isLazyAnimated = index in visibleIndices,
                     onSelectClick = { selectedIndex = index },
                     onPlayClick = {
-                        if (isPlaying && currentSongId == song.songId) onTogglePlayPause()
-                        else onPlaySong(song, songs)
+                        if (isPlaying && currentSongId == item.song.id) onTogglePlayPause()
+                        else onPlaySong(item, songs)
                     }
                 )
             }

@@ -27,4 +27,10 @@ data class DownloadedSong(
         // 带入该下载档位，供队列点播 / 上下首按行音质播放
         preferredDownloadBitrate = bitrate
     )
+
+    fun toLocalLibraryItem(): LocalLibraryItem = LocalLibraryItem(
+        song = toSong(),
+        addedAt = downloadedAt,
+        bitrate = bitrate
+    )
 }

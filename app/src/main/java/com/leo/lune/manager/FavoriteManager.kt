@@ -73,6 +73,10 @@ class FavoriteManager @Inject constructor(
 
     // 切换收藏（乐观更新）；未登录时返回失败，请求失败则回滚
     fun toggleFavorite(songId: Long) {
+        if (songId < 0L) {
+            _results.tryEmit(FavoriteResult.Failure("本地导入的歌曲暂不支持收藏"))
+            return
+        }
         if (currentUserId == null) {
             _results.tryEmit(FavoriteResult.Failure("请先登录后收藏"))
             return
