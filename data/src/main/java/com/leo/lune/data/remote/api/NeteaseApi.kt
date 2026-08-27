@@ -37,7 +37,7 @@ interface NeteaseApi {
     @GET("cloudsearch")
     suspend fun search(
         @Query("keywords") keywords: String,
-        @Query("limit") limit: Int = 20,
+        @Query("limit") limit: Int = 100,
         @Query("type") type: Int = 1
     ): SearchResponse
 

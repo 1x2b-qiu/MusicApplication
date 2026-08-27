@@ -17,7 +17,7 @@ import com.leo.lune.domain.model.UserPlaylist
 // 音乐数据仓储接口，封装搜索、播放、收藏等远端操作
 interface MusicRepository {
     // 按关键词搜索歌曲
-    suspend fun searchSongs(keywords: String, limit: Int = 20): List<Song>
+    suspend fun searchSongs(keywords: String): List<Song>
     // 获取热搜关键词列表
     suspend fun getHotSearchTerms(): List<String>
     // 按输入获取搜索联想建议

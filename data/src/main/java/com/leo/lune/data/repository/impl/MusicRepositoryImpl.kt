@@ -42,8 +42,8 @@ class MusicRepositoryImpl @Inject constructor(
 ) : MusicRepository {
 
     // 按关键词搜索歌曲
-    override suspend fun searchSongs(keywords: String, limit: Int): List<Song> {
-        val response = neteaseApi.search(keywords, limit)
+    override suspend fun searchSongs(keywords: String): List<Song> {
+        val response = neteaseApi.search(keywords)
         if (response.code != 200) {
             throw IllegalStateException("Search failed with code ${response.code}")
         }

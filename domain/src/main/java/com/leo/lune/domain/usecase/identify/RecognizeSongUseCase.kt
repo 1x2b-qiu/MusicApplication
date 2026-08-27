@@ -32,7 +32,7 @@ class RecognizeSongUseCase @Inject constructor(
         val songs = if (keywords.isEmpty()) {
             emptyList()
         } else {
-            musicRepository.searchSongs(keywords, searchLimit)
+            musicRepository.searchSongs(keywords)
         }
 
         return IdentifyMatchResult.Matched(track = track, songs = songs)
